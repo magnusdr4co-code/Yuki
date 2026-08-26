@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  yuki-agent:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: yuki_digital_diva
+    restart: unless-stopped
+    env_file:
+      - .env
+    volumes:
+      - ./data:/app/data
+      - ./media_cache:/app/media_cache
+      - ./SOUL.md:/app/SOUL.md
+      - ./MEMORY.md:/app/MEMORY.md
+      - ./config.yaml:/app/config.yaml
+    ports:
+      - "8080:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M

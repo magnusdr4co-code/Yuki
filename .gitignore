@@ -1,0 +1,65 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Testing & Coverage
+.pytest_cache/
+.coverage
+htmlcov/
+
+# Environment Variables
+.env
+
+# Virtual environments
+.env
+.venv
+env/
+venv/
+ENV/
+
+# Output assets cache (keep directory structure with .gitkeep)
+output/art/*.png
+output/art/*.jpg
+output/art/*.webp
+output/voice/*.ogg
+output/voice/*.mp3
+output/music/*.mp3
+output/music/*.wav
+output/posts/*.md
+!output/art/.gitkeep
+!output/voice/.gitkeep
+!output/music/.gitkeep
+!output/posts/.gitkeep
+
+# Local data & temp DBs
+data/test_*.db
+data/benchmark_*.db
+media_cache/
+
+# OS / Editor
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp

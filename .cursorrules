@@ -1,0 +1,28 @@
+# ==========================================
+# .cursorrules — Convenciones para Yuki en Hermes
+# ==========================================
+
+# 1. Arquitectura y Lenguaje
+- Todo el código backend debe escribirse en Python 3.10+ con tipado estático estricto (`typing`: Dict, List, Optional, Any, Union).
+- Utilizar `asyncio` y programación asíncrona para todas las operaciones de I/O, red, bases de datos y adaptadores sociales.
+- Mantener compatibilidad absoluta con la biblioteca estándar de Python cuando sea posible (ej. CLI con `argparse` y `unittest` para pruebas rápidas).
+
+# 2. Workspace y Rutas
+- Hermes opera directamente en la raíz del repositorio.
+- Todas las salidas multimedia DEBEN guardarse en las carpetas locales del workspace:
+  - Música y stems: `./output/music/`
+  - Imágenes y portadas: `./output/art/`
+  - Audios y notas de voz: `./output/voice/`
+  - Publicaciones y borradores: `./output/posts/`
+- NUNCA usar rutas de otros arneses (ej. `~/.openclaw/workspace/`).
+
+# 3. Habilidades Estándar (agentskills.io)
+- Cada nueva capacidad debe crearse dentro de `skills/<nombre-habilidad>/SKILL.md`.
+- El archivo `SKILL.md` debe incluir frontmatter YAML con `name`, `description`, `parameters` y una sección detallada de instrucciones paso a paso.
+
+# 4. Memoria y Consultas
+- Consultar recuerdos siempre a través de `FTS5MemoryEngine` con ranking BM25.
+- NUNCA volcar archivos de log completos en el prompt del LLM.
+
+# 5. Voz y Personalidad
+- Mantener la fidelidad a `SOUL.md` en todos los generadores y prompts dinámicos.

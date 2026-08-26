@@ -1,0 +1,42 @@
+# ==========================================
+# Plantilla para ~/.hermes/config.yaml
+# Configuración Global de Hermes Agent con Enrutamiento Inteligente
+# ==========================================
+
+hermes:
+  version: "2.4"
+  default_workspace: "./"
+  active_agent: "yuki"
+
+provider_routing:
+  enabled: true
+  default_aggregator: "openrouter" # o "pioneer"
+  
+  api_keys:
+    openrouter: "${OPENROUTER_API_KEY}"
+    anthropic: "${ANTHROPIC_API_KEY}"
+    nous_portal: "${NOUS_PORTAL_API_KEY}"
+    honcho: "${HONCHO_API_KEY}"
+
+  tiers:
+    tier_1_fast_and_cheap:
+      description: "Tareas de bajo coste: lectura de feeds, parsing, moderación y respuestas simples"
+      models:
+        - "openrouter/deepseek/deepseek-chat"
+        - "openrouter/qwen/qwen-2.5-72b-instruct"
+        - "openrouter/google/gemini-flash-1.5"
+      max_tokens: 400
+      temperature: 0.3
+
+    tier_2_creative_reasoning:
+      description: "Tareas complejas: composición de canciones, poesía waka, modelado dialéctico Honcho"
+      models:
+        - "openrouter/anthropic/claude-3.5-sonnet"
+        - "openrouter/openai/gpt-4o"
+      max_tokens: 1500
+      temperature: 0.75
+
+tools:
+  gateway: "nous_portal"
+  nous_portal_url: "https://api.nousportal.com/v1"
+  skills_directory: "./skills"

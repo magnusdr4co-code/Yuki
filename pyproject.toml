@@ -1,0 +1,21 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "yuki-digital-diva"
+version = "2.4.0"
+description = "Yuki - Diva Digital Autónoma basada en el arnés Hermes Agent con memoria SQLite FTS5, Honcho y Nous Portal"
+readme = "README.md"
+requires-python = ">=3.10"
+authors = [
+    { name = "Yuki Project Team" }
+]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Operating System :: OS Independent",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]

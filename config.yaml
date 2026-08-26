@@ -1,0 +1,127 @@
+# ==========================================
+# Yuki — Hermes Agent Configuration File
+# ==========================================
+
+agent:
+  name: "Yuki"
+  display_name: "Yuki (雪)"
+  version: "2.4.0"
+  harness: "hermes-agent"
+  default_language: "es-ES"
+  fallback_language: "en-US"
+  model:
+    provider: "openrouter" # o "anthropic", "openai", "nous"
+    primary_model: "anthropic/claude-3.5-sonnet"
+    fallback_model: "deepseek/deepseek-chat"
+    temperature: 0.72
+    max_tokens: 1024
+
+# Enrutamiento Inteligente para optimización de costes y latencia
+provider_routing:
+  enabled: true
+  aggregator: "openrouter" # o "pioneer"
+  routes:
+    feed_summary:
+      tier: "fast_and_cheap"
+      preferred_model: "deepseek/deepseek-chat"
+      max_tokens: 350
+      temperature: 0.3
+    social_formatting:
+      tier: "fast_and_cheap"
+      preferred_model: "qwen/qwen-2.5-72b-instruct"
+      max_tokens: 250
+      temperature: 0.4
+    music_composition:
+      tier: "creative_and_deep"
+      preferred_model: "anthropic/claude-3.5-sonnet"
+      max_tokens: 1200
+      temperature: 0.8
+    dialectic_synthesis:
+      tier: "creative_and_deep"
+      preferred_model: "anthropic/claude-3.5-sonnet"
+      max_tokens: 800
+      temperature: 0.7
+
+memory:
+  backend: "sqlite_fts5"
+  database_path: "data/yuki_memory.db"
+  memory_md_path: "MEMORY.md"
+  soul_md_path: "SOUL.md"
+  fts:
+    tokenizer: "unicode61 remove_diacritics 2"
+    bm25_weights:
+      title: 5.0
+      content: 2.0
+      tags: 3.0
+    max_retrieved_memories: 5
+    min_score_threshold: 0.15
+  decay:
+    enabled: true
+    half_life_days: 30
+
+honcho:
+  enabled: true
+  api_url: "https://api.honcho.dev/v1"
+  app_id: "yuki-digital-diva"
+  user_id: "producer_manager"
+  session_sync_interval_messages: 5
+  auto_profile_update: true
+
+nous_portal:
+  base_url: "https://api.nousportal.com/v1"
+  auth_mode: "oauth_bearer"
+  workspace_output_paths:
+    art: "./output/art"
+    voice: "./output/voice"
+    music: "./output/music"
+    posts: "./output/posts"
+  features:
+    image_generation:
+      provider: "fal"
+      model: "fal-ai/flux/dev"
+      default_aspect_ratio: "1:1"
+      safety_tolerance: "2"
+      default_aesthetic_prefix: "masterpiece, cinematic lighting, japanese aesthetic, subtle elegance, organic textures"
+    voice_synthesis:
+      provider: "nous_tts"
+      voice_id: "yuki_serene_alto"
+      cadence_pause_seconds: 0.35
+      sample_rate: 44100
+      format: "ogg_opus"
+    web_search:
+      provider: "firecrawl"
+      max_results: 5
+      scrape_mode: "markdown"
+
+scheduler:
+  timezone: "Europe/Madrid"
+  cron_jobs:
+    - name: "nocturnal_trend_reflection"
+      cron: "0 3 * * *" # 03:00 AM
+      action: "reflect_on_trends"
+      enabled: true
+    - name: "morning_inspiration_drop"
+      cron: "30 7 * * *" # 07:30 AM
+      action: "publish_morning_art"
+      enabled: true
+    - name: "daily_memory_synthesis"
+      cron: "30 23 * * *" # 23:30 PM
+      action: "synthesize_daily_memory"
+      enabled: true
+
+adapters:
+  telegram:
+    enabled: true
+    poll_mode: "webhook"
+    webhook_path: "/webhook/telegram"
+    send_voice_notes: true
+    send_images: true
+  discord:
+    enabled: true
+    guild_id: ""
+    announce_channel_id: ""
+    canvas_enabled: true
+  serverless:
+    framework: "modal"
+    idle_timeout_seconds: 120
+    memory_mb: 512
