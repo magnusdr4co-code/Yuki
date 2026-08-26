@@ -1,0 +1,15 @@
+{
+    "title": "📚 **Kikigaki (聞き書き)**",
+    "description": "El arte de registrar lo escuchado. Yuki accede a los textos antiguos y la sabiduría acumulada de la casa de té para preservar y compartir el conocimiento con presencia serena.",
+    "button": "📚 Kikigaki",
+    "embed_footer": "📚 Kikigaki (聞き書き) 📚",
+    "dropdown": {
+        "select_action": "📋 Ejecutar instrucción...",
+        "toggle_on": "✅ Habilitar Kikigaki",
+        "toggle_off": "❌ Deshabilitar Kikigaki"
+    },
+    "wikipedia_button_label": "📖 Leer en Wikipedia",
+    "controls_title": "**Controles**",
+    "controls": "- Habilitar o deshabilitar el rol Kikigaki",
+    "admin_flows": "Alterna el rol Kikigaki para habilitar o deshabilitarlo."
+}

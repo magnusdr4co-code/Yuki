@@ -1,0 +1,57 @@
+{
+    "title": "🎎 **女将さん（おかみさん）** 🎎",
+    "description": "一位精通多种传统艺术的芸者（げいしゃ），以优雅与风度为茶室的访客提供娱乐。",
+    "button": "🎎 女将さん",
+    "dropdown": {
+        "select_juggler_action": "🎎 选择 entertainment 动作...",
+        "config_juggler": "配置 Entertainment",
+        "config_juggler_description": "调整芸者 entertainment 的配置",
+        "config_juggler_emoji": "🎎"
+    },
+    "canvas_juggler_subrole_descriptions": {
+        "poetry": "📝 **俳句**: 请求为其他用户创作个性化俳句"
+    },
+    "poetry": {
+        "title": "📝 俳句",
+        "description": "请求为另一位用户创作诗歌，以服务器的个性化风格书写。",
+        "action_compose": "✍️ 创作诗歌",
+        "action_compose_desc": "为另一位用户写诗",
+        "button": "📝 俳句",
+        "dropdown": {
+            "poetry_compose": "创作俳句",
+            "poetry_compose_description": "为另一位用户写一首俳句",
+            "poetry_on": "俳句：开启",
+            "poetry_on_description": "为此服务器启用俳句",
+            "poetry_off": "俳句：关闭",
+            "poetry_off_description": "为此服务器禁用俳句"
+        },
+        "modal_title": "创作俳句",
+        "modal_target_label": "目标用户",
+        "modal_target_placeholder": "@用户或用户ID",
+        "modal_dedication_label": "献词/前提",
+        "modal_dedication_placeholder": "简短的主题或信息（最多150个字符）",
+        "error_target_invalid": "❌ 目标用户无效",
+        "error_dedication_too_long": "❌ 献词太长（最多150个字符）",
+        "error_fatigue_limit": "❌ 达到疲劳限制",
+        "error_banker_charge": "❌ 余额不足（需要1xTAE）",
+        "error_llm_failed": "❌ 生成诗歌失败",
+        "preview_title": "📝 俳句预览",
+        "preview_description": "发送前查看诗歌",
+        "preview_footer": "来自：{sender}",
+        "button_confirm": "✅ 发送",
+        "button_cancel": "❌ 取消",
+        "success_sent": "✅ 俳句已发送给{target}",
+        "success_cancelled": "❌ 俳句已取消",
+        "dm_disabled_notice": "⚠️ 目标已禁用DM。这是手动发送的俳句：",
+        "dm_disabled_offer": "你可以复制并手动发送俳句：",
+        "error_subrole_disabled": "❌ 俳句子角色在此服务器上已禁用。请联系管理员启用它。",
+        "enabled": "✅ 此服务器已启用俳句。",
+        "disabled": "❌ 此服务器已禁用俳句。",
+        "error_config_failed": "❌ 更新配置失败。",
+        "error_modal_belongs_to_another": "❌ 此模态框属于另一个用户。",
+        "error_failed_preview_dm": "❌ 发送预览私信失败。",
+        "error_server_only": "❌ 此选项仅在服务器中可用。",
+        "error_unknown_action": "❌ 未知操作：{action}",
+        "error_generic": "❌ 错误：{error}"
+    }
+}
