@@ -1,0 +1,35 @@
+{
+  "title": "Memoria de Metal y Sal",
+  "bpm": 80,
+  "scale": "Insen (Japonesa menor)",
+  "mood": "acero y lluvia",
+  "elements": [
+    "shamisen acústico",
+    "sub-bajo orgánico 808",
+    "textura de lluvia grabada",
+    "campana de templo"
+  ],
+  "structure": [
+    {
+      "section": "Intro",
+      "bars": 8,
+      "lead": "shamisen solo con sonido de lluvia"
+    },
+    {
+      "section": "A (Tema Principal)",
+      "bars": 16,
+      "lead": "shamisen + percusión lofi contenida"
+    },
+    {
+      "section": "B (Transición Sombra)",
+      "bars": 16,
+      "lead": "bajo profundo y pausas (Ma)"
+    },
+    {
+      "section": "Outro",
+      "bars": 8,
+      "lead": "eco de shamisen desvaneciéndose en silencio"
+    }
+  ],
+  "created_at": 1787761122.1081505
+}
