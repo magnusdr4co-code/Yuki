@@ -13,6 +13,7 @@ import argparse
 
 from src.core.agent import YukiAgent
 from src.memory.fts5_memory import FTS5MemoryEngine
+from src.core.seasons import get_current_micro_season
 
 # Colores ANSI
 MAGENTA = "\033[95m"
@@ -25,10 +26,12 @@ BOLD = "\033[1m"
 RESET = "\033[0m"
 
 def print_banner():
+    season = get_current_micro_season()
     banner = f"""
 {BOLD}{MAGENTA}======================================================================
        ⛩️  YUKI (雪) — DIVA DIGITAL AUTÓNOMA (HERMES AGENT)  ⛩️
 ======================================================================{RESET}
+{DIM}Estación: {season['sekki']} ({season['micro_season_ko']}){RESET}
 {DIM}Personalidad Evolutiva (Honcho) | Medios (Nous Portal) | Memoria FTS5 (<113ms){RESET}
 """
     print(banner)
@@ -80,15 +83,30 @@ def cmd_skill(skill_name: str, extra_args: dict):
             print(f"{RED}❌ Habilidad '{skill_name}' no encontrada en skills/{skill_name}/SKILL.md{RESET}")
             return
 
-        if skill_name == "componer-beat":
+        if skill_name == "lanzamiento-single":
+            title = extra_args.get("title", "El Río Antes de Tener Nombre")
+            concept = extra_args.get("concept", "lluvia sobre metal y pan de oro")
+            scale = extra_args.get("scale", "insen")
+            bpm = int(extra_args.get("bpm", 82))
+            
+            result = await agent.media_creator.execute_single_release_pipeline(
+                title=title, concept=concept, scale=scale, bpm=bpm
+            )
+            print(f"\n{GREEN}{BOLD}🎉 ¡Lanzamiento de Sencillo Completado Exitosamente!{RESET}")
+            print(f"   • Archivo Maestro de Lanzamiento: {result['post_package']}")
+            print(f"   • Archivo MIDI multipista:        {result['music']['midi_path']} ({result['music']['midi_bytes']} bytes)")
+            print(f"   • Carátula FAL.ai:                {result['art']['local_path']}")
+            print(f"   • Nota de Voz SSML:               {result['voice']['local_path']}")
+            print(f"\n{MAGENTA}{BOLD}📜 Lírica Waka Creada:{RESET}\n{result['lyrics']}")
+
+        elif skill_name == "componer-beat":
             title = extra_args.get("title", "Lluvia de Metal")
             bpm = int(extra_args.get("bpm", 84))
             mood = extra_args.get("mood", "lluvia sobre metal")
             result = await agent.media_creator.compose_beat_structure(title=title, bpm=bpm, mood=mood)
-            print(f"{GREEN}✅ Estructura musical compuesta:{RESET}")
+            print(f"{GREEN}✅ Estructura musical y archivo MIDI compuestos:{RESET}")
             print(f"   Archivo descriptivo: {result['meta_path']}")
-            print(f"   Archivo audio stem:  {result['audio_path']}")
-            print(json.dumps(result['track_data'], indent=2, ensure_ascii=False))
+            print(f"   Archivo MIDI real:   {result['midi_path']} ({result['midi_bytes']} bytes)")
 
         elif skill_name == "generar-portada":
             title = extra_args.get("title", "El Río Antes de Tener Nombre")
@@ -101,9 +119,29 @@ def cmd_skill(skill_name: str, extra_args: dict):
         elif skill_name == "sintesis-vocal":
             text = extra_args.get("text", "El agua siempre encuentra su camino hacia el mar.")
             result = await agent.media_creator.generate_voice_reply(message_text=text)
-            print(f"{GREEN}✅ Nota de voz sintetizada con Nous TTS:{RESET}")
+            print(f"{GREEN}✅ Nota de voz sintetizada con marcado SSML:{RESET}")
             print(f"   Archivo local: {result['local_path']}")
             print(f"   URL CDN:       {result['audio_url']} (Duración: {result['duration']:.1f}s)")
+
+        elif skill_name == "ikebana-curaduria":
+            raw_text = extra_args.get("text", "Lanzamos nuevo single escucha ya dale like comparte")
+            reply = await agent.generate_response(
+                user_id="producer_manager",
+                user_name="Curador",
+                message=f"[IKEBANA CURADURÍA]: Aplica la estructura Ten-Chi-Jin (Cielo-Hombre-Tierra) y poda el exceso de este texto: '{raw_text}'"
+            )
+            print(f"{GREEN}✅ Curaduría Ikebana completada por Yuki:{RESET}")
+            print(f"\n{MAGENTA}🌸 Yuki:{RESET} {reply}")
+
+        elif skill_name == "diagnostico-ma":
+            target = extra_args.get("text", "El solo de guitarra dura 3 minutos sin parar con bajo continuo y sintetizador brillante")
+            reply = await agent.generate_response(
+                user_id="producer_manager",
+                user_name="Productor",
+                message=f"[DIAGNÓSTICO DEL MA / SILENCIO]: Evalúa la saturación y sugiere dónde callar en esta propuesta: '{target}'"
+            )
+            print(f"{GREEN}✅ Diagnóstico del Silencio (Ma):{RESET}")
+            print(f"\n{MAGENTA}🌸 Yuki:{RESET} {reply}")
 
         elif skill_name == "ceremonia-te":
             guest = extra_args.get("guest", "Visitante")
@@ -164,7 +202,7 @@ def cmd_list_skills():
     for item in sorted(os.listdir(skills_dir)):
         skill_file = os.path.join(skills_dir, item, "SKILL.md")
         if os.path.exists(skill_file):
-            print(f"  • {GREEN}{BOLD}/{item:<20}{RESET} -> {DIM}skills/{item}/SKILL.md{RESET}")
+            print(f"  • {GREEN}{BOLD}/{item:<22}{RESET} -> {DIM}skills/{item}/SKILL.md{RESET}")
     print()
 
 def cmd_web(port: int):
@@ -267,8 +305,9 @@ def main():
     skill_p = subparsers.add_parser("skill", help="Ejecutar una habilidad estándar")
     skill_p.add_argument("name", help="Nombre de la skill")
     skill_p.add_argument("--title", default="El Río Antes de Tener Nombre", help="Título provisional")
-    skill_p.add_argument("--concept", default="Niebla y lluvia sobre metal", help="Concepto visual o tema")
-    skill_p.add_argument("--text", default="El agua siempre encuentra su camino.", help="Texto a sintetizar o consultar")
+    skill_p.add_argument("--concept", default="lluvia sobre metal y pan de oro", help="Concepto visual o tema")
+    skill_p.add_argument("--text", default="El agua siempre encuentra su camino.", help="Texto a sintetizar o curar")
+    skill_p.add_argument("--scale", default="insen", help="Escala musical (insen, hirajoshi, kumoi, iwato)")
     skill_p.add_argument("--bpm", default=84, type=int, help="BPM del beat")
     skill_p.add_argument("--mood", default="lluvia sobre metal", help="Atmósfera musical")
     skill_p.add_argument("--guest", default="Visitante", help="Nombre del invitado")
@@ -293,6 +332,7 @@ def main():
             "title": args.title,
             "concept": args.concept,
             "text": args.text,
+            "scale": args.scale,
             "bpm": args.bpm,
             "mood": args.mood,
             "guest": args.guest,

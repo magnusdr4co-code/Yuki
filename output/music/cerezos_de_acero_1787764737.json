@@ -1,0 +1,31 @@
+{
+  "title": "Cerezos de Acero",
+  "bpm": 82,
+  "scale": "Insen (Tradicional Japonesa)",
+  "mood": "lluvia sobre metal y pan de oro",
+  "seasonal_influence": "Shosho (Fin del Calor)",
+  "midi_file": "cerezos_de_acero_1787764737.mid",
+  "structure": [
+    {
+      "section": "Intro",
+      "bars": 4,
+      "lead": "shamisen solo con atmósfera de rocío blanco"
+    },
+    {
+      "section": "A (Tema Principal)",
+      "bars": 8,
+      "lead": "shamisen + percusión lofi contenida"
+    },
+    {
+      "section": "B (Transición Sombra)",
+      "bars": 8,
+      "lead": "bajo 808 profundo y pausas (Ma)"
+    },
+    {
+      "section": "Outro",
+      "bars": 4,
+      "lead": "eco de shamisen desvaneciéndose en silencio"
+    }
+  ],
+  "created_at": 1787764737.312042
+}

@@ -1,8 +1,8 @@
 """
 Pasarela Unificada de Nous Portal para Yuki (Hermes Agent Harness).
 Permite acceso con un solo login OAuth a:
-1. Generación de imágenes (FAL.ai Flux/SDXL) -> ./output/art/
-2. Síntesis de voz emotiva (Nous TTS con pausas) -> ./output/voice/
+1. Generación de imágenes (FAL.ai Flux/SDXL con matrices de iluminación) -> ./output/art/
+2. Síntesis de voz emotiva (Nous TTS con SSML y prosodia de pausas) -> ./output/voice/
 3. Búsqueda y tendencias web (Firecrawl)
 """
 
@@ -36,21 +36,29 @@ class NousPortalClient:
         self,
         prompt: str,
         style_preset: str = "yuki_aesthetic",
-        aspect_ratio: str = "1:1"
+        aspect_ratio: str = "1:1",
+        lighting_style: str = "komorebi"
     ) -> Dict[str, Any]:
         """
-        Genera portadas de sencillos o arte visual a través de FAL.ai en Nous Portal
-        y guarda el archivo en ./output/art/.
+        Genera portadas de sencillos o arte visual a través de FAL.ai en Nous Portal.
+        Aplica matrices de iluminación (komorebi, urushi gold sheen, chiaroscuro industrial).
         """
+        lighting_descriptors = {
+            "komorebi": "sunlight filtering through bamboo leaves, gentle natural hazes",
+            "urushi": "warm candlelight reflections on Urushi black lacquer and gold leaf",
+            "industrial_rain": "cinematic neon reflections on wet asphalt, mist, moody ambient"
+        }
+        light_desc = lighting_descriptors.get(lighting_style, lighting_descriptors["komorebi"])
+
         refined_prompt = (
             f"masterpiece, ethereal photography, cinematic lighting, japanese aesthetic, "
-            f"subtle elegance, soft haze, industrial metallic undertone: {prompt}"
+            f"subtle elegance, soft haze, {light_desc}, industrial metallic undertone: {prompt}"
         )
 
         image_filename = f"yuki_art_{int(time.time())}.png"
         image_path = os.path.join(self.art_dir, image_filename)
 
-        logger.info(f"Pintando lienzo visual vía FAL: '{refined_prompt[:60]}...'")
+        logger.info(f"Pintando lienzo visual vía FAL ({lighting_style}): '{refined_prompt[:60]}...'")
         
         mock_result = {
             "status": "success",
@@ -59,10 +67,10 @@ class NousPortalClient:
             "image_url": f"https://nousportal.media/cdn/{image_filename}",
             "local_path": image_path,
             "aspect_ratio": aspect_ratio,
+            "lighting": lighting_style,
             "created_at": time.time()
         }
 
-        # Guardar archivo en el workspace nativo
         with open(image_path, "w", encoding="utf-8") as f:
             f.write(f"/* YUKI ART ASSET: {refined_prompt} */\n")
 
@@ -72,30 +80,42 @@ class NousPortalClient:
         self,
         text: str,
         voice_id: str = "yuki_serene_alto",
-        cadence_pause_ms: int = 350
+        cadence_pause_ms: int = 350,
+        is_night_mode: bool = False
     ) -> Dict[str, Any]:
         """
-        Sintetiza una nota de voz con la entonación cálida y la pausa deliberada de Yuki
-        y guarda el archivo en ./output/voice/.
+        Sintetiza una nota de voz en formato OGG Opus con marcado SSML.
+        Controla prosodia, pausas respiratorias deliberadas y modo susurro de madrugada.
         """
         audio_filename = f"yuki_voice_{int(time.time())}.ogg"
         audio_path = os.path.join(self.voice_dir, audio_filename)
 
-        paced_text = text.replace(". ", " ... ").replace(", ", " .. ")
+        # Construcción de marcado SSML
+        pause_tag = f'<break time="{cadence_pause_ms}ms"/>'
+        prosody_rate = "88%" if is_night_mode else "94%"
+        prosody_pitch = "-2st" if is_night_mode else "-1st"
 
-        logger.info(f"Sintetizando voz en Nous TTS: '{text[:50]}...'")
+        ssml_body = text.replace(". ", f". {pause_tag} ").replace(", ", f", {pause_tag} ")
+        ssml_text = f"""<speak>
+  <prosody rate="{prosody_rate}" pitch="{prosody_pitch}">
+    {ssml_body}
+  </prosody>
+</speak>"""
+
+        logger.info(f"Sintetizando voz en Nous TTS (SSML): '{text[:50]}...'")
 
         with open(audio_path, "w", encoding="utf-8") as f:
-            f.write(f"/* YUKI VOICE ASSET (OGG OPUS): {paced_text} */\n")
+            f.write(f"/* YUKI VOICE ASSET (OGG OPUS SSML): {ssml_text} */\n")
 
         return {
             "status": "success",
             "provider": "nous_tts/v2",
             "voice_id": voice_id,
-            "duration_seconds": max(2.5, len(text) * 0.08),
+            "duration_seconds": max(2.5, len(text) * 0.085),
             "audio_url": f"https://nousportal.media/cdn/{audio_filename}",
             "local_path": audio_path,
-            "text_processed": paced_text
+            "ssml_payload": ssml_text,
+            "is_night_mode": is_night_mode
         }
 
     async def search_trends_firecrawl(
