@@ -5,41 +5,41 @@
 agent:
   name: "Yuki"
   display_name: "Yuki (雪)"
-  version: "2.4.0"
+  version: "2.5.0"
   harness: "hermes-agent"
   default_language: "es-ES"
   fallback_language: "en-US"
   model:
-    provider: "openrouter" # o "anthropic", "openai", "nous"
+    provider: "openrouter" # o "anthropic", "google", "openai", "nous"
     primary_model: "anthropic/claude-3.5-sonnet"
-    fallback_model: "deepseek/deepseek-chat"
+    fallback_model: "google/gemini-2.0-flash"
     temperature: 0.72
     max_tokens: 1024
 
-# Enrutamiento Inteligente para optimización de costes y latencia
+# Enrutamiento Inteligente para optimización de costes, latencia y modelos de frontera
 provider_routing:
   enabled: true
-  aggregator: "openrouter" # o "pioneer"
+  aggregator: "openrouter"
   routes:
     feed_summary:
       tier: "fast_and_cheap"
-      preferred_model: "deepseek/deepseek-chat"
+      preferred_model: "google/gemini-2.0-flash"
       max_tokens: 350
       temperature: 0.3
     social_formatting:
       tier: "fast_and_cheap"
-      preferred_model: "qwen/qwen-2.5-72b-instruct"
+      preferred_model: "deepseek/deepseek-chat"
       max_tokens: 250
       temperature: 0.4
     music_composition:
       tier: "creative_and_deep"
       preferred_model: "anthropic/claude-3.5-sonnet"
-      max_tokens: 1200
+      max_tokens: 1500
       temperature: 0.8
     dialectic_synthesis:
       tier: "creative_and_deep"
-      preferred_model: "anthropic/claude-3.5-sonnet"
-      max_tokens: 800
+      preferred_model: "google/gemini-2.0-pro-exp"
+      max_tokens: 1000
       temperature: 0.7
 
 memory:
@@ -75,19 +75,22 @@ nous_portal:
     voice: "./output/voice"
     music: "./output/music"
     posts: "./output/posts"
-  features:
-    image_generation:
-      provider: "fal"
-      model: "fal-ai/flux/dev"
-      default_aspect_ratio: "1:1"
-      safety_tolerance: "2"
-      default_aesthetic_prefix: "masterpiece, cinematic lighting, japanese aesthetic, subtle elegance, organic textures"
-    voice_synthesis:
-      provider: "nous_tts"
+  frontier_engines:
+    vision:
+      default_provider: "gemini_image" # "gemini_image", "seedream", "flux_pro"
+      models:
+        gemini_image: "google/imagen-3-generate-002"
+        seedream: "bytedance/seedream-v2.5-hd"
+        flux_pro: "fal-ai/flux-pro/v1.1-ultra"
+    music:
+      default_engine: "flow_audio" # "flow_audio", "suno_v4", "midi_only"
+      models:
+        flow_audio: "deepmind/flow-audio-craft-v2"
+        suno_v4: "suno/v4-studio"
+    voice:
+      default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"
       voice_id: "yuki_serene_alto"
-      cadence_pause_seconds: 0.35
-      sample_rate: 44100
-      format: "ogg_opus"
+      cadence_pause_ms: 350
     web_search:
       provider: "firecrawl"
       max_results: 5
@@ -97,15 +100,15 @@ scheduler:
   timezone: "Europe/Madrid"
   cron_jobs:
     - name: "nocturnal_trend_reflection"
-      cron: "0 3 * * *" # 03:00 AM
+      cron: "0 3 * * *"
       action: "reflect_on_trends"
       enabled: true
     - name: "morning_inspiration_drop"
-      cron: "30 7 * * *" # 07:30 AM
+      cron: "30 7 * * *"
       action: "publish_morning_art"
       enabled: true
     - name: "daily_memory_synthesis"
-      cron: "30 23 * * *" # 23:30 PM
+      cron: "30 23 * * *"
       action: "synthesize_daily_memory"
       enabled: true
 

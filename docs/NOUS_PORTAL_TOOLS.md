@@ -1,58 +1,76 @@
-# 🎨 Gateway de Medios: Nous Portal (FAL, TTS & Firecrawl)
+# 🎨 Gateway de Medios: Nous Portal con Modelos de Frontera
 
-Este manual documenta la integración de herramientas multimedia en Yuki mediante la pasarela unificada **Nous Portal**.
-
----
-
-## 1. El Dilema de la Fragmentación de APIs
-
-En arneses tradicionales, integrar generación de imagen (Midjourney / Stability), síntesis de voz (ElevenLabs) y motores de búsqueda requiere:
-- Múltiples librerías y dependencias pesadas.
-- Gestión dispersa de tokens y credenciales.
-- Mayor superficie de error en producción.
-
-Con **Nous Portal**, Hermes Agent accede a un **único punto de entrada OAuth** para todas las capacidades de percepción y síntesis.
+Este manual documenta la integración de modelos de **Inteligencia Artificial de Frontera** en Yuki a través de la pasarela unificada **Nous Portal**.
 
 ---
 
-## 2. Herramientas Integradas
+## 1. Motores Visuales de Frontera
 
-### 2.1. Generación de Arte y Portadas (`FAL.ai Flux/SDXL`)
-Permite a Yuki pintar de forma autónoma las portadas de sus sencillos y publicaciones sociales:
-- **Estilo:** `yuki_aesthetic` (composición cuidada, niebla, pan de oro, reflejos de lluvia e iluminación cinematográfica).
-- **Proporciones:** `1:1` para carátulas de sencillos; `16:9` para banners de eventos.
+| Motor | Backend / Proveedor | Características Principales | Uso en Yuki |
+| :--- | :--- | :--- | :--- |
+| **Gemini Image** | `google/imagen-3-generate-002` | Fotorrealismo extremo, texturas orgánicas y composición balanceada | Portadas de sencillos y conceptos visuales principales |
+| **Seedream** | `bytedance/seedream-v2.5-hd` | Estilismo conceptual, líneas expresivas y Kintsugi refinado | Ilustraciones de poesía Waka y publicaciones de redes |
+| **Flux Pro Ultra**| `fal-ai/flux-pro/v1.1-ultra` | Iluminación cinematográfica 8K y renderizado de materiales | Banners de eventos y arte promocional en alta resolución |
 
 ```python
-# Ejemplo de invocación en Python
+# Ejemplo: Generar portada con Gemini Image
 cover = await agent.media_creator.create_single_cover(
     track_title="El Río Antes de Tener Nombre",
-    visual_concept="Niebla sobre un estanque japonés con reflejos de neón y lluvia sobre asfalto."
+    visual_concept="Niebla sobre estanque japonés con reflejos de neón",
+    provider="gemini_image",
+    lighting="komorebi"
 )
 ```
-
-### 2.2. Síntesis de Voz Emotiva (`Nous TTS`)
-Genera notas de voz realistas en formato OGG Opus optimizadas para Telegram y Discord:
-- **Modelo de Voz:** `yuki_serene_alto`.
-- **Inyección de Cadencia:** Introduce micro-pausas deliberadas (`cadence_pause_seconds: 0.35`) en las comas y puntos, reproduciendo el estilo pausado de Yuki.
-
-```python
-voice = await agent.media_creator.generate_voice_reply(
-    message_text="Hay canciones que nacen de la prisa, y otras que esperan pacientemente su momento."
-)
-```
-
-### 2.3. Exploración Web y Tendencias (`Firecrawl`)
-Permite a Yuki inspeccionar qué es tendencia en música, arte digital y actualidad:
-- Retorna contenido limpio en Markdown sin ruido de anuncios o JavaScript innecesario.
-- Utilizado por la rutina autónoma de las 03:00 AM para nutrir sus reflexiones nocturnas.
 
 ---
 
-## 3. Comparativa: Creación (Hermes) vs Reproducción (OpenClaw)
+## 2. Motores Musicales de Frontera
 
-| Característica | OpenClaw (`shpotify`) | Hermes Agent (`Nous Portal`) |
-| :--- | :--- | :--- |
-| **Acción Principal** | Reproducir en Spotify lo que el usuario escucha localmente | **Crear y publicar** nuevo arte, conceptos musicales y voz propia |
-| **Generación Visual** | Limitada o vía scripts externos complejos | **FAL.ai Flux nativo** con estilos visuales guiados por SOUL.md |
-| **Síntesis de Voz** | Dependiente de TTS del sistema operativo | **Voz neuronal con cadencia y pausas deliberadas (Nous TTS)** |
-| **Autenticación** | Múltiples API keys locales dispersas | **OAuth unificado en Nous Portal** |
+| Motor | Backend | Capacidades | Salida |
+| :--- | :--- | :--- | :--- |
+| **Flow Audio** | `deepmind/flow-audio-craft-v2` | Síntesis acústica de shamisen, koto y sub-bajos 808 profundos | Archivos `.mp3` de alta fidelidad |
+| **Suno v4** | `suno/v4-studio` | Producción completa multipista con voz cantada y lírica | Pistas masterizadas completas |
+| **MIDI Generator** | Pure Python Standard | Generador procedural de partituras Type 1 con escalas tradicionales | Archivos `.mid` multipista |
+
+```python
+# Ejemplo: Composición con Flow Audio + MIDI
+music = await agent.media_creator.compose_beat_structure(
+    title="Memoria de Metal y Sal",
+    bpm=82,
+    scale="insen",
+    engine="flow_audio"
+)
+```
+
+---
+
+## 3. Síntesis Vocal de Frontera con SSML
+
+Yuki utiliza **Gemini Multimodal Audio** y **Nous TTS v2** con marcado SSML para reproducir su cadencia deliberada:
+- **Pausas Respiratorias:** `<break time="350ms"/>` en puntos y comas.
+- **Modo Sombra Nocturna (*Kage*):** Prosodia reducida (`rate="88%"`, `pitch="-2st"`) para notas de voz íntimas de madrugada.
+
+---
+
+## 4. Pipeline de Lanzamiento Orquestado (`/lanzamiento-single`)
+
+```mermaid
+sequenceDiagram
+    autonumber
+    actor Productor as Productor / Mánager
+    participant Yuki as Yuki Agent
+    participant Flow as Flow Audio (DeepMind)
+    participant Vision as Gemini Image / Seedream
+    participant Voice as Gemini Multimodal Voice
+    participant Out as Workspace ./output/
+
+    Productor->>Yuki: /lanzamiento-single (Título, Concepto)
+    Yuki->>Flow: Sintetiza pista acústica + Genera MIDI .mid
+    Flow-->>Out: Guarda ./output/music/*.mp3 y *.mid
+    Yuki->>Vision: Pinta carátula con iluminación Urushi
+    Vision-->>Out: Guarda ./output/art/*.png
+    Yuki->>Voice: Graba nota de voz con SSML
+    Voice-->>Out: Guarda ./output/voice/*.ogg
+    Yuki->>Out: Empaqueta ./output/posts/single_release_*.md
+    Yuki-->>Productor: Entrega lanzamiento maestro completo
+```

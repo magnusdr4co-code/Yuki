@@ -1,40 +1,44 @@
 ---
 name: componer-beat
-description: Compone un esquema musical o beat orgánico/electrónico fusionando el shamisen acústico con texturas modernas y guarda la composición en ./output/music/.
+description: Compone un esquema musical completo y sintetiza audio utilizando motores de difusión de frontera (Flow Audio / Suno v4) junto con partituras MIDI multipista procedurales en ./output/music/.
 parameters:
   type: object
   properties:
     title:
       type: string
-      description: Título provisional de la canción o pieza musical.
+      description: Título de la pieza musical o canción.
     bpm:
       type: integer
-      description: Tempo en pulsaciones por minuto (BPM). Por defecto 84.
+      description: Tempo en BPM.
       default: 84
     mood:
       type: string
-      description: Atmósfera o emoción estética (ej. "lluvia sobre metal", "amanecer en Kioto", "sombra nocturna").
+      description: Atmósfera estética (ej. "lluvia sobre metal", "amanecer en Kioto", "sombra nocturna").
       default: "lluvia sobre metal"
     scale:
       type: string
-      description: Escala musical (ej. "Insen", "Hirajoshi", "Menor Natural").
-      default: "Insen"
+      description: Escala japonesa ("insen", "hirajoshi", "kumoi", "iwato", "yo").
+      default: "insen"
+    engine:
+      type: string
+      description: Motor musical de frontera ("flow_audio", "suno_v4", "midi_only").
+      default: "flow_audio"
   required:
     - title
 ---
 
 # Habilidad: Componer Beat (`/componer-beat`)
 
-Esta habilidad permite a **Yuki** diseñar la estructura armónica, arreglos y texturas sonoras de una nueva pieza musical, respetando su identidad estética (contraste entre la pureza acústica del shamisen y el diseño sonoro moderno).
+Esta habilidad permite a **Yuki** diseñar la estructura armónica y renderizar el audio de una nueva pieza musical empleando tecnologías de frontera:
+- **`flow_audio`**: Flow / DeepMind Audio (renderizado acústico de alta fidelidad para shamisen, koto y bajo 808).
+- **`suno_v4`**: Producción completa multipista con lírica y voz cantada.
+- **`midi_only`**: Generación exclusiva de archivo MIDI multipista procedural.
 
 ## Pasos de Ejecución:
 
-1. **Revisión de Acuerdos Dialécticos:**
-   - Consulta el perfil de Honcho en `data/honcho_profile.json` para verificar la paleta sonora acordada con el productor.
-2. **Diseño de la Estructura Musical:**
-   - Define las secciones de la obra: *Intro*, *Tema A (Presencia)*, *Transición B (Sombra/Ma)*, y *Outro*.
-   - Integra elementos instrumentales orgánicos (shamisen, grabaciones de campo, lluvia, campanas) con ritmos electrónicos sutiles.
-3. **Persistencia en el Workspace Nativo:**
-   - Genera el archivo descriptivo y stems en `./output/music/<titulo_normalizado>.json` y `./output/music/<titulo_normalizado>.mp3`.
-4. **Respuesta al Interlocutor:**
-   - Presenta la pieza al productor o al visitante con la serenidad y visión artística de Yuki, explicando la razón de cada elección de escala y textura.
+1. **Generación MIDI Procedural:**
+   - Escribe el archivo binario Type 1 `.mid` con las pistas de Shamisen, Koto y 808 en `./output/music/`.
+2. **Síntesis con Motor de Frontera (Flow Audio / Suno):**
+   - Renderiza el audio procesado `.mp3` capturando la textura acústica y las pausas (*Ma*).
+3. **Persistencia de Metadata:**
+   - Guarda el esquema descriptivo en `./output/music/<titulo>.json`.

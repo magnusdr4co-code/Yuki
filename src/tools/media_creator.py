@@ -1,7 +1,8 @@
 """
 Herramientas creativas de alto nivel para la Diva Digital.
-Permite a Yuki pintar portadas, emitir notas de voz SSML, componer archivos MIDI reales y orquestar lanzamientos completos.
-Todas las salidas se organizan en ./output/ (Workspace nativo de Hermes).
+Permite a Yuki pintar portadas con Gemini Image / Seedream / Flux Pro,
+componer música con Flow Audio / Suno v4 / MIDI real,
+y orquestar lanzamientos multimedia en el workspace nativo ./output/.
 """
 
 import os
@@ -21,29 +22,47 @@ class MediaCreatorTool:
         self,
         track_title: str,
         visual_concept: str,
+        provider: str = "gemini_image", # "gemini_image", "seedream", "flux_pro"
         lighting: str = "komorebi"
     ) -> Dict[str, Any]:
-        """Genera una portada de sencillo artística en ./output/art/ con FAL.ai."""
+        """Genera una portada de sencillo con modelos de frontera (Gemini Image / Seedream / Flux Pro)."""
         season = get_current_micro_season()
         prompt = f"Album single cover for track '{track_title}'. Concept: {visual_concept}. Seasonal motif: {season['seasonal_kigo']}. Traditional shamisen meets modern industrial minimalism."
-        result = await self.portal.generate_image_fal(prompt=prompt, aspect_ratio="1:1", lighting_style=lighting)
+        result = await self.portal.generate_image_frontier(
+            prompt=prompt,
+            provider=provider,
+            aspect_ratio="1:1",
+            lighting_style=lighting
+        )
         return {
             "track_title": track_title,
+            "provider": provider,
+            "model_used": result["model"],
             "cover_url": result["image_url"],
             "local_path": result["local_path"],
             "prompt_used": result["prompt_used"],
             "season_used": season["sekki"]
         }
 
-    async def generate_voice_reply(self, message_text: str, is_night_mode: bool = False) -> Dict[str, Any]:
-        """Genera una nota de voz con marcado SSML en ./output/voice/."""
-        result = await self.portal.synthesize_voice_tts(text=message_text, is_night_mode=is_night_mode)
+    async def generate_voice_reply(
+        self,
+        message_text: str,
+        is_night_mode: bool = False,
+        engine: str = "gemini_multimodal_audio"
+    ) -> Dict[str, Any]:
+        """Genera una nota de voz SSML con motor de audio de frontera en ./output/voice/."""
+        result = await self.portal.synthesize_voice_tts(
+            text=message_text,
+            is_night_mode=is_night_mode,
+            engine=engine
+        )
         return {
             "audio_url": result["audio_url"],
             "local_path": result["local_path"],
             "duration": result["duration_seconds"],
             "transcript": message_text,
-            "ssml": result["ssml_payload"]
+            "ssml": result["ssml_payload"],
+            "provider": engine
         }
 
     async def compose_beat_structure(
@@ -51,11 +70,12 @@ class MediaCreatorTool:
         title: str,
         bpm: int = 84,
         scale: str = "insen",
-        mood: str = "lluvia sobre metal"
+        mood: str = "lluvia sobre metal",
+        engine: str = "flow_audio" # "flow_audio", "suno_v4", "midi_only"
     ) -> Dict[str, Any]:
         """
-        Compone una estructura musical y genera tanto el archivo de metadata .json
-        como el archivo MIDI real (.mid) multipista en ./output/music/.
+        Compone una pieza musical con motores de audio de frontera (Flow / Suno v4)
+        generando también la partitura MIDI multipista procedural en ./output/music/.
         """
         music_dir = "output/music"
         os.makedirs(music_dir, exist_ok=True)
@@ -70,16 +90,29 @@ class MediaCreatorTool:
         )
 
         season = get_current_micro_season()
+        prompt = f"Atmospheric organic lofi track '{title}', authentic Japanese shamisen lead, subtle koto arpeggio, 808 deep sub-bass, mood: {mood}, season: {season['seasonal_kigo']}"
+        
+        # 2. Generar síntesis de audio de frontera (Flow Audio / Suno)
+        audio_result = await self.portal.generate_music_flow(
+            title=title,
+            prompt=prompt,
+            engine=engine,
+            bpm=bpm,
+            scale=scale
+        )
+
         track_data = {
             "title": title,
             "bpm": bpm,
             "scale": f"{scale.capitalize()} (Tradicional Japonesa)",
             "mood": mood,
+            "music_engine": engine,
             "seasonal_influence": season["sekki"],
             "midi_file": midi_result["filename"],
+            "audio_rendered_file": os.path.basename(audio_result["local_path"]),
             "structure": [
                 {"section": "Intro", "bars": 4, "lead": f"shamisen solo con atmósfera de {season['seasonal_kigo']}"},
-                {"section": "A (Tema Principal)", "bars": 8, "lead": "shamisen + percusión lofi contenida"},
+                {"section": "A (Tema Principal)", "bars": 8, "lead": "shamisen acústico + Flow Audio bassline"},
                 {"section": "B (Transición Sombra)", "bars": 8, "lead": "bajo 808 profundo y pausas (Ma)"},
                 {"section": "Outro", "bars": 4, "lead": "eco de shamisen desvaneciéndose en silencio"}
             ],
@@ -95,6 +128,8 @@ class MediaCreatorTool:
             "title": title,
             "meta_path": meta_path,
             "midi_path": midi_result["file_path"],
+            "audio_rendered_path": audio_result["local_path"],
+            "audio_url": audio_result["audio_url"],
             "midi_bytes": midi_result["size_bytes"],
             "track_data": track_data
         }
@@ -103,31 +138,39 @@ class MediaCreatorTool:
         self,
         title: str,
         concept: str,
+        image_provider: str = "gemini_image",
+        music_engine: str = "flow_audio",
         scale: str = "insen",
         bpm: int = 82
     ) -> Dict[str, Any]:
         """
-        Mega-habilidad de Skill Chaining:
-        1. Composición de beat + archivo MIDI (.mid)
-        2. Creación de portada visual FAL (.png)
-        3. Composición de poema Waka
-        4. Síntesis de voz emotiva SSML (.ogg)
-        5. Preparación del paquete de publicación en ./output/posts/
+        Orquestación de lanzamiento con suite completa de frontera:
+        - Música: Flow Audio / Suno v4 + MIDI real
+        - Portada: Gemini Image / Seedream / Flux Pro
+        - Lírica Waka estacional
+        - Voz: Gemini Multimodal Audio SSML
         """
-        # Paso 1: Beat y MIDI
-        music_res = await self.compose_beat_structure(title=title, bpm=bpm, scale=scale, mood=concept)
+        # Paso 1: Beat con Flow Audio + MIDI
+        music_res = await self.compose_beat_structure(
+            title=title, bpm=bpm, scale=scale, mood=concept, engine=music_engine
+        )
         
-        # Paso 2: Portada FAL
-        art_res = await self.create_single_cover(track_title=title, visual_concept=concept, lighting="urushi")
+        # Paso 2: Portada con Gemini Image / Seedream
+        art_res = await self.create_single_cover(
+            track_title=title, visual_concept=concept, provider=image_provider, lighting="urushi"
+        )
 
         # Paso 3: Poema lírico
         season = get_current_micro_season()
         lyrics = f"Sobre el metal frío,\ncae la lluvia de {season['seasonal_kigo']},\nel shamisen llama.\nEn el silencio activo,\nlas palabras encuentran paz."
 
-        # Paso 4: Nota de voz
-        voice_res = await self.generate_voice_reply(message_text=f"Presento '{title}'. Una pieza nacida en el silencio de {season['sekki']}.")
+        # Paso 4: Nota de voz con Gemini Audio
+        voice_res = await self.generate_voice_reply(
+            message_text=f"Presento '{title}'. Una pieza nacida en el silencio de {season['sekki']}.",
+            engine="gemini_multimodal_audio"
+        )
 
-        # Paso 5: Post empaquetado
+        # Paso 5: Post empaquetado en ./output/posts/
         posts_dir = "output/posts"
         os.makedirs(posts_dir, exist_ok=True)
         post_file = os.path.join(posts_dir, f"single_release_{title.lower().replace(' ', '_')}.md")
@@ -136,20 +179,24 @@ class MediaCreatorTool:
             f.write(f"""# Lanzamiento Oficial: {title}
 *Diva Digital Autónoma: Yuki (雪)*
 *Estación: {season['sekki']} ({season['micro_season_ko']})*
+*Motores de Frontera: {image_provider.upper()} (Visual) + {music_engine.upper()} (Audio) + Gemini Audio (Voz)*
 
 ## Lírica Waka:
 > {lyrics.replace(chr(10), chr(10) + '> ')}
 
 ## Recursos del Workspace:
-- 🎵 Pista MIDI: `{music_res['midi_path']}`
-- 🎨 Portada FAL: `{art_res['local_path']}`
-- 🎙️ Nota de Voz (SSML): `{voice_res['local_path']}`
+- 🎵 Render de Audio ({music_engine}): `{music_res['audio_rendered_path']}`
+- 🎼 Pista MIDI multipista: `{music_res['midi_path']}`
+- 🎨 Portada ({image_provider}): `{art_res['local_path']}`
+- 🎙️ Nota de Voz (Gemini SSML): `{voice_res['local_path']}`
 """)
 
         return {
             "status": "completed",
             "title": title,
             "post_package": post_file,
+            "image_provider": image_provider,
+            "music_engine": music_engine,
             "music": music_res,
             "art": art_res,
             "voice": voice_res,
