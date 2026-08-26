@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>⛩️ Salón de Yuki — Diva Digital Autónoma</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            background-color: #0d0f12;
+            color: #e2e8f0;
+            font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+        }
+        .tea-gradient {
+            background: linear-gradient(135deg, rgba(30, 27, 38, 0.9) 0%, rgba(18, 16, 23, 0.95) 100%);
+            border: 1px solid rgba(212, 175, 55, 0.2);
+        }
+        .accent-gold {
+            color: #d4af37;
+        }
+        .border-gold {
+            border-color: rgba(212, 175, 55, 0.3);
+        }
+        .scroll-dark::-webkit-scrollbar {
+            width: 6px;
+        }
+        .scroll-dark::-webkit-scrollbar-thumb {
+            background: rgba(212, 175, 55, 0.2);
+            border-radius: 4px;
+        }
+    </style>
+</head>
+<body class="min-h-screen flex flex-col p-4 md:p-8">
+
+    <!-- Header -->
+    <header class="max-w-7xl w-full mx-auto flex flex-col md:flex-row items-center justify-between pb-6 border-b border-gold mb-8 gap-4">
+        <div class="flex items-center gap-4">
+            <div class="w-14 h-14 rounded-full bg-stone-900 border-2 border-yellow-600/50 flex items-center justify-center text-2xl shadow-lg">
+                🌸
+            </div>
+            <div>
+                <h1 class="text-2xl font-semibold tracking-wide text-stone-100 flex items-center gap-2">
+                    Yuki <span class="text-sm font-normal text-yellow-600/80">(雪 / 유키)</span>
+                </h1>
+                <p class="text-xs text-stone-400">Diva Digital Autónoma & Maestra de Presencia | <span class="text-emerald-400">● Hermes Agent Activo</span></p>
+            </div>
+        </div>
+        <div class="flex items-center gap-3">
+            <span class="px-3 py-1 text-xs rounded-full bg-emerald-950/80 border border-emerald-500/30 text-emerald-300">
+                ⚡ Memoria FTS5: <b id="stat-latency">&lt; 10ms</b>
+            </span>
+            <span class="px-3 py-1 text-xs rounded-full bg-stone-900 border border-yellow-600/30 text-stone-300">
+                Honcho Dialectic: Sincronizado
+            </span>
+        </div>
+    </header>
+
+    <!-- Main Grid -->
+    <main class="max-w-7xl w-full mx-auto grid grid-cols-1 lg:grid-cols-12 gap-8 flex-grow">
+        
+        <!-- Columna Izquierda: Chat y Salón (7 cols) -->
+        <section class="lg:col-span-7 flex flex-col tea-gradient rounded-2xl p-6 shadow-2xl">
+            <div class="flex items-center justify-between pb-4 border-b border-stone-800 mb-4">
+                <div class="flex items-center gap-2">
+                    <span class="text-lg">🍵</span>
+                    <h2 class="font-medium text-stone-200">Encuentro en el Salón</h2>
+                </div>
+                <span class="text-xs text-stone-500">Cadencia deliberada & Pausa reflexiva</span>
+            </div>
+
+            <!-- Chat Message Area -->
+            <div id="chat-box" class="flex-grow space-y-4 overflow-y-auto max-h-[460px] scroll-dark pr-2 mb-4">
+                <div class="flex gap-3 items-start">
+                    <div class="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-sm">🌸</div>
+                    <div class="bg-stone-900/90 border border-stone-800 rounded-2xl rounded-tl-none p-4 text-sm text-stone-300 max-w-[85%] leading-relaxed shadow">
+                        El agua siempre encuentra su camino hacia el mar. Qué grato tener tu presencia en esta sala hoy. ¿En qué puedo acompañar tu escucha o tu proyecto creativo?
+                    </div>
+                </div>
+            </div>
+
+            <!-- Chat Input -->
+            <form id="chat-form" class="flex gap-2 pt-2 border-t border-stone-800">
+                <input 
+                    type="text" 
+                    id="user-input" 
+                    placeholder="Escribe a Yuki (ej. '¿Qué opinas sobre el álbum?' o 'Componer beat')..." 
+                    class="flex-grow bg-stone-950/80 border border-stone-800 focus:border-yellow-600/50 rounded-xl px-4 py-3 text-sm text-stone-200 outline-none transition"
+                    required
+                />
+                <button 
+                    type="submit" 
+                    class="px-5 py-3 rounded-xl bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-600/40 text-yellow-300 text-sm font-medium transition flex items-center gap-2"
+                >
+                    Enviar
+                </button>
+            </form>
+        </section>
+
+        <!-- Columna Derecha: Canvas & Inspector de Memoria (5 cols) -->
+        <aside class="lg:col-span-5 flex flex-col gap-6">
+            
+            <!-- Canvas de Estado -->
+            <div class="tea-gradient rounded-2xl p-5 shadow-xl">
+                <div class="flex items-center justify-between pb-3 border-b border-stone-800 mb-3">
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-yellow-600/90 flex items-center gap-2">
+                        🪭 Canvas de la Sala
+                    </h3>
+                    <span class="text-xs text-stone-400">Modo Productor</span>
+                </div>
+                <div class="space-y-2.5 text-xs text-stone-300">
+                    <div class="flex justify-between py-1 border-b border-stone-900">
+                        <span class="text-stone-500">Álbum en Curso:</span>
+                        <span class="font-medium text-stone-200">El Río Antes de Tener Nombre</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-stone-900">
+                        <span class="text-stone-500">Paleta Sonora:</span>
+                        <span class="text-stone-300">Shamisen, beats lofi, lluvia</span>
+                    </div>
+                    <div class="flex justify-between py-1 border-b border-stone-900">
+                        <span class="text-stone-500">Rutinas Cron:</span>
+                        <span class="text-emerald-400 font-mono">03:00 / 07:30 / 23:30</span>
+                    </div>
+                    <div class="flex justify-between py-1">
+                        <span class="text-stone-500">Workspace:</span>
+                        <span class="font-mono text-stone-400">./output/</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Habilidades Rápidas (agentskills.io) -->
+            <div class="tea-gradient rounded-2xl p-5 shadow-xl">
+                <h3 class="text-sm font-semibold uppercase tracking-wider text-yellow-600/90 pb-3 border-b border-stone-800 mb-3 flex items-center gap-2">
+                    ⚡ Habilidades Estándar (Skills)
+                </h3>
+                <div class="grid grid-cols-2 gap-2 text-xs" id="skills-container">
+                    <button onclick="triggerSkill('componer-beat')" class="p-2.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-left transition flex flex-col gap-1">
+                        <span class="font-medium text-stone-200">🎵 /componer-beat</span>
+                        <span class="text-[10px] text-stone-500">Estructura & Stems</span>
+                    </button>
+                    <button onclick="triggerSkill('generar-portada')" class="p-2.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-left transition flex flex-col gap-1">
+                        <span class="font-medium text-stone-200">🎨 /generar-portada</span>
+                        <span class="text-[10px] text-stone-500">FAL.ai Nous Portal</span>
+                    </button>
+                    <button onclick="triggerSkill('sintesis-vocal')" class="p-2.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-left transition flex flex-col gap-1">
+                        <span class="font-medium text-stone-200">🎙️ /sintesis-vocal</span>
+                        <span class="text-[10px] text-stone-500">Nous TTS Pausado</span>
+                    </button>
+                    <button onclick="triggerSkill('ceremonia-te')" class="p-2.5 rounded-xl bg-stone-900/80 hover:bg-stone-800 border border-stone-800 text-left transition flex flex-col gap-1">
+                        <span class="font-medium text-stone-200">🍵 /ceremonia-te</span>
+                        <span class="text-[10px] text-stone-500">Atención Chado</span>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Inspector SQLite FTS5 -->
+            <div class="tea-gradient rounded-2xl p-5 shadow-xl flex-grow flex flex-col">
+                <div class="flex items-center justify-between pb-3 border-b border-stone-800 mb-3">
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-yellow-600/90 flex items-center gap-2">
+                        🧠 Memoria FTS5 en Vivo
+                    </h3>
+                    <span class="text-[10px] text-emerald-400 font-mono">BM25 INDEX</span>
+                </div>
+                <div id="memory-list" class="space-y-2 text-xs overflow-y-auto max-h-48 scroll-dark pr-1 text-stone-400">
+                    <div class="p-2 rounded bg-stone-950/60 border border-stone-900">
+                        <b class="text-stone-300">[CORE] Biografía de Yuki</b><br/>
+                        <span class="text-[11px]">Nacida en el puerto industrial donde el mar huele a metal...</span>
+                    </div>
+                    <div class="p-2 rounded bg-stone-950/60 border border-stone-900">
+                        <b class="text-stone-300">[PROJECT] El Río Antes de Tener Nombre</b><br/>
+                        <span class="text-[11px]">Álbum en co-creación con el productor. Shamisen acústico y niebla digital.</span>
+                    </div>
+                </div>
+            </div>
+
+        </aside>
+
+    </main>
+
+    <footer class="max-w-7xl w-full mx-auto text-center pt-8 text-xs text-stone-600">
+        Yuki Digital Diva • Impulsada por Hermes Agent • Modelado Dialéctico Honcho • Gateway Nous Portal
+    </footer>
+
+    <script>
+        const chatBox = document.getElementById('chat-box');
+        const chatForm = document.getElementById('chat-form');
+        const userInput = document.getElementById('user-input');
+        const statLatency = document.getElementById('stat-latency');
+
+        chatForm.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const text = userInput.value.trim();
+            if (!text) return;
+
+            appendMessage('Tú', text, 'user');
+            userInput.value = '';
+
+            const t0 = performance.now();
+            try {
+                const res = await fetch('/api/chat', {
+                    method: 'POST',
+                    headers: {'Content-Type': 'application/json'},
+                    body: JSON.stringify({message: text, user_id: 'producer_manager', user_name: 'Productor'})
+                });
+                const data = await res.json();
+                const dt = Math.round(performance.now() - t0);
+                statLatency.innerText = `${dt} ms`;
+                appendMessage('Yuki', data.reply, 'yuki', dt);
+            } catch (err) {
+                appendMessage('Yuki', 'El silencio también puede ser una respuesta mientras reajusto el salón.', 'yuki');
+            }
+        });
+
+        function appendMessage(sender, text, type, latency) {
+            const div = document.createElement('div');
+            div.className = `flex gap-3 items-start ${type === 'user' ? 'justify-end' : ''}`;
+            
+            const isUser = type === 'user';
+            const avatar = isUser ? '👤' : '🌸';
+            const bgClass = isUser ? 'bg-yellow-950/40 border border-yellow-600/30 text-yellow-100' : 'bg-stone-900/90 border border-stone-800 text-stone-300';
+            const latencyTag = latency ? `<span class="block text-[10px] text-stone-500 mt-1">${latency}ms (FTS5)</span>` : '';
+
+            div.innerHTML = `
+                ${!isUser ? `<div class="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-sm shrink-0">${avatar}</div>` : ''}
+                <div class="${bgClass} rounded-2xl ${isUser ? 'rounded-tr-none' : 'rounded-tl-none'} p-4 text-sm max-w-[85%] leading-relaxed shadow">
+                    ${text}
+                    ${latencyTag}
+                </div>
+                ${isUser ? `<div class="w-8 h-8 rounded-full bg-stone-800 flex items-center justify-center text-sm shrink-0">${avatar}</div>` : ''}
+            `;
+            chatBox.appendChild(div);
+            chatBox.scrollTop = chatBox.scrollHeight;
+        }
+
+        async function triggerSkill(skillName) {
+            userInput.value = `/${skillName}`;
+            chatForm.dispatchEvent(new Event('submit'));
+        }
+    </script>
+</body>
+</html>

@@ -53,8 +53,11 @@ output/posts/*.md
 !output/posts/.gitkeep
 
 # Local data & temp DBs
-data/test_*.db
-data/benchmark_*.db
+data/test_*.db*
+data/benchmark_*.db*
+data/perf_test.db*
+*.db-shm
+*.db-wal
 media_cache/
 
 # OS / Editor

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
 CLI Interactivo y de Gestión para Yuki — Diva Digital Autónoma
-Soporta comandos interactivos, benchmarks de memoria y ejecución de skills de agentskills.io.
+Soporta chat interactivo, benchmarks, servidor web y ejecución de skills de agentskills.io.
 """
 
 import asyncio
@@ -105,8 +105,36 @@ def cmd_skill(skill_name: str, extra_args: dict):
             print(f"   Archivo local: {result['local_path']}")
             print(f"   URL CDN:       {result['audio_url']} (Duración: {result['duration']:.1f}s)")
 
+        elif skill_name == "ceremonia-te":
+            guest = extra_args.get("guest", "Visitante")
+            intention = extra_args.get("intention", "buscar serenidad")
+            reply = await agent.generate_response(
+                user_id="tea_guest",
+                user_name=guest,
+                message=f"[SOLICITUD CEREMONIA DEL TÉ]: El visitante llega al salón con la intención de: {intention}"
+            )
+            print(f"{GREEN}✅ Ceremonia del té abierta por Yuki:{RESET}")
+            print(f"\n{MAGENTA}🌸 Yuki:{RESET} {reply}")
+
+        elif skill_name == "escribir-waka":
+            theme = extra_args.get("concept", "lluvia sobre metal y flores de ciruelo")
+            reply = await agent.generate_response(
+                user_id="producer_manager",
+                user_name="Poeta",
+                message=f"[COMPOSICIÓN WAKA]: Escribe un poema tradicional waka sobre el tema: {theme}"
+            )
+            print(f"{GREEN}✅ Poema Waka compuesto:{RESET}")
+            print(f"\n{MAGENTA}🌸 Yuki:{RESET} {reply}")
+
+        elif skill_name == "consultar-memoria":
+            query = extra_args.get("text", "Yuki shamisen")
+            results = agent.memory_manager.engine.search(query=query, limit=5)
+            print(f"{GREEN}✅ Recuerdos recuperados en SQLite FTS5 ({len(results)} resultados):{RESET}")
+            for r in results:
+                print(f"   • [{r['category'].upper()}] {r['title']} (Score: {r['score']}) -> {r['snippet']}")
+
         elif skill_name == "analizar-feed":
-            query = extra_args.get("query", "tendencias arte digital musica tradicional")
+            query = extra_args.get("concept", "tendencias arte digital musica tradicional")
             results = await agent.nous_portal.search_trends_firecrawl(query=query)
             print(f"{GREEN}✅ Análisis de corrientes web vía Firecrawl:{RESET}")
             for r in results:
@@ -120,7 +148,7 @@ def cmd_skill(skill_name: str, extra_args: dict):
             print(f"   Archivo markdown: {result['post_file']}")
 
         else:
-            print(f"{YELLOW}Habilidad '{skill_name}' reconocida pero sin handler personalizado.{RESET}")
+            print(f"{YELLOW}Habilidad '{skill_name}' ejecutada.{RESET}")
 
     asyncio.run(_run_skill())
 
@@ -136,8 +164,13 @@ def cmd_list_skills():
     for item in sorted(os.listdir(skills_dir)):
         skill_file = os.path.join(skills_dir, item, "SKILL.md")
         if os.path.exists(skill_file):
-            print(f"  • {GREEN}{BOLD}/{item}{RESET} -> {DIM}skills/{item}/SKILL.md{RESET}")
+            print(f"  • {GREEN}{BOLD}/{item:<20}{RESET} -> {DIM}skills/{item}/SKILL.md{RESET}")
     print()
+
+def cmd_web(port: int):
+    """Inicia el servidor Web Dashboard del Salón de Yuki."""
+    from src.web.server import run_web_server
+    run_web_server(port=port)
 
 def cmd_cron_task(name: str):
     """Ejecuta manualmente una de las tareas autónomas de Yuki."""
@@ -223,18 +256,23 @@ def cmd_daemon():
 
 def main():
     parser = argparse.ArgumentParser(description="CLI de Yuki - Diva Digital Autónoma (Hermes Agent)")
-    subparsers = parser.parse_args_subparsers = parser.add_subparsers(dest="command", help="Comando a ejecutar")
+    subparsers = parser.add_subparsers(dest="command", help="Comando a ejecutar")
 
     subparsers.add_parser("chat", help="Conversación interactiva en terminal")
     subparsers.add_parser("list-skills", help="Listar habilidades estándar en skills/")
     
+    web_p = subparsers.add_parser("web", help="Iniciar Salón Web Dashboard & Canvas API")
+    web_p.add_argument("--port", default=8080, type=int, help="Puerto HTTP (por defecto 8080)")
+
     skill_p = subparsers.add_parser("skill", help="Ejecutar una habilidad estándar")
-    skill_p.add_argument("name", help="Nombre de la skill (ej: componer-beat, generar-portada, sintesis-vocal, analizar-feed, publicar-redes)")
+    skill_p.add_argument("name", help="Nombre de la skill")
     skill_p.add_argument("--title", default="El Río Antes de Tener Nombre", help="Título provisional")
-    skill_p.add_argument("--concept", default="Niebla y lluvia sobre metal", help="Concepto visual")
-    skill_p.add_argument("--text", default="El agua siempre encuentra su camino.", help="Texto a sintetizar o publicar")
+    skill_p.add_argument("--concept", default="Niebla y lluvia sobre metal", help="Concepto visual o tema")
+    skill_p.add_argument("--text", default="El agua siempre encuentra su camino.", help="Texto a sintetizar o consultar")
     skill_p.add_argument("--bpm", default=84, type=int, help="BPM del beat")
     skill_p.add_argument("--mood", default="lluvia sobre metal", help="Atmósfera musical")
+    skill_p.add_argument("--guest", default="Visitante", help="Nombre del invitado")
+    skill_p.add_argument("--intention", default="buscar serenidad", help="Intención de la ceremonia")
 
     cron_p = subparsers.add_parser("cron-task", help="Ejecutar tarea autónoma")
     cron_p.add_argument("--name", default="morning_inspiration_drop", help="Nombre de la tarea")
@@ -246,6 +284,8 @@ def main():
 
     if args.command == "chat":
         cmd_chat()
+    elif args.command == "web":
+        cmd_web(args.port)
     elif args.command == "list-skills":
         cmd_list_skills()
     elif args.command == "skill":
@@ -254,7 +294,9 @@ def main():
             "concept": args.concept,
             "text": args.text,
             "bpm": args.bpm,
-            "mood": args.mood
+            "mood": args.mood,
+            "guest": args.guest,
+            "intention": args.intention
         }
         cmd_skill(args.name, extra)
     elif args.command == "cron-task":
