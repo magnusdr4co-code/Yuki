@@ -2,8 +2,8 @@
 
 *Propuesta de infraestructura para Yuki: **Nous Portal** como pasarela única de modelos y herramientas, **OpenRouter** como respaldo y capa de razonamiento nuclear, **Google Cloud** como hogar del contenedor Hermes, y el inventario mínimo de cuentas del proyecto.*
 
-> **Estado: propuesta adoptada — pendiente de ejecución.**
-> Las decisiones de §0 se dan por tomadas y son la base del plan de §3. Los tres supuestos que aún dependen del productor (región, música y presupuesto) están fijados con un valor por defecto reversible en §8.
+> **Estado: propuesta cerrada (v1.0) — lista para ejecutar.**
+> Las decisiones de §0 se dan por tomadas y son la base del plan de §3. Los tres supuestos que aún dependen del productor (región, música y presupuesto) están fijados con un valor por defecto reversible en §8. La revisión final añadió los detalles operativos de §2.4 y el bloque de cumplimiento de §6.bis; la lista de verificación de cierre está en §9.
 > Fecha de investigación: agosto 2026 · Documentos relacionados: [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) · [`NOUS_PORTAL_TOOLS.md`](NOUS_PORTAL_TOOLS.md)
 
 ---
@@ -30,6 +30,8 @@ Regla de oro de la arquitectura: **Nous Portal es el núcleo cognitivo y multimo
 ---
 
 ## 1. Investigación: OpenRouter como proveedor multimodal y nuclear
+
+> Esta sección es la investigación que sustenta D-2 y D-3. Tras comparar con Nous Portal (§1.bis), OpenRouter queda como **respaldo cognitivo y ruta de escape**, no como pasarela principal. Los *tiers* y el control de razonamiento de §1.2 y §1.3 se aplican igual sea cual sea la pasarela que atienda la petición.
 
 ### 1.1 Qué cubre hoy OpenRouter
 
@@ -251,6 +253,14 @@ graph TD
 - **Identidad:** una cuenta de servicio dedicada `yuki-runtime@` con `secretmanager.secretAccessor`, `storage.objectAdmin` sobre un único bucket y `logging.logWriter`. Nunca la cuenta por defecto de Compute con *scope* `cloud-platform`.
 - **Actualizaciones:** `docker compose pull && docker compose up -d` disparado por GitHub Actions vía SSH IAP, o simplemente manual. La imagen queda versionada en Artifact Registry.
 
+**Cinco detalles detectados al contrastar la propuesta con el código del repositorio:**
+
+- ⚠️ **Zona horaria.** `config.yaml` programa el cron en `Europe/Madrid` (03:00, 07:30, 23:30) pero la VM y el contenedor corren en UTC, y `python:3.11-slim` **no incluye `tzdata`**. APScheduler 3.x se apoya en su propia base de zonas, pero `python-telegram-bot` 21 y `zoneinfo` no: hay que añadir `tzdata` al `Dockerfile` (`apt-get install -y tzdata`) y fijar `ENV TZ=Europe/Madrid`. Sin esto, el *morning drop* puede desplazarse una hora al cambiar el horario de verano — o fallar directamente.
+- ⚠️ **OAuth del Portal en un contenedor sin navegador.** `hermes setup --portal` necesita un navegador una vez. El flujo correcto es autenticarse en local, guardar el `refresh token` de `~/.hermes/auth.json` **como secreto en Secret Manager** y montarlo en el contenedor. Hay que vigilar su caducidad: si expira, Yuki se queda muda sin previo aviso. La alerta de salud (§6) debe cubrir también el fallo de autenticación, no sólo la caída del proceso.
+- ⚠️ **Acceso al Salón Web.** `src/web/server.py` escucha en el 8080 y `docker-compose.yml` lo publica, pero la VM no tiene IP pública. El acceso es por túnel, no abriendo el firewall: `gcloud compute start-iap-tunnel yuki-agent 8080 --local-host-port=localhost:8080 --zone=us-central1-a`.
+- **Salida de red del nivel gratuito.** El *Always Free* incluye **1 GB/mes** de salida desde Norteamérica. Arte y notas de voz (≈ 30 imágenes + audio diario ≈ 100 MB/mes) caben de sobra; los *reels* de vídeo de la fase 3 (≈ 20 MB cada uno) se comerían la cuota. Si se activa vídeo, contar con salir del nivel gratuito o servir el media desde Cloud Storage.
+- **`src/serverless/modal_app.py` queda obsoleto.** La propuesta aloja a Yuki en Compute Engine (D-7) y el sandbox de Modal viene ya dentro del Tool Gateway (D-1). Se marca el módulo como alternativa no soportada y se retira `modal>=0.62.0` de `requirements.txt` (aligera la imagen y elimina una dependencia sin uso en producción).
+
 ### 2.5 Alternativa: Hermes Cloud (incluido en la suscripción del Portal)
 
 El Portal incluye **Hermes Cloud**, hospedaje gestionado 24/7 del agente con contenedor propio por agente, memoria persistente y conectores a Telegram, Discord, Slack, correo y CLI sobre una única memoria. Escala a cero en reposo y se factura contra el mismo saldo.
@@ -280,9 +290,11 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 | 1.3 | Crear cuenta de servicio `yuki-runtime` con `secretmanager.secretAccessor`, `storage.objectAdmin` (un solo bucket) y `logging.logWriter` (D-8) | Identidad de ejecución sin permisos de más |
 | 1.4 | Cargar en Secret Manager las claves de `.env.example` | Un secreto por clave; ningún `.env` en la VM |
 | 1.5 | Crear disco persistente `yuki-data` (20 GB) y VM `e2-micro` con COS en `us-central1`, sin IP pública (D-7) | VM accesible sólo por IAP |
-| 1.6 | Construir y subir la imagen a Artifact Registry; `docker compose up -d` | Contenedor en marcha |
+| 1.6 | Añadir `tzdata` y `ENV TZ=Europe/Madrid` al `Dockerfile` antes de construir (§2.4) | Cron en hora peninsular pese a la VM en UTC |
+| 1.7 | Construir y subir la imagen a Artifact Registry; `docker compose up -d` | Contenedor en marcha |
+| 1.8 | Verificar el Salón Web por túnel IAP, sin abrir el firewall | `start-iap-tunnel` documentado en el runbook |
 
-**Criterio de aceptación:** `python3 cli.py memory-benchmark` dentro del contenedor devuelve latencia < 150 ms, `cli.py chat` responde, y la VM sobrevive a un reinicio con la base SQLite intacta en el disco persistente.
+**Criterio de aceptación:** `python3 cli.py memory-benchmark` dentro del contenedor devuelve latencia < 150 ms, `cli.py chat` responde, `date` dentro del contenedor muestra hora de Madrid, y la VM sobrevive a un reinicio con la base SQLite intacta en el disco persistente.
 
 ### Fase 2 — Pasarela Nous Portal + respaldo OpenRouter (día 3–5)
 
@@ -297,6 +309,8 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 | 2.7 | Transcodificar la salida TTS a OGG Opus (`ffmpeg -c:a libopus`) para las notas de voz (D-5) | `src/tools/media_creator.py` |
 | 2.8 | Registrar el `usage` (tokens y coste) de cada petición en la memoria, por tarea de cron | `src/memory/memory_manager.py` |
 | 2.9 | Retirar `FAL_KEY` y `FIRECRAWL_API_KEY` de Secret Manager y de `.env.example` (D-1, D-4) | `.env.example` |
+| 2.10 | Autenticar el Portal en local y guardar el `refresh token` como secreto montado en el contenedor (§2.4) | Secret Manager, `docker-compose.yml` |
+| 2.11 | Marcar `src/serverless/modal_app.py` como no soportado y retirar `modal` de `requirements.txt` | `requirements.txt`, `docs/DEPLOYMENT_GUIDE.md` |
 
 **Criterio de aceptación:** `cli.py media-test` genera una portada real en `output/art` y una nota de voz OGG en `output/voice` usando sólo credenciales del Portal; al forzar un fallo del Portal, la cadena `fallback_providers` responde con OpenRouter sin intervención manual; el `tier_2_nuclear` registra `reasoning_tokens > 0`.
 
@@ -306,6 +320,7 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 |---|---|---|
 | 3.1 | Alta y verificación de las cuentas de §4 | **Camino crítico:** Meta tarda 2–4 semanas si se necesita acceso avanzado |
 | 3.2 | Adaptador de Instagram (contenedor de media → `media_publish`) reutilizando `output/art` | Cuenta Business, no Creator |
+| 3.2b | **Aviso de IA en el primer mensaje** de Telegram y Discord, en las biografías, y etiquetado nativo de contenido generado al publicar (§6.bis) | Obligación en vigor; mismo *sprint* que 3.2 |
 | 3.3 | Backup diario `sqlite3 .backup` → Cloud Storage con versionado + snapshots semanales de disco | Restauración probada en < 15 min |
 | 3.4 | Alerta de *uptime* y panel de Monitoring (RAM < 180 MB, latencia de memoria < 150 ms) | |
 | 3.5 | Revisión de consumo real del primer mes: decidir si Portal Plus basta o conviene Super (§8, S-3) | |
@@ -324,6 +339,10 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 | `src/core/agent.py` | Selección de tier y validación de `reasoning_tokens` |
 | `src/memory/memory_manager.py` | Registro de `usage` y coste por tarea |
 | `config.yaml` / `hermes_config.yaml` | Tiers, `fallback_providers`, motores de música marcados como no disponibles |
+| `src/adapters/*.py` | Aviso de interacción con IA al inicio de cada conversación (§6.bis) |
+| `Dockerfile` | `tzdata` + `ENV TZ=Europe/Madrid` |
+| `requirements.txt` | Fuera `modal` (hospedaje en Compute Engine, sandbox vía Tool Gateway) |
+| `src/serverless/modal_app.py` | Marcado como alternativa no soportada |
 | `.env.example` | Fuera `FAL_KEY` y `FIRECRAWL_API_KEY`; dentro las variables del Portal |
 | `docs/NOUS_PORTAL_TOOLS.md` | Corregir el catálogo: hoy documenta motores que la pasarela no ofrece |
 
@@ -413,8 +432,26 @@ Dos columnas: el **escenario adoptado** (D-1 + D-7: Portal Plus sobre `e2-micro`
 | Restauración | Procedimiento probado: nueva VM + adjuntar snapshot + `docker compose up -d` (objetivo: < 15 min) |
 | Privacidad del modelo | Política de datos de OpenRouter configurada para excluir proveedores que entrenan con las peticiones; la memoria FTS5 envía como máximo 5 fragmentos, nunca `MEMORY.md` completo |
 | Coste | Presupuesto de facturación con alertas al 50/90/100 % y límite de gasto por clave de OpenRouter |
-| Salud | Comprobación de *uptime* + alerta si el daemon deja de escribir logs o si la RAM supera los 300 MB |
+| Salud | Comprobación de *uptime* + alerta si el daemon deja de escribir logs, si la RAM supera los 300 MB, **o si aparece un error de autenticación del Portal** (token OAuth caducado, §2.4) |
+| Créditos | Alerta cuando el saldo del Portal baje del 20 % del mes, para que el respaldo de OpenRouter no entre por sorpresa |
 | Contenido | Registro de todo lo publicado en `output/posts` para auditoría; ninguna publicación automática en Instagram sin la revisión del productor durante las primeras semanas |
+
+## 6.bis Cumplimiento legal y transparencia
+
+Yuki es una persona sintética que conversa con personas reales y publica contenido generado por IA desde España. Eso la sitúa de lleno en obligaciones que **ya están en vigor** y que ninguna decisión de infraestructura resuelve sola. No es asesoramiento jurídico; es el mapa de lo que hay que revisar antes de abrir la cuenta al público.
+
+| Ámbito | Obligación | Qué implica en el código |
+|---|---|---|
+| **Reglamento Europeo de IA, art. 50(1)** — aplicable desde el **2 de agosto de 2026** | Quien interactúa con un sistema de IA debe saberlo **al inicio de cada interacción** | Aviso explícito en el primer mensaje de Telegram y Discord y en la biografía de las cuentas. Se implementa en `src/adapters/` y en `SOUL.md`, sin excusa de "romper el personaje" |
+| **Reglamento Europeo de IA, art. 50(2)** — marcado de contenido sintético (audio, imagen, vídeo, texto), con plazos escalonados hasta diciembre de 2026 y febrero de 2027 | La salida generada debe ser **detectable y marcada en formato legible por máquina** | Conservar los metadatos/marcas que devuelvan los proveedores al guardar en `output/`; no re-codificar de forma que se pierdan. El contenido anterior al 2/8/2026 no se etiqueta retroactivamente |
+| **Políticas de Meta e Instagram** | Etiquetado de contenido generado por IA | Usar la etiqueta nativa de la plataforma al publicar, además del marcado técnico |
+| **RGPD** | Yuki almacena conversaciones de seguidores en `data/yuki_memory.db` y las envía a Honcho y a la pasarela de modelos | Base jurídica y aviso de privacidad; ambos son **encargados del tratamiento**. El decaimiento de memoria a 30 días ya configurado (`memory.decay`) juega a favor; falta un procedimiento de borrado a petición y no persistir datos especialmente sensibles |
+| **Condiciones de Telegram y Discord** | Identificación del bot y límites de automatización | Ya se cumple usando las APIs oficiales; evitar automatizar cuentas de usuario |
+| **Autoría del contenido** | Titularidad de arte, música y letras generados | Revisar las condiciones de cada modelo antes de un lanzamiento comercial; documentar en el paquete de cada lanzamiento en `output/posts` |
+
+**Acción concreta para la fase 3:** el aviso de IA y el etiquetado no son opcionales ni cosméticos, y su ausencia es el único riesgo del proyecto capaz de costar la cuenta de Instagram entera. Van al mismo *sprint* que el adaptador de publicación.
+
+---
 
 ---
 
@@ -519,6 +556,50 @@ Las decisiones D-1 a D-10 se dan por cerradas. Estos tres supuestos se han fijad
 
 Cambios que **sí** requerirían rehacer esta propuesta: pasar Instagram a acceso avanzado (App Review de 2–4 semanas), abrir webhooks con dominio propio (revierte D-9), o adoptar Hermes Cloud en lugar de Compute Engine cuando salga de preview (revierte D-7).
 
+## 9. Cierre: lista de verificación
+
+La propuesta se considera completa cuando cada casilla esté marcada. Sirve como orden del día de la ejecución.
+
+**Antes de tocar nada**
+- [ ] Correo del proyecto creado y con 2FA; gestor de contraseñas compartido en marcha
+- [ ] Suscripción a Nous Portal Plus activa y `hermes setup --portal` completado en local
+- [ ] Cuenta de OpenRouter con clave `prod` y tope de gasto
+
+**Fase 1 — Cimientos**
+- [ ] Proyecto `yuki-prod` con presupuesto y alertas al 50/90/100 %
+- [ ] Cuenta de servicio `yuki-runtime` con los tres roles mínimos, nunca la cuenta por defecto
+- [ ] VM `e2-micro` sin IP pública + disco persistente `yuki-data`
+- [ ] `tzdata` y `TZ=Europe/Madrid` en la imagen, verificado con `date` dentro del contenedor
+- [ ] `memory-benchmark` < 150 ms y base SQLite intacta tras un reinicio
+
+**Fase 2 — Pasarela**
+- [ ] URL base ficticia corregida y *mocks* de `nous_portal.py` sustituidos por llamadas reales
+- [ ] Token OAuth del Portal en Secret Manager y montado en el contenedor
+- [ ] `fallback_providers` con OpenRouter probado forzando un fallo del Portal
+- [ ] `tier_2_nuclear` registrando `reasoning_tokens > 0`
+- [ ] `FAL_KEY`, `FIRECRAWL_API_KEY` y `modal` retirados
+- [ ] Registro de `usage` y coste por tarea de cron funcionando
+
+**Fase 3 — Presencia**
+- [ ] Cuenta de Instagram Business vinculada a una página de Facebook, con la app de Meta en modo desarrollo
+- [ ] **Aviso de IA** en el primer mensaje de cada canal y etiquetado nativo al publicar (§6.bis)
+- [ ] Backup diario a Cloud Storage **y una restauración probada de extremo a extremo**
+- [ ] Alertas de uptime, RAM, fallo de autenticación y saldo del Portal
+- [ ] Revisión de consumo real del primer mes frente a los 22 USD de crédito (S-3)
+
+**Lo que queda deliberadamente fuera de esta versión**
+
+| Tema | Por qué se aparca | Cuándo volver a mirarlo |
+|---|---|---|
+| Hermes Cloud | En preview, no ejecuta la imagen propia de Yuki | Cuando alcance GA (§2.5) |
+| Webhooks con dominio y TLS | *Long polling* sobra para el volumen actual (D-9) | Si la latencia de respuesta molesta |
+| Suno / música cantada | Fuera del Tool Gateway (D-6) | Ante el primer lanzamiento que la exija |
+| Vídeo y *reels* | Consumiría la cuota gratuita de salida de red (§2.4) | Junto con la salida del nivel gratuito |
+| Alta disponibilidad | Una sola VM; el objetivo es restaurar en < 15 min, no evitar la caída | Si Yuki pasa a tener compromisos con terceros |
+| Entorno de *staging* | Con un solo agente, el coste supera al beneficio | Cuando haya más de una persona tocando el despliegue |
+
+---
+
 ---
 
 ## Fuentes consultadas
@@ -537,4 +618,6 @@ Cambios que **sí** requerirían rehacer esta propuesta: pasar Instagram a acces
 - [Google Cloud — Configure Cloud Storage volume mounts for Cloud Run services](https://docs.cloud.google.com/run/docs/configuring/services/cloud-storage-volume-mounts)
 - [Google Cloud — Compute Engine free tier](https://cloud.google.com/free/docs/compute-getting-started)
 - [Meta — Publish Content using the Instagram Platform](https://developers.facebook.com/docs/instagram-platform/content-publishing/)
+- [Reglamento Europeo de IA — Artículo 50, obligaciones de transparencia](https://artificialintelligenceact.eu/article/50/) · [Guía práctica](https://artificialintelligenceact.eu/transparency-rules-article-50/)
+- [Comisión Europea — FAQ sobre las obligaciones de transparencia del artículo 50](https://digital-strategy.ec.europa.eu/en/faqs/transparency-obligations-under-article-50-ai-act)
 - [Instagram API Integration Guide 2026 (Phyllo)](https://www.getphyllo.com/post/instagram-api-integration-101-for-developers-of-the-creator-economy)
