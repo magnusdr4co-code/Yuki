@@ -12,15 +12,18 @@
 
 | Decisión | Recomendación | Motivo principal |
 |---|---|---|
-| Proveedor de texto y razonamiento | **OpenRouter** como agregador único (ya declarado en `config.yaml`) | Una sola clave, una sola factura, failover automático entre proveedores, parámetro `reasoning` unificado |
-| Proveedor de imagen | **OpenRouter Image API** (30+ modelos: Nano Banana 2 / Gemini Flash Image, Seedream 4.5, FLUX.2 Pro) | Sustituye la ruta directa a FAL.ai sin perder modelos; se factura por el mismo saldo |
-| Proveedor de voz (TTS/STT) | **OpenRouter TTS/Transcripciones** como principal, `nous_tts_v2` como respaldo | Endpoints compatibles con OpenAI, salida MP3/PCM |
+| Pasarela principal | **Nous Portal** — una única suscripción que cubre modelos + Tool Gateway (búsqueda, imagen, vídeo, voz, navegador, sandbox) | Es la vía nativa de Hermes Agent: un solo OAuth, un solo saldo, cero claves por servicio (ver §1.bis) |
+| Proveedor de texto y razonamiento | **OpenRouter** como agregador de respaldo y control fino (ya declarado en `config.yaml`) | Failover nativo (`fallback_providers`), catálogo más amplio, parámetro `reasoning` unificado |
+| Proveedor de imagen | **Tool Gateway de Nous Portal** (FAL: FLUX 2 Pro, Nano Banana Pro, Ideogram v3, Recraft v4…) con **OpenRouter Image API** como alternativa | Elimina la clave `FAL_KEY` propia; ambos catálogos son casi idénticos |
+| Proveedor de voz (TTS/STT) | **Tool Gateway** (OpenAI TTS + Whisper) o **OpenRouter TTS/Transcripciones** | Endpoints compatibles con OpenAI, salida MP3/PCM |
 | Música (`suno_v4`, `flow_audio`) | **Fuera de OpenRouter** — se mantiene la pasarela Nous Portal / API directa | OpenRouter no expone catálogo de música generativa de larga duración |
 | Alojamiento del contenedor Hermes | **Compute Engine `e2-small`** (o `e2-micro` Always Free) con Container-Optimized OS + disco persistente | SQLite FTS5 exige un sistema de ficheros POSIX real con bloqueo; Cloud Run no lo ofrece |
 | Secretos | **Secret Manager** montado como variables de entorno | Elimina el `.env` en disco de producción |
-| Coste objetivo | **≈ 0 – 22 USD/mes** de infraestructura + consumo variable de tokens | Ver §5 |
+| Coste objetivo | **≈ 0 – 22 USD/mes** de infraestructura + suscripción de Portal (20–100 USD) o consumo de OpenRouter | Ver §5 |
 
-Regla de oro de la arquitectura: **OpenRouter es el núcleo cognitivo y multimodal; Google Cloud es el cuerpo que lo mantiene despierto 24/7.**
+Regla de oro de la arquitectura: **Nous Portal (u OpenRouter) es el núcleo cognitivo y multimodal; Google Cloud es el cuerpo que lo mantiene despierto 24/7.**
+
+> ⚠️ **Matiz importante sobre "suscripción única":** la suscripción de Nous Portal unifica el *acceso y la facturación*, no es tarifa plana. Cada llamada a un modelo y cada uso de herramienta descuenta del saldo mensual de créditos del plan. Detalle en §1.bis.
 
 ---
 
@@ -101,6 +104,81 @@ Correspondencia con los bloques ya existentes en `config.yaml → nous_portal.fr
 
 ---
 
+## 1.bis. Nous Portal: ¿una sola suscripción para todas las herramientas?
+
+**Respuesta corta: sí.** Nous Portal es la pasarela oficial de Nous Research y la vía recomendada para ejecutar Hermes Agent —el arnés sobre el que está construida Yuki—. Con **un único OAuth y una única suscripción** se obtiene acceso al catálogo de modelos (300+ según la documentación oficial) **y** al *Tool Gateway*, sin dar de alta ni pagar por separado ninguna de las herramientas.
+
+### 1.bis.1 Qué incluye el Tool Gateway
+
+| Herramienta | Backend gestionado | Sustituye a | Uso en Yuki |
+|---|---|---|---|
+| Búsqueda y extracción web | **Firecrawl** | `FIRECRAWL_API_KEY` propia | `src/tools/web_search.py`, reflexión nocturna de tendencias |
+| Generación de imagen | **FAL** (FLUX 2 Pro, Nano Banana Pro, Ideogram v3, Recraft v4, Qwen Image…) | `FAL_KEY` propia | Portadas y arte de `output/art` |
+| Generación de vídeo | **FAL** (Veo 3.1, Kling v3, Seedance 2.0, PixVerse v6, LTX-2) | — | *Reels* de Instagram (fase 3) |
+| Voz: TTS y transcripción | **OpenAI** (TTS + Whisper) | `ELEVENLABS_API_KEY` / TTS propio | Notas de voz de `output/voice` |
+| Automatización de navegador | **Browser Use** (Chromium headless) | Cuenta de Browserbase | Publicación en plataformas sin API pública |
+| Sandbox de código / terminal | **Modal** | Cuenta de Modal propia | Ejecución aislada; sustituiría a `src/serverless/modal_app.py` |
+| Hospedaje del agente | **Hermes Cloud** (en *preview*) | VPS / Compute Engine | Ver §2.5 |
+
+Es decir: de las cuentas opcionales listadas en §4.3, el Portal absorbe **Firecrawl, FAL, TTS, Browserbase y Modal**.
+
+### 1.bis.2 Lo que la suscripción **no** es
+
+Esto es lo que hay que tener claro antes de decidir:
+
+- **No es tarifa plana.** Los planes publicados son **Free (0 USD)**, **Plus (20 USD/mes)**, **Super (100 USD/mes)** y **Ultra (200 USD/mes)**. Plus incluye ≈ 22 USD de créditos mensuales (tope de acumulación ≈ 10 USD) y Super ≈ 110 USD (tope ≈ 50 USD).
+- **Modelos y herramientas comparten el mismo saldo.** Cada imagen (≈ 0.005–0.26 USD), cada minuto de Whisper (≈ 0.0063 USD), cada búsqueda y cada token de razonamiento descuentan de esos créditos. La ventaja es *una sola factura y una sola clave*, no consumo ilimitado.
+- **El Tool Gateway es beneficio de plan de pago.** El nivel gratuito sirve para probar, no para operar a Yuki 24/7.
+- **La música generativa larga sigue sin estar cubierta.** El Tool Gateway ofrece imagen, vídeo y voz, pero **no Suno ni Flow Audio**. ⚠️ Los motores `suno_v4` y `flow_audio` que `docs/NOUS_PORTAL_TOOLS.md` y `src/tools/nous_portal.py` describen como parte de la pasarela **no corresponden al catálogo real del Tool Gateway**: hoy son *mocks*. Si la música cantada es un requisito, exige una cuenta de Suno aparte (§4.3).
+
+### 1.bis.3 Configuración por herramienta
+
+El Portal se configura **por categoría**, así que se puede adoptar parcialmente: por ejemplo, imagen y búsqueda por el Portal, pero el razonamiento por OpenRouter.
+
+```bash
+hermes setup --portal     # OAuth; guarda el refresh token en ~/.hermes/auth.json
+hermes tools              # selector por categoría: Fal, Firecrawl, OpenAI TTS, Browser Use…
+```
+
+```yaml
+# ~/.hermes/config.yaml
+model:
+  provider: nous
+  default: anthropic/claude-sonnet-4.6
+  base_url: https://inference-api.nousresearch.com/v1
+
+web:
+  backend: nous           # Firecrawl gestionado
+image_gen:
+  provider: nous          # FAL gestionado
+speech:
+  provider: nous          # OpenAI TTS + Whisper
+
+# Respaldo nativo de Hermes si el Portal falla o se agota el saldo
+fallback_providers:
+  - provider: openrouter
+    model: anthropic/claude-sonnet-4.5
+  - provider: anthropic
+    model: claude-sonnet-4-6
+```
+
+Esto encaja con `hermes_config.yaml`, que ya declara `tools.gateway: "nous_portal"`. El cambio real es sustituir la `base_url` inventada `https://api.nousportal.com/v1` por la oficial `https://inference-api.nousresearch.com/v1` y pasar de clave estática a OAuth.
+
+### 1.bis.4 Nous Portal vs. OpenRouter para Yuki
+
+| Criterio | Nous Portal | OpenRouter |
+|---|---|---|
+| Alta y credenciales | Un OAuth, cero claves por herramienta | Una clave API, herramientas de medios en la misma API pero sin navegador ni sandbox |
+| Herramientas incluidas | Búsqueda, imagen, vídeo, voz, navegador, sandbox, hosting | Imagen, vídeo, voz, transcripción, embeddings (sin navegador ni sandbox) |
+| Integración con Hermes | Nativa y recomendada (`provider: nous`) | De primera clase (`OPENROUTER_API_KEY`) |
+| Modelo de pago | Suscripción con créditos incluidos y tope de acumulación | Prepago puro, sin cuota fija |
+| Control fino de enrutado | Limitado al catálogo curado | `provider_routing` (`sort`, `only`, `data_collection: deny`) |
+| Riesgo | Créditos que caducan si Yuki consume poco | Sin cuota, pero saldo que hay que recargar |
+
+**Recomendación para Yuki:** empezar en **Portal Plus (20 USD/mes)** como pasarela principal —cubre modelos, Firecrawl, FAL y TTS con una sola alta— y dejar **OpenRouter configurado como `fallback_providers`** para el `tier_2_nuclear` y para cuando haga falta un modelo fuera del catálogo curado. Es la combinación que minimiza cuentas sin crear un punto único de fallo. Si el consumo mensual real supera con holgura los 22 USD de crédito incluidos, comparar entonces Super (100 USD) contra OpenRouter puro a coste marginal.
+
+---
+
 ## 2. Investigación: Google Cloud para el contenedor Hermes
 
 ### 2.1 El requisito que decide la arquitectura
@@ -171,6 +249,20 @@ graph TD
 - **Identidad:** una cuenta de servicio dedicada `yuki-runtime@` con `secretmanager.secretAccessor`, `storage.objectAdmin` sobre un único bucket y `logging.logWriter`. Nunca la cuenta por defecto de Compute con *scope* `cloud-platform`.
 - **Actualizaciones:** `docker compose pull && docker compose up -d` disparado por GitHub Actions vía SSH IAP, o simplemente manual. La imagen queda versionada en Artifact Registry.
 
+### 2.5 Alternativa: Hermes Cloud (incluido en la suscripción del Portal)
+
+El Portal incluye **Hermes Cloud**, hospedaje gestionado 24/7 del agente con contenedor propio por agente, memoria persistente y conectores a Telegram, Discord, Slack, correo y CLI sobre una única memoria. Escala a cero en reposo y se factura contra el mismo saldo.
+
+| | Hermes Cloud | Compute Engine (§2.3) |
+|---|---|---|
+| Puesta en marcha | Minutos, sin servidor que administrar | Horas: VM, disco, IAM, secretos |
+| Coste | Contra los créditos de la suscripción | 0–15 USD/mes de infraestructura |
+| Control del contenedor | Ninguno: no se despliega el `Dockerfile` propio de Yuki | Total |
+| Persistencia de `data/yuki_memory.db` | Memoria gestionada por la plataforma, **no** el SQLite FTS5 propio de Yuki | Disco persistente, control total |
+| Madurez | **En preview** | GA |
+
+**Veredicto:** atractivo, pero hoy **no sustituye** al plan de §2.3 para Yuki, porque el valor diferencial del proyecto (motor SQLite FTS5 con BM25, `SOUL.md`, cron propio, adaptadores propios) vive dentro de una imagen Docker específica que Hermes Cloud no ejecuta. Se recomienda **reevaluarlo cuando salga de preview**; mientras tanto, Compute Engine sigue siendo el cuerpo de Yuki.
+
 ---
 
 ## 3. Plan de implementación por fases
@@ -183,8 +275,9 @@ graph TD
 5. Crear la VM (`e2-micro` en `us-central1` para validar coste cero, o `e2-small` en `europe-southwest1`) + disco persistente para `data/`.
 6. `docker compose up -d` con la imagen actual → validar `python3 cli.py chat` y `memory-benchmark` dentro del contenedor.
 
-### Fase 2 — Consolidación en OpenRouter (día 3–5)
-1. Añadir un cliente único `src/tools/openrouter_client.py` compatible con OpenAI (`base_url=https://openrouter.ai/api/v1`) con cabeceras `HTTP-Referer` y `X-Title` para atribución.
+### Fase 2 — Consolidación de la pasarela (día 3–5)
+0. **Decidir pasarela (§1.bis.4).** Si se elige Nous Portal: `hermes setup --portal`, `hermes tools` para fijar Fal / Firecrawl / OpenAI TTS, corregir la `base_url` de `src/tools/nous_portal.py` a `https://inference-api.nousresearch.com/v1`, sustituir los *mocks* por llamadas reales y montar `~/.hermes/auth.json` en el contenedor. Retirar entonces `FAL_KEY` y `FIRECRAWL_API_KEY` de los secretos.
+1. Añadir un cliente único `src/tools/openrouter_client.py` (pasarela principal o respaldo según la decisión anterior) compatible con OpenAI (`base_url=https://openrouter.ai/api/v1`) con cabeceras `HTTP-Referer` y `X-Title` para atribución.
 2. Extender `provider_routing` de `config.yaml` con el `tier_2_nuclear` y el bloque `reasoning` por ruta.
 3. Migrar `src/tools/media_creator.py` de FAL directo a la Image API, dejando FAL como respaldo por bandera de configuración.
 4. Migrar TTS a la ruta OpenRouter + transcodificado `ffmpeg -c:a libopus` para las notas de voz.
@@ -207,33 +300,36 @@ graph TD
 |---|---|---|---|---|
 | 1 | **Correo dedicado del proyecto** (p. ej. Google Workspace o Gmail propio de Yuki) | Titularidad de todas las demás altas; evita atar la identidad del proyecto a una cuenta personal | Activar 2FA con app TOTP, no SMS | 0–6 USD/mes |
 | 2 | **Google Cloud** (proyecto + cuenta de facturación) | VM, Artifact Registry, Secret Manager, Storage, Logging | Tarjeta obligatoria incluso para *Always Free* | 0–15 USD/mes |
-| 3 | **OpenRouter** | Texto, razonamiento, imagen, voz, transcripción | Saldo prepago; crear **claves separadas** para `dev` y `prod` con límite de gasto por clave | consumo |
-| 4 | **GitHub** | Repositorio y CI/CD de la imagen | El repo ya existe | 0 |
-| 5 | **Telegram — BotFather** | Bot de Yuki (`TELEGRAM_BOT_TOKEN`) | Requiere un número de teléfono | 0 |
-| 6 | **Discord Developer Portal** | Aplicación + bot (`DISCORD_BOT_TOKEN`), intents de mensajes | Cuenta de Discord verificada por correo; para >100 servidores exige verificación del bot | 0 |
-| 7 | **Honcho** | Modelado dialéctico (`HONCHO_API_KEY`, app `yuki-digital-diva`) | Ya referenciado en `config.yaml` | según plan |
+| 3 | **Nous Portal** | Pasarela única: modelos + Tool Gateway (búsqueda, imagen, vídeo, voz, navegador, sandbox) | Alta por OAuth (`hermes setup --portal`). El Tool Gateway exige plan de pago; **Plus 20 USD/mes** recomendado. Absorbe las altas #14, #15 y #16 | 20–100 USD/mes |
+| 4 | **OpenRouter** | Respaldo de texto y razonamiento (`fallback_providers`) y catálogo fuera del Portal | Saldo prepago; crear **claves separadas** para `dev` y `prod` con límite de gasto por clave | consumo |
+| 5 | **GitHub** | Repositorio y CI/CD de la imagen | El repo ya existe | 0 |
+| 6 | **Telegram — BotFather** | Bot de Yuki (`TELEGRAM_BOT_TOKEN`) | Requiere un número de teléfono | 0 |
+| 7 | **Discord Developer Portal** | Aplicación + bot (`DISCORD_BOT_TOKEN`), intents de mensajes | Cuenta de Discord verificada por correo; para >100 servidores exige verificación del bot | 0 |
+| 8 | **Honcho** | Modelado dialéctico (`HONCHO_API_KEY`, app `yuki-digital-diva`) | Ya referenciado en `config.yaml` | según plan |
 
 ### 4.2 Necesarias para la presencia pública
 
 | # | Cuenta | Para qué | Requisitos críticos | Coste |
 |---|---|---|---|---|
-| 8 | **Instagram Profesional (Business)** | Publicar arte y *reels* de Yuki | **Business, no Creator**: las cuentas Creator no admiten publicación por API | 0 |
-| 9 | **Página de Facebook** | Vínculo obligatorio de la cuenta de Instagram Business | Se puede crear vacía, pero es obligatoria | 0 |
-| 10 | **Meta Business + app de desarrollador** | `instagram_business_basic` + `instagram_business_content_publish` | Los *scopes* antiguos (`instagram_basic`, `instagram_content_publish`) están retirados desde el 27/01/2025. **Si Yuki publica sólo en su propia cuenta, basta con la app en modo desarrollo añadiendo la cuenta como *Instagram Tester* — sin App Review.** El acceso avanzado (cuentas de terceros) exige revisión + verificación de empresa: **2–4 semanas** | 0 |
-| 11 | **Dominio propio** (p. ej. `yuki.art`) | Correo de marca, webhooks con TLS, enlaces de lanzamiento | Sólo necesario si se opta por webhook en lugar de *polling* | ≈ 10–15 USD/año |
-| 12 | **Cloudflare** *(opcional)* | DNS, proxy y TLS del subdominio del webhook | Plan gratuito suficiente | 0 |
+| 9 | **Instagram Profesional (Business)** | Publicar arte y *reels* de Yuki | **Business, no Creator**: las cuentas Creator no admiten publicación por API | 0 |
+| 10 | **Página de Facebook** | Vínculo obligatorio de la cuenta de Instagram Business | Se puede crear vacía, pero es obligatoria | 0 |
+| 11 | **Meta Business + app de desarrollador** | `instagram_business_basic` + `instagram_business_content_publish` | Los *scopes* antiguos (`instagram_basic`, `instagram_content_publish`) están retirados desde el 27/01/2025. **Si Yuki publica sólo en su propia cuenta, basta con la app en modo desarrollo añadiendo la cuenta como *Instagram Tester* — sin App Review.** El acceso avanzado (cuentas de terceros) exige revisión + verificación de empresa: **2–4 semanas** | 0 |
+| 12 | **Dominio propio** (p. ej. `yuki.art`) | Correo de marca, webhooks con TLS, enlaces de lanzamiento | Sólo necesario si se opta por webhook en lugar de *polling* | ≈ 10–15 USD/año |
+| 13 | **Cloudflare** *(opcional)* | DNS, proxy y TLS del subdominio del webhook | Plan gratuito suficiente | 0 |
 
 ### 4.3 Opcionales según el alcance creativo
 
 | # | Cuenta | Para qué | Nota |
 |---|---|---|---|
-| 13 | **Nous Portal** | Pasarela unificada ya integrada (`nous_portal.py`); respaldo de TTS | Se conserva mientras cubra música/voz |
-| 14 | **Suno** (`suno_v4`) | Música generativa completa | No cubierto por OpenRouter |
-| 15 | **FAL.ai** (`FAL_KEY`) | Respaldo de imagen si cae la Image API | Mantener la clave aunque la ruta principal sea OpenRouter |
-| 16 | **Firecrawl** (`FIRECRAWL_API_KEY`) | Rastreo de tendencias (`web_search`) | Ya en `.env.example` |
-| 17 | **Anthropic / Google AI Studio** | Claves directas de emergencia (BYOK o *bypass* del agregador) | Ya en `hermes_config.yaml` |
-| 18 | **Plataformas de distribución musical** (DistroKid, Bandcamp, Spotify for Artists) | Publicación de sencillos de Yuki | Fuera del alcance de infraestructura |
-| 19 | **Gestor de contraseñas de equipo** (1Password / Bitwarden) | Custodia de las credenciales de todas las cuentas anteriores | Recomendado desde el día 1 |
+| 14 | **Suno** (`suno_v4`) | Música generativa cantada completa | ⚠️ **No** cubierto ni por el Tool Gateway ni por OpenRouter. Única forma de tener voz cantada real; si no se contrata, la fase 1 se limita a MIDI propio |
+| 15 | **FAL.ai** (`FAL_KEY`) | Imagen directa | **Innecesaria** con Portal de pago (FAL va incluido). Sólo como respaldo si se prescinde del Portal |
+| 16 | **Firecrawl** (`FIRECRAWL_API_KEY`) | Rastreo de tendencias (`web_search`) | **Innecesaria** con Portal de pago (Firecrawl va incluido) |
+| 17 | **Modal / Browserbase / ElevenLabs** | Sandbox, navegador y TTS premium | **Innecesarias** con Portal de pago: el Tool Gateway aporta Modal, Browser Use y OpenAI TTS |
+| 18 | **Anthropic / Google AI Studio** | Claves directas de emergencia (BYOK o *bypass* de la pasarela) | Ya en `hermes_config.yaml` |
+| 19 | **Plataformas de distribución musical** (DistroKid, Bandcamp, Spotify for Artists) | Publicación de sencillos de Yuki | Fuera del alcance de infraestructura |
+| 20 | **Gestor de contraseñas de equipo** (1Password / Bitwarden) | Custodia de las credenciales de todas las cuentas anteriores | Recomendado desde el día 1 |
+
+> **Efecto neto de contratar Nous Portal:** el inventario mínimo real baja de ~12 altas a **8** (correo, Google Cloud, Nous Portal, GitHub, Telegram, Discord, Honcho e Instagram/Meta), porque Firecrawl, FAL, TTS, Browserbase y Modal quedan dentro de la suscripción.
 
 ### 4.4 Reglas de higiene para las cuentas
 
@@ -255,10 +351,13 @@ graph TD
 | Artifact Registry + Secret Manager + Logging | ≈ 0–1 USD | ≈ 1–2 USD |
 | Cloud Storage (media y backups) | < 1 USD | ≈ 1 USD |
 | **Subtotal infraestructura** | **≈ 0–2 USD** | **≈ 17–21 USD** |
-| OpenRouter — texto/razonamiento (3 tareas cron + chat) | variable, típicamente 5–20 USD | 20–60 USD |
-| OpenRouter — imagen (≈ 30 portadas/mes a ≈ 0.04 USD) | ≈ 1–2 USD | ≈ 3–5 USD |
-| OpenRouter — TTS | ≈ 1–3 USD | ≈ 5 USD |
-| Honcho / Firecrawl / Suno | según plan | según plan |
+| **Nous Portal Plus** (modelos + Tool Gateway) | 20 USD (incluye ≈ 22 USD de créditos) | 20–100 USD según plan |
+| OpenRouter — respaldo de texto/razonamiento | 0 USD si no se usa | 10–40 USD |
+| (Alternativa sin Portal) OpenRouter — texto/razonamiento | variable, típicamente 5–20 USD | 20–60 USD |
+| Imagen (≈ 30 portadas/mes a ≈ 0.04 USD) | ≈ 1–2 USD | ≈ 3–5 USD |
+| Voz (TTS + Whisper) | ≈ 1–3 USD | ≈ 5 USD |
+| Honcho | según plan | según plan |
+| Suno (sólo si se quiere voz cantada) | — | ≈ 10 USD |
 
 > Las cifras de infraestructura son estimaciones a partir de las tarifas públicas consultadas en agosto de 2026; confírmalas en la calculadora de Google Cloud antes de comprometer presupuesto. El gasto en modelos depende por completo del volumen real de interacción.
 
@@ -374,8 +473,9 @@ curl -s "https://openrouter.ai/api/v1/images/models/google%2Fgemini-flash-image/
 1. **Región:** ¿coste cero en EE. UU. (`e2-micro` Always Free) o latencia europea pagando ≈ 15 USD/mes?
 2. **Telegram:** ¿*long polling* (sin dominio ni puertos) o webhook con dominio propio y TLS?
 3. **Instagram:** ¿publicación sólo en la cuenta de Yuki (modo desarrollo, sin App Review) o soporte para cuentas de terceros (revisión de 2–4 semanas)?
-4. **Música:** ¿se mantiene Suno/Nous Portal, o se limita la fase 1 a MIDI propio (`src/tools/midi_generator.py`) más imagen y voz?
-5. **Presupuesto mensual máximo** de tokens, para dimensionar el reparto entre `tier_0` y `tier_2_nuclear`.
+4. **Pasarela:** ¿Nous Portal Plus como principal con OpenRouter de respaldo (recomendado), o OpenRouter puro sin cuota fija?
+5. **Música:** el Tool Gateway **no** incluye Suno ni Flow Audio. ¿Se contrata Suno aparte o la fase 1 se limita a MIDI propio (`src/tools/midi_generator.py`) más imagen y voz?
+6. **Presupuesto mensual máximo** de tokens, para dimensionar el reparto entre `tier_0` y `tier_2_nuclear`.
 
 ---
 
@@ -387,6 +487,10 @@ curl -s "https://openrouter.ai/api/v1/images/models/google%2Fgemini-flash-image/
 - [OpenRouter — Image Generation docs](https://openrouter.ai/docs/guides/overview/multimodal/image-generation)
 - [OpenRouter — Reasoning Tokens](https://openrouter.ai/docs/guides/best-practices/reasoning-tokens)
 - [OpenRouter — Audio models collection](https://openrouter.ai/collections/audio-models)
+- [Hermes Agent — Nous Portal](https://hermes-agent.nousresearch.com/docs/integrations/nous-portal) ([fuente en GitHub](https://github.com/NousResearch/hermes-agent/blob/main/website/docs/integrations/nous-portal.md))
+- [Hermes Agent — LLM and Model Providers](https://hermes-agent.nousresearch.com/docs/integrations/providers)
+- [Hermes Agent — Nous Tool Gateway](https://hermes-agent.nousresearch.com/docs/user-guide/features/tool-gateway)
+- [Nous Portal](https://portal.nousresearch.com/) · [Hermes Cloud](https://portal.nousresearch.com/cloud)
 - [Google Cloud — Cloud Run pricing](https://cloud.google.com/run/pricing)
 - [Google Cloud — Configure Cloud Storage volume mounts for Cloud Run services](https://docs.cloud.google.com/run/docs/configuring/services/cloud-storage-volume-mounts)
 - [Google Cloud — Compute Engine free tier](https://cloud.google.com/free/docs/compute-getting-started)
