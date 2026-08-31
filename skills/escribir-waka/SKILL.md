@@ -29,3 +29,15 @@ Permite a **Yuki** destilar una emoción estética o una situación mediante la 
    - Los primeros versos presentan la imagen natural; los últimos versos revelan el eco en el alma humana.
 4. **Entrega y Guardado:**
    - Guarda el poema en `./output/posts/` si se solicita para redes o lo presenta en el diálogo activo.
+
+## Herramientas
+
+> Contrato de herramientas según [`skills/HERRAMIENTAS.md`](../HERRAMIENTAS.md). Si una herramienta no está listada ahí, no existe.
+
+| Paso | Herramienta | Detalle |
+|---|---|---|
+| Kigo y contexto | `local.memory` | Micro-estación activa y recuerdos afines. Máximo 5 fragmentos |
+| Componer | `portal.chat` → `tier_1_creative` | `reasoning: low`, ≤ 800 tokens. La métrica manda: 5-7-5-7-7 en waka/tanka, 5-7-5 en haiku |
+| Guardar (opcional) | — | `./output/posts/` sólo si el poema va a redes |
+
+**Un poema no necesita `tier_2_nuclear`.** El razonamiento profundo no mejora la métrica y multiplica el coste de una tarea que Yuki ejecuta varias veces al día.

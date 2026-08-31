@@ -2,6 +2,8 @@
 
 Este manual documenta la integración de modelos de **Inteligencia Artificial de Frontera** en Yuki a través de la pasarela unificada **Nous Portal**.
 
+> ⚠️ **Documento desactualizado.** Los motores `suno_v4` y `flow_audio` descritos aquí **no existen** en el Tool Gateway real, y los identificadores de imagen y voz han cambiado. El catálogo vigente es [`skills/HERRAMIENTAS.md`](../skills/HERRAMIENTAS.md); la corrección de este manual es el paso 2.4 del plan de [`INFRASTRUCTURE_IMPLEMENTATION.md`](INFRASTRUCTURE_IMPLEMENTATION.md).
+
 ---
 
 ## 1. Motores Visuales de Frontera

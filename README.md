@@ -137,7 +137,8 @@ Yuki/
 │   ├── NOUS_PORTAL_TOOLS.md   # Manual de herramientas de arte, voz y tendencias
 │   ├── FAST_MEMORY_FTS5.md    # Análisis y benchmark: SQLite FTS5 vs Context Rot
 │   ├── AUTONOMOUS_CRON.md     # Guía de rutinas 24/7 y automatización autónoma
-│   └── DEPLOYMENT_GUIDE.md    # Guía de despliegue en VPS ($5/mo), Docker y Modal
+│   ├── DEPLOYMENT_GUIDE.md    # Guía de despliegue en VPS ($5/mo), Docker y Modal
+│   └── INFRASTRUCTURE_IMPLEMENTATION.md # OpenRouter, Google Cloud y cuentas mínimas
 │
 └── tests/                     # Suite de pruebas unitarias e integración
 ```
@@ -153,3 +154,4 @@ Yuki/
 - ⚡ [Motor de Memoria FTS5 y Benchmark de Rendimiento (`docs/FAST_MEMORY_FTS5.md`)](docs/FAST_MEMORY_FTS5.md)
 - ⏰ [Planificador Cron y Rutinas Autónomas 24/7 (`docs/AUTONOMOUS_CRON.md`)](docs/AUTONOMOUS_CRON.md)
 - 🚀 [Guía de Despliegue en VPS y Serverless (`docs/DEPLOYMENT_GUIDE.md`)](docs/DEPLOYMENT_GUIDE.md)
+- 🏗️ [Implementación de Infraestructura: OpenRouter, Google Cloud y Cuentas (`docs/INFRASTRUCTURE_IMPLEMENTATION.md`)](docs/INFRASTRUCTURE_IMPLEMENTATION.md)
