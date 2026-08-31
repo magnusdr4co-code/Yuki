@@ -26,6 +26,9 @@ class TelegramAdapter:
 
     async def handle_message(self, user_id: str, user_name: str, text: str) -> str:
         """Procesa un mensaje recibido en Telegram."""
+        if hasattr(self.agent, 'presence_controller'):
+            if not self.agent.presence_controller.should_respond('telegram_dm'):
+                return 'NADA_QUE_DECIR'
         return await self.agent.generate_response(
             user_id=user_id,
             user_name=user_name,
@@ -35,6 +38,10 @@ class TelegramAdapter:
 
     async def broadcast_drop(self, text: str, image_path: Optional[str] = None, audio_path: Optional[str] = None):
         """Difunde un lanzamiento autónomo a los seguidores."""
+        if hasattr(self.agent, 'presence_controller'):
+            if not self.agent.presence_controller.should_broadcast('telegram_channel'):
+                logger.info("Yuki no tiene disposición para publicar en Telegram ahora.")
+                return
         logger.info(f"📢 [TELEGRAM BROADCAST] {text}")
         if image_path:
             logger.info(f"📸 Enviando foto: {image_path}")

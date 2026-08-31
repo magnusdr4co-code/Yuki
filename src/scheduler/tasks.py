@@ -21,6 +21,10 @@ class AutonomousTasks:
         03:00 AM - Yuki despierta en el silencio de la madrugada,
         observa las corrientes del mundo y formula un pensamiento profundo.
         """
+        if self.agent.circadian.current_phase() != 'kage' or self.agent.vital_state.curiosity <= 0.5:
+            logger.info("Skipping nocturnal_trend_reflection: vital state conditions not met.")
+            return
+
         logger.info("🌌 [CRON 03:00] Iniciando reflexión nocturna de tendencias...")
         trends = await self.agent.nous_portal.search_trends_firecrawl("tendencias arte digital musica tradicional")
         
@@ -53,12 +57,22 @@ class AutonomousTasks:
         """
         07:30 AM - Yuki crea y publica un haiku y una obra visual para sus canales.
         """
+        if self.agent.vital_state.energy <= 0.3:
+            logger.info("Skipping morning_inspiration_drop: energy too low.")
+            return
+
         logger.info("🌅 [CRON 07:30] Creando lanzamiento matutino de arte...")
         
-        haiku_prompt = (
-            "Son las 07:30 de la mañana. Escribe un saludo matutino sereno acompañado de un haiku "
-            "o pensamiento breve para tus seguidores en Telegram y Discord. Máximo 3 frases."
-        )
+        mood = self.agent.vital_state.mood
+        if mood < 0.4:
+            haiku_prompt = "Son las 07:30 de la mañana. Escribe un saludo matutino sereno acompañado de un haiku breve. Máximo 3 frases."
+        elif mood > 0.7:
+            haiku_prompt = "Son las 07:30 de la mañana. Escribe un texto expansivo, lleno de energía, luz y arte para tus seguidores en Telegram y Discord."
+        else:
+            haiku_prompt = (
+                "Son las 07:30 de la mañana. Escribe un saludo matutino sereno acompañado de un haiku "
+                "o pensamiento breve para tus seguidores en Telegram y Discord. Máximo 3 frases."
+            )
         
         morning_text = await self.agent.generate_response(
             user_id="autonomous_cron",
@@ -68,18 +82,24 @@ class AutonomousTasks:
         )
 
         visual_concept = "Luz dorada de la mañana entrando en un salón de té tradicional con reflejos de lluvia en el cristal."
-        image_result = await self.agent.nous_portal.generate_image_fal(prompt=visual_concept)
-        voice_result = await self.agent.nous_portal.synthesize_voice_tts(text=morning_text)
-
-        logger.info(f"🎨 Arte matutino generado: {image_result['image_url']}")
-        logger.info(f"🎙️ Voz matutina generada: {voice_result['audio_url']}")
+        
+        image_result = None
+        voice_result = None
+        
+        if mood >= 0.4:
+            image_result = await self.agent.nous_portal.generate_image_frontier(prompt=visual_concept)
+            logger.info(f"🎨 Arte matutino generado: {image_result['image_url']}")
+            
+        if mood > 0.7:
+            voice_result = await self.agent.nous_portal.synthesize_voice_tts(text=morning_text)
+            logger.info(f"🎙️ Voz matutina generada: {voice_result['audio_url']}")
 
         # Difundir a adaptadores activos (si están configurados)
         if hasattr(self.agent, "telegram_adapter") and self.agent.telegram_adapter:
             await self.agent.telegram_adapter.broadcast_drop(
                 text=morning_text,
-                image_path=image_result["local_path"],
-                audio_path=voice_result["local_path"]
+                image_path=image_result["local_path"] if image_result else None,
+                audio_path=voice_result["local_path"] if voice_result else None
             )
 
         return {
@@ -95,10 +115,17 @@ class AutonomousTasks:
         logger.info("🌙 [CRON 23:30] Destilando memoria diaria...")
         date_str = datetime.now().strftime("%Y-%m-%d")
         
+        interactions = self.agent.vital_state.accumulated_interactions_today
+        if interactions > 20:
+            depth_instruction = "Escribe un análisis profundo y extenso"
+        elif interactions > 5:
+            depth_instruction = "Escribe un párrafo contemplativo en primera persona (máximo 400 caracteres)"
+        else:
+            depth_instruction = "Escribe una frase muy breve, casi como un suspiro, dado que el día fue muy silencioso"
+            
         synthesis_prompt = (
-            "El día concluye. Revisa en tu interior los encuentros, palabras y silencios de hoy. "
-            "Escribe un párrafo contemplativo en primera persona (máximo 400 caracteres) sintetizando "
-            "cómo fluyó el agua de la jornada."
+            f"El día concluye. Revisa en tu interior los encuentros, palabras y silencios de hoy. "
+            f"{depth_instruction} sintetizando cómo fluyó el agua de la jornada."
         )
         
         daily_text = await self.agent.generate_response(
@@ -114,3 +141,58 @@ class AutonomousTasks:
         )
         logger.info(f"Memoria del día guardada ({date_str}): {daily_text}")
         return daily_text
+
+    async def echo_ritual(self):
+        """06:30 AM - Yuki se invoca a sí misma para comenzar el día."""
+        logger.info("🔮 [CRON 06:30] Iniciando ritual del eco...")
+        from ..core.seasons import get_current_micro_season
+        season = get_current_micro_season()
+        prompt = self.agent.echo_ritual.generate_echo_prompt(
+            vital_state=self.agent.vital_state,
+            season_context=season
+        )
+        response = await self.agent.generate_response(
+            user_id="autonomous_cron",
+            user_name="Eco",
+            message=prompt,
+            is_internal_thought=True
+        )
+        impulses = self.agent.echo_ritual.extract_impulses_from_echo(
+            echo_text=response,
+            vital_state=self.agent.vital_state
+        )
+        for impulse in impulses:
+            self.agent.will_queue.add(impulse)
+            
+        self.agent.echo_ritual.record_echo(response)
+        # Reiniciar contadores del día
+        self.agent.vital_state.accumulated_interactions_today = 0
+        self.agent.vital_state.accumulated_creations_today = 0
+        self.agent.vital_state.save()
+        return response
+
+    async def agency_loop_tick(self):
+        """Cada 15-30 min - Evalúa impulsos y decide actuar."""
+        phase = self.agent.circadian.current_phase()
+        if phase in ['kage']:
+            return None
+            
+        action_decision = self.agent.agency_loop.evaluate()
+        if action_decision:
+            return await self.agent.execute_autonomous_will(action_decision)
+        return None
+
+    async def spontaneous_monologue(self):
+        """Pensamiento espontáneo condicionado al estado vital."""
+        if not self.agent.inner_monologue.should_think():
+            return None
+            
+        prompt = self.agent.inner_monologue.generate_thought_prompt()
+        response = await self.agent.generate_response(
+            user_id="autonomous_cron",
+            user_name="Monólogo Interior",
+            message=prompt,
+            is_internal_thought=True
+        )
+        self.agent.inner_monologue.record_thought(response)
+        return response

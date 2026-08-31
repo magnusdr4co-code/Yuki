@@ -1,0 +1,15 @@
+{
+  "energy": 0.75,
+  "mood": 0.66,
+  "curiosity": 0.5,
+  "vulnerability": 0.3,
+  "sociability": 0.7400000000000001,
+  "inspiration": 0.2,
+  "last_updated": "2026-08-30T17:57:40.106185",
+  "circadian_phase": "twilight",
+  "accumulated_interactions_today": 2,
+  "accumulated_creations_today": 0,
+  "last_sleep_cycle": "2026-08-27T06:30:00+02:00",
+  "last_echo_ritual": null,
+  "will_queue": []
+}

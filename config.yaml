@@ -111,6 +111,18 @@ scheduler:
       cron: "30 23 * * *"
       action: "synthesize_daily_memory"
       enabled: true
+    - name: "echo_ritual"
+      cron: "30 6 * * *"
+      action: "echo_ritual"
+      enabled: true
+    - name: "agency_loop_tick"
+      cron: "*/20 * * * *"
+      action: "agency_loop_tick"
+      enabled: true
+    - name: "spontaneous_monologue"
+      cron: "0 */3 * * *"
+      action: "spontaneous_monologue"
+      enabled: true
 
 adapters:
   telegram:

@@ -24,6 +24,9 @@ class DiscordAdapter:
 
     async def handle_message(self, channel_id: str, author_id: str, author_name: str, content: str) -> str:
         """Procesa menciones o DMs en Discord."""
+        if hasattr(self.agent, 'presence_controller'):
+            if not self.agent.presence_controller.should_respond('discord_channel'):
+                return 'NADA_QUE_DECIR'
         return await self.agent.generate_response(
             user_id=author_id,
             user_name=author_name,

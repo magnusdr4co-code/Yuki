@@ -5,7 +5,8 @@ Permite presencia autónoma 24/7 sin intervención manual.
 
 import asyncio
 import logging
-from typing import Dict, Any, Callable, List
+import random
+from typing import Dict, Any, Callable, List, Optional
 from datetime import datetime
 
 logger = logging.getLogger("Yuki.CronEngine")
@@ -17,14 +18,19 @@ class CronEngine:
         self._running = False
         self._task: asyncio.Task = None
 
-    def register_job(self, name: str, cron_expr: str, func: Callable, enabled: bool = True):
+    def register_job(self, name: str, cron_expr: str, func: Callable, enabled: bool = True,
+                     fire_condition: Optional[Callable[[], bool]] = None, jitter_minutes: int = 0,
+                     probability: float = 1.0):
         """Registra una tarea cron."""
         self.jobs[name] = {
             "cron_expr": cron_expr,
             "func": func,
             "enabled": enabled,
             "last_run": None,
-            "run_count": 0
+            "run_count": 0,
+            "fire_condition": fire_condition,
+            "jitter_minutes": jitter_minutes,
+            "probability": probability
         }
         logger.info(f"Tarea cron registrada: [{name}] con expresión '{cron_expr}' (Habilitada: {enabled})")
 
@@ -51,11 +57,22 @@ class CronEngine:
             
             expr = job["cron_expr"].split()
             if len(expr) == 5:
-                minute_match = expr[0] == "*" or int(expr[0]) == current_minute
+                jitter = 0
+                if job.get("jitter_minutes"):
+                    jitter = hash(name + now.strftime('%Y-%m-%d')) % (2 * job["jitter_minutes"] + 1) - job["jitter_minutes"]
+                
+                minute_match = expr[0] == "*" or int(expr[0]) == (current_minute - jitter) % 60
                 hour_match = expr[1] == "*" or int(expr[1]) == current_hour
                 
                 # Prevenir ejecuciones múltiples en el mismo minuto
                 if minute_match and hour_match:
+                    if job.get("fire_condition") and not job["fire_condition"]():
+                        continue
+                        
+                    if random.random() >= job.get("probability", 1.0):
+                        logger.info(f"Saltando tarea cron [{name}] por probabilidad.")
+                        continue
+                        
                     last_run = job["last_run"]
                     if not last_run or (now - last_run).total_seconds() > 60:
                         logger.info(f"⚡ Disparando tarea autónoma: [{name}]")

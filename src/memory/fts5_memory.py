@@ -35,7 +35,7 @@ class FTS5MemoryEngine:
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
                     id INTEGER PRIMARY KEY AUTOINCREMENT,
-                    category TEXT NOT NULL,          -- 'core', 'project', 'producer', 'visitor', 'daily_synthesis'
+                    category TEXT NOT NULL,          -- 'core', 'project', 'producer', 'visitor', 'daily_synthesis', 'inner_thought'
                     title TEXT NOT NULL,
                     content TEXT NOT NULL,
                     tags TEXT DEFAULT '',
@@ -43,6 +43,19 @@ class FTS5MemoryEngine:
                     importance REAL DEFAULT 1.0,     -- Multiplicador de 0.1 a 5.0
                     created_at REAL NOT NULL,        -- Timestamp Unix
                     updated_at REAL NOT NULL
+                )
+            """)
+
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS growth_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    date TEXT NOT NULL,
+                    domain TEXT NOT NULL,            -- 'music', 'aesthetics', 'philosophy', 'relationships'
+                    from_position TEXT NOT NULL,
+                    to_position TEXT NOT NULL,
+                    trigger_memory_ids TEXT DEFAULT '[]',  -- JSON array of memory IDs that influenced this
+                    confidence REAL DEFAULT 0.5,
+                    created_at REAL NOT NULL
                 )
             """)
 
@@ -247,3 +260,50 @@ class FTS5MemoryEngine:
                 user_id="general",
                 importance=importance
             )
+
+    def add_growth_event(self, date: str, domain: str, from_pos: str, to_pos: str, trigger_ids: str, confidence: float) -> int:
+        """Inserta un evento de crecimiento (desplazamiento dialectico o evolutivo)."""
+        now = time.time()
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT INTO growth_events (date, domain, from_position, to_position, trigger_memory_ids, confidence, created_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?)
+            """, (date, domain, from_pos, to_pos, trigger_ids, confidence, now))
+            conn.commit()
+            return cursor.lastrowid
+
+    def get_recent_growth(self, limit: int = 5) -> List[Dict[str, Any]]:
+        """Devuelve los eventos de crecimiento más recientes."""
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, date, domain, from_position, to_position, trigger_memory_ids, confidence, created_at
+                FROM growth_events
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (limit,))
+            rows = cursor.fetchall()
+            return [dict(r) for r in rows]
+
+    def get_recent_inner_thoughts(self, hours: int = 24, limit: int = 10) -> List[Dict[str, Any]]:
+        """Busca pensamientos internos recientes de la memoria."""
+        now = time.time()
+        threshold = now - (hours * 3600)
+        with self._get_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT id, category, title, content, tags, user_id, importance, created_at
+                FROM memories
+                WHERE category = 'inner_thought' AND created_at >= ?
+                ORDER BY created_at DESC
+                LIMIT ?
+            """, (threshold, limit))
+            rows = cursor.fetchall()
+            
+            results = []
+            for r in rows:
+                row_dict = dict(r)
+                row_dict["created_at"] = datetime.fromtimestamp(row_dict["created_at"], timezone.utc).isoformat()
+                results.append(row_dict)
+            return results

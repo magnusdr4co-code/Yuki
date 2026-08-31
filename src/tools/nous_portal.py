@@ -38,7 +38,8 @@ class NousPortalClient:
         prompt: str,
         provider: str = "gemini_image", # "gemini_image", "seedream", "flux_pro"
         aspect_ratio: str = "1:1",
-        lighting_style: str = "komorebi"
+        lighting_style: str = "komorebi",
+        mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Genera portadas y arte visual consumiendo modelos de frontera:
@@ -46,6 +47,14 @@ class NousPortalClient:
         - seedream: Seedream 2.0 (estética conceptual y trazo kintsugi refinado)
         - flux_pro: FAL Flux 1.1 Pro Ultra (iluminación cinematográfica 8K)
         """
+        if mood_params:
+            lighting_style = mood_params.get('lighting', lighting_style)
+            texture_hint = mood_params.get('texture_hint', '')
+            if texture_hint:
+                prompt = f"{texture_hint}, {prompt}"
+            color_bias = mood_params.get('color_bias', '')
+            if color_bias:
+                prompt = f"{prompt}, {color_bias}"
         lighting_descriptors = {
             "komorebi": "sunlight filtering through bamboo leaves, gentle natural hazes",
             "urushi": "warm candlelight reflections on Urushi black lacquer and gold leaf",
@@ -94,13 +103,20 @@ class NousPortalClient:
         engine: str = "flow_audio", # "flow_audio", "suno_v4", "audiocraft"
         duration_seconds: int = 45,
         bpm: int = 84,
-        scale: str = "Insen"
+        scale: str = "Insen",
+        mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Sintetiza música completa y stems mediante motores de difusión de audio de frontera:
         - flow_audio: Flow / DeepMind AudioCraft (renderizado acústico de shamisen, koto y sub-bajo)
         - suno_v4: Suno v4 / Udio v1.5 (canción completa con lírica y voz cantada de Yuki)
         """
+        if mood_params:
+            bpm = mood_params.get('bpm', bpm)
+            scale = mood_params.get('scale', scale)
+            atmosphere = mood_params.get('atmosphere', '')
+            if atmosphere:
+                prompt = f"{prompt}, atmosphere: {atmosphere}"
         audio_filename = f"{title.lower().replace(' ', '_')}_{engine}_{int(time.time())}.mp3"
         audio_path = os.path.join(self.music_dir, audio_filename)
 
@@ -128,17 +144,25 @@ class NousPortalClient:
         voice_id: str = "yuki_serene_alto",
         cadence_pause_ms: int = 350,
         is_night_mode: bool = False,
-        engine: str = "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"
+        engine: str = "gemini_multimodal_audio", # "gemini_multimodal_audio", "nous_tts_v2"
+        mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Sintetiza una nota de voz en formato OGG Opus con marcado SSML y prosodia de frontera.
         """
+        if mood_params:
+            cadence_pause_ms = mood_params.get('pause_ms', cadence_pause_ms)
+
         audio_filename = f"yuki_voice_{int(time.time())}.ogg"
         audio_path = os.path.join(self.voice_dir, audio_filename)
 
         pause_tag = f'<break time="{cadence_pause_ms}ms"/>'
         prosody_rate = "88%" if is_night_mode else "94%"
         prosody_pitch = "-2st" if is_night_mode else "-1st"
+
+        if mood_params:
+            prosody_rate = mood_params.get('rate', prosody_rate)
+            prosody_pitch = mood_params.get('pitch', prosody_pitch)
 
         ssml_body = text.replace(". ", f". {pause_tag} ").replace(", ", f", {pause_tag} ")
         ssml_text = f"""<speak>

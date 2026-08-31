@@ -20,6 +20,12 @@ from ..tools.media_creator import MediaCreatorTool
 from ..scheduler.cron_engine import CronEngine
 from ..scheduler.tasks import AutonomousTasks
 from .prompt_builder import PromptBuilder
+from .vital_state import VitalState
+from .circadian import CircadianClock
+from .spark import WillQueue, EchoRitual, AgencyLoop
+from .inner_monologue import InnerMonologue
+from .growth_journal import GrowthJournal
+from .presence_controller import PresenceController
 
 logger = logging.getLogger("Yuki.Agent")
 
@@ -50,6 +56,33 @@ class YukiAgent:
 
         # 5. Programador Cron Autónomo
         tz = self.config.get("scheduler", {}).get("timezone", "Europe/Madrid")
+        
+        # 6. Kokoro Engine (Motor de Vida Interior)
+        self.vital_state = VitalState(state_path="data/vital_state.json")
+        self.circadian = CircadianClock(tz_name=tz)
+
+        # 7. La Chispa (The Spark)
+        self.will_queue = WillQueue()
+        if self.vital_state.will_queue:
+            self.will_queue = WillQueue.from_list(self.vital_state.will_queue)
+        self.growth_journal = GrowthJournal(memory_engine=self.memory_manager.engine)
+        self.echo_ritual = EchoRitual(
+            memory_manager=self.memory_manager,
+            growth_journal=self.growth_journal
+        )
+        self.agency_loop = AgencyLoop(
+            will_queue=self.will_queue,
+            vital_state_ref=self.vital_state
+        )
+        self.inner_monologue = InnerMonologue(
+            memory_manager=self.memory_manager,
+            vital_state=self.vital_state
+        )
+        self.presence_controller = PresenceController(
+            vital_state=self.vital_state,
+            circadian_clock=self.circadian
+        )
+
         self.cron = CronEngine(timezone=tz)
         self.tasks = AutonomousTasks(self)
         self._register_cron_jobs()
@@ -74,7 +107,10 @@ class YukiAgent:
             func_map = {
                 "reflect_on_trends": self.tasks.nocturnal_trend_reflection,
                 "publish_morning_art": self.tasks.morning_inspiration_drop,
-                "synthesize_daily_memory": self.tasks.daily_memory_synthesis
+                "synthesize_daily_memory": self.tasks.daily_memory_synthesis,
+                "echo_ritual": self.tasks.echo_ritual,
+                "agency_loop_tick": self.tasks.agency_loop_tick,
+                "spontaneous_monologue": self.tasks.spontaneous_monologue
             }
 
             if action in func_map:
@@ -97,6 +133,10 @@ class YukiAgent:
         4. Actualización no bloqueante de memoria
         """
         start_time = time.perf_counter()
+        
+        if hasattr(self, 'presence_controller'):
+            if not self.presence_controller.should_respond(channel_type):
+                return 'NADA_QUE_DECIR'
 
         # Detección de Tabú
         if "maruta" in message.lower():
@@ -119,7 +159,10 @@ class YukiAgent:
             user_name=user_name,
             user_id=user_id,
             channel_type=channel_type,
-            active_role=active_role
+            active_role=active_role,
+            vital_state_block=self.vital_state.to_natural_language(),
+            echo_impulse=self.echo_ritual.last_echo,
+            evolution_context=self.growth_journal.get_evolution_context()
         )
 
         # 4. Generación (simulación o invocación LLM real según API Keys)
@@ -141,6 +184,12 @@ class YukiAgent:
                 agent_response=response_text,
                 user_id=user_id
             )
+            self.vital_state.apply_stimulus('positive_interaction', 0.3)
+            
+        phase = self.circadian.current_phase()
+        self.vital_state.update_tick(phase, 0)
+        self.vital_state.will_queue = self.will_queue.to_list()
+        self.vital_state.save()
 
         return response_text
 
@@ -176,3 +225,13 @@ class YukiAgent:
             return "Guardo en mi memoria nuestros acuerdos sobre el álbum 'El Río Antes de Tener Nombre'. Cada trazo que definimos sigue vivo en el taller."
         
         return "Cada palabra requiere su propio tiempo para asentarse. He escuchado lo que dices con atención completa."
+        
+    async def execute_autonomous_will(self, impulse) -> Dict[str, Any]:
+        """Ejecuta un impulso de la Cola de Voluntad por iniciativa propia."""
+        logger.info(f"🔥 [CHISPA] Ejecutando voluntad autónoma: {impulse.desire}")
+        result = await self.media_creator.create_from_impulse(impulse, self.vital_state)
+        self.agency_loop.record_action(impulse, result)
+        # Persist updated state
+        self.vital_state.will_queue = self.will_queue.to_list()
+        self.vital_state.save()
+        return result

@@ -18,12 +18,76 @@ class MediaCreatorTool:
         self.portal = portal_client or NousPortalClient()
         self.midi_gen = YukiMIDIGenerator()
 
+    def _mood_to_image_params(self, vital_state) -> dict:
+        """Traduce el clima interior en parámetros para generación visual."""
+        if vital_state.mood < 0.35:
+            return {"lighting": "industrial_rain", "color_bias": "cool desaturated tones, blue-grey mist",
+                    "texture_hint": "wet metal, mist, still water reflection, solitude"}
+        elif vital_state.mood > 0.70:
+            return {"lighting": "komorebi", "color_bias": "warm golden tones, honey light",
+                    "texture_hint": "silk, aged wood, cherry blossom on warm stone, gentle breeze"}
+        else:
+            return {"lighting": "urushi", "color_bias": "neutral deep amber",
+                    "texture_hint": "lacquer, twilight amber, tea steam rising"}
+
+    def _mood_to_music_params(self, vital_state) -> dict:
+        """Traduce el clima interior en parámetros musicales."""
+        if vital_state.mood < 0.35:
+            return {"bpm": 72, "scale": "Insen", "atmosphere": "deep silence, sparse shamisen, distant rain"}
+        elif vital_state.mood > 0.70:
+            return {"bpm": 90, "scale": "Yo", "atmosphere": "flowing shamisen melody, open harmonics, gentle wind"}
+        else:
+            return {"bpm": 82, "scale": "Miyako-bushi", "atmosphere": "contemplative koto, soft sub-bass, dusk"}
+
+    def _mood_to_voice_params(self, vital_state) -> dict:
+        """Traduce el clima interior en parámetros de voz."""
+        if vital_state.mood < 0.35:
+            return {"rate": "85%", "pitch": "-2st", "pause_ms": 450}
+        elif vital_state.mood > 0.70:
+            return {"rate": "96%", "pitch": "-0.5st", "pause_ms": 250}
+        else:
+            return {"rate": "90%", "pitch": "-1st", "pause_ms": 350}
+
+    async def create_from_impulse(self, impulse, vital_state) -> Dict[str, Any]:
+        """Orquesta la herramienta apropiada a partir de un impulso de la Cola de Voluntad."""
+        from ..core.seasons import get_current_micro_season
+        season = get_current_micro_season()
+        
+        if impulse.tool_hint == 'compose':
+            mood_params = self._mood_to_music_params(vital_state)
+            return await self.compose_beat_structure(
+                title=f"Impulso_{int(time.time())}",
+                bpm=mood_params['bpm'],
+                scale=mood_params['scale'].lower(),
+                mood=impulse.desire,
+                mood_params=mood_params
+            )
+        elif impulse.tool_hint == 'paint':
+            mood_params = self._mood_to_image_params(vital_state)
+            return await self.create_single_cover(
+                track_title=f"Vision_{int(time.time())}",
+                visual_concept=impulse.desire,
+                lighting=mood_params['lighting'],
+                mood_params=mood_params
+            )
+        elif impulse.tool_hint == 'write':
+            return {"status": "ready", "type": "write", "content": impulse.desire, "season": season}
+        elif impulse.tool_hint == 'search':
+            return {"status": "ready", "type": "search", "query": impulse.desire}
+        elif impulse.tool_hint == 'publish':
+            return {"status": "ready", "type": "publish", "content": impulse.desire}
+        elif impulse.tool_hint == 'reach_out':
+            return {"status": "ready", "type": "reach_out", "content": impulse.desire}
+        else:
+            return {"status": "contemplated", "type": "contemplate", "content": impulse.desire}
+
     async def create_single_cover(
         self,
         track_title: str,
         visual_concept: str,
         provider: str = "gemini_image", # "gemini_image", "seedream", "flux_pro"
-        lighting: str = "komorebi"
+        lighting: str = "komorebi",
+        mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Genera una portada de sencillo con modelos de frontera (Gemini Image / Seedream / Flux Pro)."""
         season = get_current_micro_season()
@@ -32,7 +96,8 @@ class MediaCreatorTool:
             prompt=prompt,
             provider=provider,
             aspect_ratio="1:1",
-            lighting_style=lighting
+            lighting_style=lighting,
+            mood_params=mood_params
         )
         return {
             "track_title": track_title,
@@ -48,13 +113,15 @@ class MediaCreatorTool:
         self,
         message_text: str,
         is_night_mode: bool = False,
-        engine: str = "gemini_multimodal_audio"
+        engine: str = "gemini_multimodal_audio",
+        mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """Genera una nota de voz SSML con motor de audio de frontera en ./output/voice/."""
         result = await self.portal.synthesize_voice_tts(
             text=message_text,
             is_night_mode=is_night_mode,
-            engine=engine
+            engine=engine,
+            mood_params=mood_params
         )
         return {
             "audio_url": result["audio_url"],
@@ -71,7 +138,8 @@ class MediaCreatorTool:
         bpm: int = 84,
         scale: str = "insen",
         mood: str = "lluvia sobre metal",
-        engine: str = "flow_audio" # "flow_audio", "suno_v4", "midi_only"
+        engine: str = "flow_audio", # "flow_audio", "suno_v4", "midi_only"
+        mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
         Compone una pieza musical con motores de audio de frontera (Flow / Suno v4)
@@ -98,7 +166,8 @@ class MediaCreatorTool:
             prompt=prompt,
             engine=engine,
             bpm=bpm,
-            scale=scale
+            scale=scale,
+            mood_params=mood_params
         )
 
         track_data = {

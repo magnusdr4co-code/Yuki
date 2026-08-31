@@ -28,10 +28,27 @@ class PromptBuilder:
         user_name: str,
         user_id: str,
         channel_type: str = "direct_message",
-        active_role: Optional[str] = None
+        active_role: Optional[str] = None,
+        vital_state_block: Optional[str] = None,
+        echo_impulse: Optional[str] = None,
+        evolution_context: Optional[str] = None
     ) -> str:
         """Ensambla el prompt completo para el modelo de lenguaje."""
         role_block = f"\n[ARTE ACTIVA EN ESTA SALA]: {active_role}" if active_role else ""
+        
+        echo_impulse_section = f"\n[IMPULSO DEL DÍA (RITUAL DEL ECO)]:\n{echo_impulse}" if echo_impulse else ""
+        evolution_section = f"\n[EVOLUCIÓN RECIENTE]:\n{evolution_context}" if evolution_context else ""
+        
+        vital_state_str = ""
+        if vital_state_block:
+            vital_state_str = f"""
+==================================================
+ESTADO VITAL DE YUKI EN ESTE INSTANTE:
+==================================================
+{vital_state_block}
+{echo_impulse_section}
+{evolution_section}
+"""
 
         return f"""
 {self._soul_cache}
@@ -42,7 +59,7 @@ CONTEXTO DE MEMORIA RECUPERADA (SQLITE FTS5):
 {retrieved_memory_block}
 
 {dialectic_context}
-
+{vital_state_str}
 ==================================================
 ESTADO DE LA CONVERSACIÓN ACTUAL:
 ==================================================
