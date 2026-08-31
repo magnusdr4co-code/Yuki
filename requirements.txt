@@ -10,7 +10,8 @@ APScheduler>=3.10.4
 sqlite-utils>=3.36
 
 # LLM & Hermes Integration
-anthropic>=0.28.0
+# OpenRouter (agregador declarado en hermes_config.yaml) habla el protocolo
+# de OpenAI, así que este único SDK cubre toda la cadena de modelos.
 openai>=1.35.0
 
 # Social Adapters

@@ -205,7 +205,7 @@ def cmd_list_skills():
             print(f"  • {GREEN}{BOLD}/{item:<22}{RESET} -> {DIM}skills/{item}/SKILL.md{RESET}")
     print()
 
-def cmd_web(port: int):
+def cmd_web(port: int = None):
     """Inicia el servidor Web Dashboard del Salón de Yuki."""
     from src.web.server import run_web_server
     run_web_server(port=port)
@@ -219,12 +219,17 @@ def cmd_cron_task(name: str):
         task_map = {
             "nocturnal_trend_reflection": agent.tasks.nocturnal_trend_reflection,
             "morning_inspiration_drop": agent.tasks.morning_inspiration_drop,
-            "daily_memory_synthesis": agent.tasks.daily_memory_synthesis
+            "daily_memory_synthesis": agent.tasks.daily_memory_synthesis,
+            "echo_ritual": agent.tasks.echo_ritual,
+            "agency_loop_tick": agent.tasks.agency_loop_tick,
+            "spontaneous_monologue": agent.tasks.spontaneous_monologue
         }
 
         if name not in task_map:
             print(f"{RED}❌ Tarea desconocida '{name}'. Opciones: {list(task_map.keys())}{RESET}")
-            return
+            # Código de salida distinto de cero: un planificador externo
+            # (Cloud Scheduler, Cloud Run Jobs) debe ver el fallo, no un falso éxito.
+            sys.exit(1)
 
         result = await task_map[name]()
         print(f"\n{GREEN}{BOLD}✅ Resultado de {name}:{RESET}")
@@ -300,7 +305,8 @@ def main():
     subparsers.add_parser("list-skills", help="Listar habilidades estándar en skills/")
     
     web_p = subparsers.add_parser("web", help="Iniciar Salón Web Dashboard & Canvas API")
-    web_p.add_argument("--port", default=8080, type=int, help="Puerto HTTP (por defecto 8080)")
+    web_p.add_argument("--port", default=None, type=int,
+                       help="Puerto HTTP (por defecto: variable de entorno PORT, o 8080)")
 
     skill_p = subparsers.add_parser("skill", help="Ejecutar una habilidad estándar")
     skill_p.add_argument("name", help="Nombre de la skill")
