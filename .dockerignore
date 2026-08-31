@@ -1,0 +1,17 @@
+.git
+.gitignore
+docs/
+tests/
+deploy/
+recursos extra/
+output/
+data/*.db
+data/*.json
+*.md
+!SOUL.md
+!MEMORY.md
+!AGENTS.md
+__pycache__/
+*.pyc
+.env
+.venv/

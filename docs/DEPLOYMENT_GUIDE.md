@@ -4,6 +4,8 @@ Este manual cubre todas las opciones de despliegue en producción para **Yuki**,
 
 > Para el plan de infraestructura en producción (Nous Portal como agregador principal con OpenRouter de respaldo, Google Cloud como hogar del contenedor Hermes, y el inventario mínimo de cuentas), consulta [`INFRASTRUCTURE_IMPLEMENTATION.md`](INFRASTRUCTURE_IMPLEMENTATION.md).
 
+> **Producción actual:** el despliegue soportado es Google Cloud sobre `e2-micro` — ver [`GCP_DEPLOYMENT.md`](GCP_DEPLOYMENT.md). Las opciones de abajo se conservan como alternativas.
+
 ---
 
 ## Opción 1: Despliegue en VPS Económico ($5/mes)

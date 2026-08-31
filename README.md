@@ -138,7 +138,10 @@ Yuki/
 │   ├── FAST_MEMORY_FTS5.md    # Análisis y benchmark: SQLite FTS5 vs Context Rot
 │   ├── AUTONOMOUS_CRON.md     # Guía de rutinas 24/7 y automatización autónoma
 │   ├── DEPLOYMENT_GUIDE.md    # Guía de despliegue en VPS ($5/mo), Docker y Modal
-│   └── INFRASTRUCTURE_IMPLEMENTATION.md # Nous Portal, Google Cloud y cuentas mínimas
+│   ├── INFRASTRUCTURE_IMPLEMENTATION.md # Nous Portal, Google Cloud y cuentas mínimas
+│   └── GCP_DEPLOYMENT.md      # Runbook de despliegue en e2-micro
+│
+├── deploy/gcp/                # Scripts de provisión y despliegue en Google Cloud
 │
 └── tests/                     # Suite de pruebas unitarias e integración
 ```
@@ -155,4 +158,5 @@ Yuki/
 - ⏰ [Planificador Cron y Rutinas Autónomas 24/7 (`docs/AUTONOMOUS_CRON.md`)](docs/AUTONOMOUS_CRON.md)
 - 🚀 [Guía de Despliegue en VPS y Serverless (`docs/DEPLOYMENT_GUIDE.md`)](docs/DEPLOYMENT_GUIDE.md)
 - 🏗️ [Implementación de Infraestructura: Nous Portal, Google Cloud y Cuentas (`docs/INFRASTRUCTURE_IMPLEMENTATION.md`)](docs/INFRASTRUCTURE_IMPLEMENTATION.md)
+- ☁️ [Despliegue en Google Cloud sobre `e2-micro` (`docs/GCP_DEPLOYMENT.md`)](docs/GCP_DEPLOYMENT.md)
 - 🧰 [Catálogo de Herramientas y Contratos de Habilidades (`skills/HERRAMIENTAS.md`)](skills/HERRAMIENTAS.md)

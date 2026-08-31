@@ -1,0 +1,200 @@
+#cloud-config
+# ==========================================================
+# Container-Optimized OS — arranque de Yuki en una e2-micro
+#
+# Qué hace, en orden:
+#   1. Formatea (sólo la primera vez) y monta el disco persistente.
+#   2. Crea 1 GB de swap sobre ese disco: la e2-micro tiene 1 GB de RAM.
+#   3. Descarga los secretos de Secret Manager a un fichero en tmpfs.
+#   4. Arranca el contenedor de Yuki como servicio systemd con reinicio.
+#   5. Programa la copia de seguridad diaria de la memoria SQLite.
+#
+# COS no trae docker compose ni gcloud: por eso los secretos y el backup se
+# resuelven con el contenedor oficial google/cloud-sdk.
+# ==========================================================
+
+write_files:
+  # ---------- Montaje del disco de datos ----------
+  - path: /etc/systemd/system/yuki-data.mount
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Disco persistente de Yuki
+      Before=yuki.service
+
+      [Mount]
+      What=/dev/disk/by-id/google-yuki-data
+      Where=/mnt/disks/yuki-data
+      Type=ext4
+      Options=defaults,noatime,discard
+
+      [Install]
+      WantedBy=multi-user.target
+
+  - path: /etc/systemd/system/yuki-disk-init.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Formatea el disco de datos si está vacío y prepara la swap
+      Before=yuki-data.mount
+      ConditionPathExists=/dev/disk/by-id/google-yuki-data
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/bin/bash -c '\
+        if ! blkid /dev/disk/by-id/google-yuki-data >/dev/null 2>&1; then \
+          echo "Disco sin formato: creando ext4"; \
+          mkfs.ext4 -m 0 -F -E lazy_itable_init=0,lazy_journal_init=0,discard \
+            /dev/disk/by-id/google-yuki-data; \
+        fi'
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ---------- Swap: imprescindible con 1 GB de RAM ----------
+  - path: /etc/systemd/system/yuki-swap.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Swap de 1 GB sobre el disco persistente
+      Requires=yuki-data.mount
+      After=yuki-data.mount
+      Before=yuki.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/bin/bash -c '\
+        if [ ! -f /mnt/disks/yuki-data/swapfile ]; then \
+          fallocate -l 1G /mnt/disks/yuki-data/swapfile && \
+          chmod 600 /mnt/disks/yuki-data/swapfile && \
+          mkswap /mnt/disks/yuki-data/swapfile; \
+        fi; \
+        swapon /mnt/disks/yuki-data/swapfile || true; \
+        sysctl vm.swappiness=10'
+      ExecStop=/bin/bash -c 'swapoff /mnt/disks/yuki-data/swapfile || true'
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ---------- Secretos: Secret Manager -> /run/yuki/yuki.env (tmpfs) ----------
+  - path: /usr/local/bin/yuki-fetch-secrets.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Escribe /run/yuki/yuki.env con los secretos accesibles por la cuenta de
+      # servicio. /run es tmpfs: los secretos nunca tocan el disco.
+      set -uo pipefail
+      mkdir -p /run/yuki
+      : > /run/yuki/yuki.env
+      chmod 600 /run/yuki/yuki.env
+
+      SECRETS="__SECRET_LIST__"
+      for name in $SECRETS; do
+        value=$(docker run --rm --network=host \
+          gcr.io/google.com/cloudsdktool/google-cloud-cli:stable \
+          gcloud secrets versions access latest --secret="$name" 2>/dev/null) || {
+            echo "aviso: secreto $name no disponible, se omite"; continue; }
+        printf '%s=%s\n' "$name" "$value" >> /run/yuki/yuki.env
+      done
+      echo "TZ=__AGENT_TZ__" >> /run/yuki/yuki.env
+      echo "ENVIRONMENT=production" >> /run/yuki/yuki.env
+      echo "DATABASE_PATH=/app/data/yuki_memory.db" >> /run/yuki/yuki.env
+      echo "secretos cargados: $(wc -l < /run/yuki/yuki.env) variables"
+
+  - path: /etc/systemd/system/yuki-secrets.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Carga de secretos de Yuki desde Secret Manager
+      After=network-online.target docker.service
+      Wants=network-online.target
+      Before=yuki.service
+
+      [Service]
+      Type=oneshot
+      RemainAfterExit=true
+      ExecStart=/usr/local/bin/yuki-fetch-secrets.sh
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ---------- El agente ----------
+  - path: /etc/systemd/system/yuki.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Yuki — Diva Digital Autónoma (Hermes Agent)
+      Requires=docker.service yuki-data.mount yuki-secrets.service
+      After=docker.service yuki-data.mount yuki-secrets.service yuki-swap.service
+
+      [Service]
+      Restart=always
+      RestartSec=10
+      ExecStartPre=-/usr/bin/docker rm -f yuki
+      ExecStartPre=/usr/bin/docker-credential-gcr configure-docker --registries=__REGION__-docker.pkg.dev
+      ExecStartPre=/usr/bin/docker pull __IMAGE__:__TAG__
+      ExecStart=/usr/bin/docker run --rm --name yuki \
+        --env-file /run/yuki/yuki.env \
+        --volume /mnt/disks/yuki-data/data:/app/data \
+        --volume /mnt/disks/yuki-data/output:/app/output \
+        --volume /mnt/disks/yuki-data/hermes:/root/.hermes \
+        --memory 700m --memory-swap 1500m --cpus 1.5 \
+        --log-driver=gcplogs \
+        --network host \
+        __IMAGE__:__TAG__
+      ExecStop=/usr/bin/docker stop yuki
+
+      [Install]
+      WantedBy=multi-user.target
+
+  # ---------- Copia de seguridad diaria de la memoria ----------
+  - path: /usr/local/bin/yuki-backup.sh
+    permissions: "0755"
+    content: |
+      #!/bin/bash
+      # Copia consistente de la memoria SQLite a Cloud Storage.
+      # sqlite3 .backup es seguro con la base en uso; cp NO lo es.
+      set -euo pipefail
+      STAMP=$(date -u +%Y%m%dT%H%M%SZ)
+      DATA=/mnt/disks/yuki-data/data
+      docker exec yuki sqlite3 /app/data/yuki_memory.db \
+        ".backup '/app/data/backup_${STAMP}.db'"
+      docker run --rm --network=host \
+        -v "${DATA}:/data" \
+        gcr.io/google.com/cloudsdktool/google-cloud-cli:stable \
+        gcloud storage cp "/data/backup_${STAMP}.db" \
+        "gs://__BUCKET__/backups/yuki_memory_${STAMP}.db"
+      rm -f "${DATA}/backup_${STAMP}.db"
+      echo "backup ${STAMP} completado"
+
+  - path: /etc/systemd/system/yuki-backup.service
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Copia de seguridad de la memoria de Yuki
+      [Service]
+      Type=oneshot
+      ExecStart=/usr/local/bin/yuki-backup.sh
+
+  - path: /etc/systemd/system/yuki-backup.timer
+    permissions: "0644"
+    content: |
+      [Unit]
+      Description=Copia diaria de la memoria de Yuki (04:30 UTC)
+      [Timer]
+      OnCalendar=*-*-* 04:30:00
+      Persistent=true
+      [Install]
+      WantedBy=timers.target
+
+runcmd:
+  - systemctl daemon-reload
+  - systemctl enable --now yuki-disk-init.service
+  - systemctl enable --now yuki-data.mount
+  - mkdir -p /mnt/disks/yuki-data/data /mnt/disks/yuki-data/output /mnt/disks/yuki-data/hermes
+  - systemctl enable --now yuki-swap.service
+  - systemctl enable --now yuki-secrets.service
+  - systemctl enable --now yuki.service
+  - systemctl enable --now yuki-backup.timer

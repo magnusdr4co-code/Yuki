@@ -24,6 +24,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     ffmpeg \
     ca-certificates \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
@@ -34,6 +35,9 @@ RUN mkdir -p /app/data /app/media_cache
 
 ENV PYTHONUNBUFFERED=1
 ENV ENVIRONMENT=production
+# La VM corre en UTC; el cron de Yuki (03:00, 07:30, 23:30) es hora peninsular.
+# Sin tzdata + TZ, el "morning drop" se desplaza al cambiar el horario de verano.
+ENV TZ=Europe/Madrid
 
 EXPOSE 8080
 

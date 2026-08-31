@@ -283,6 +283,8 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 
 ### Fase 1 — Cimientos en Google Cloud (día 1–2)
 
+> **Ya implementado.** Los pasos de esta fase están automatizados en [`deploy/gcp/`](../deploy/gcp/) y documentados paso a paso en [`GCP_DEPLOYMENT.md`](GCP_DEPLOYMENT.md).
+
 | Paso | Acción | Entregable |
 |---|---|---|
 | 1.1 | Crear proyecto `yuki-prod`, vincular facturación y **presupuesto con alertas al 50/90/100 %** (D-10) | Proyecto con alerta activa |
