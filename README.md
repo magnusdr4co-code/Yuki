@@ -155,24 +155,32 @@ contratar servicios de pago o de prometer una demo.
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
 | Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT` |
-| Generación de texto | ⚠️ Desviado del diseño | `_call_llm_inference` llama directo al SDK de Anthropic; si falta la clave, responde con voz predefinida |
-| Enrutamiento OpenRouter (`provider_routing`) | ⚠️ Sin implementar | Declarado en `config.yaml` y `hermes_config.yaml`; ningún código lo lee |
-| Pasarela Nous Portal como gateway | ⚠️ Sin implementar | `gateway: nous_portal` declarado; el cliente no hace peticiones |
+| Generación de texto vía OpenRouter | ✅ Real | Peticiones HTTP reales al agregador, con modelo de respaldo si el primario falla |
+| Cadena de pasarelas | ✅ Real | Nous Portal → OpenRouter → voz local, en `src/core/llm_router.py` |
+| Pasarela Nous Portal | ⚠️ Interfaz lista, mock | El endpoint no existe aún; `NOUS_PORTAL_MODE=mock` para trabajar sin red |
+| Enrutado por tiers (`provider_routing.routes`) | ⚠️ Sin implementar | Se usa `agent.model`; los tiers por tarea (feed, formateo, composición) siguen sin leerse |
 | Nous Portal: imagen, música, voz | ⚠️ Simulado | `src/tools/nous_portal.py` escribe ficheros de marcador, no llama a ninguna API |
 | Firecrawl / búsqueda web | ⚠️ Simulado | Sin cliente HTTP |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
 | Adaptadores Telegram y Discord | ⚠️ Simulado | Registran en log; no usan `python-telegram-bot` ni `discord.py` |
 
-**Sobre los proveedores.** La arquitectura declarada es Nous Portal como
-pasarela de herramientas y OpenRouter como agregador de LLM; los modelos se
-nombran siempre a través del agregador (`openrouter/anthropic/claude-3.5-sonnet`),
-así que no se necesita cuenta directa con ningún proveedor de modelos. El
-código actual no cumple esa arquitectura: invoca el SDK de Anthropic
-directamente. Es una deuda pendiente, no una decisión de diseño.
+**Sobre los proveedores.** Nous Portal es la pasarela de herramientas y
+OpenRouter el agregador de LLM. Los modelos se nombran siempre a través del
+agregador (`anthropic/claude-3.5-sonnet`, `google/gemini-2.0-flash`), así que
+**basta con una cuenta de OpenRouter**: no se necesita alta directa con ningún
+proveedor de modelos.
 
-En todo el código no hay ninguna llamada HTTP saliente salvo la de ese SDK.
-Los pasos naturales para cerrar la brecha son implementar el cliente de
-`NousPortalClient` y hacer que `_call_llm_inference` respete `provider_routing`.
+`src/core/llm_router.py` recorre las pasarelas en ese orden y cae a la
+siguiente cuando una no está disponible. Como el endpoint de Nous Portal
+todavía no existe, se declara no disponible por defecto y el tráfico real sale
+por OpenRouter; con `NOUS_PORTAL_MODE=mock` responde simulado para desarrollo
+sin red. Si no hay ninguna clave, Yuki conserva su voz local y nunca se queda
+muda.
+
+Lo que falta para cerrar la arquitectura: implementar `_call_remote` de
+`NousPortalProvider` cuando exista el endpoint, el cliente HTTP de
+`NousPortalClient` para imagen, música y voz, y el enrutado por tiers de
+`provider_routing.routes`.
 
 ---
 

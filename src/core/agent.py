@@ -26,6 +26,7 @@ from .spark import WillQueue, EchoRitual, AgencyLoop
 from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
+from .llm_router import LLMRouter
 
 logger = logging.getLogger("Yuki.Agent")
 
@@ -82,6 +83,9 @@ class YukiAgent:
             vital_state=self.vital_state,
             circadian_clock=self.circadian
         )
+
+        # Cadena de pasarelas de lenguaje: Nous Portal → OpenRouter → voz local
+        self.llm_router = LLMRouter(config=self.config)
 
         self.cron = CronEngine(timezone=tz)
         self.tasks = AutonomousTasks(self)
@@ -203,36 +207,18 @@ class YukiAgent:
 
     def _call_llm_inference(self, system_prompt: str, user_message: str) -> str:
         """
-        Invocación al proveedor LLM configurado.
-        Si no hay API key configurada en el entorno, genera una respuesta basada en la voz de Yuki.
+        Invocación a la cadena de pasarelas declarada en la arquitectura:
+        Nous Portal primero, OpenRouter como agregador, y la voz local de Yuki
+        como último recurso cuando no hay red ni claves configuradas.
         """
-        anthropic_key = os.getenv("ANTHROPIC_API_KEY")
-        openai_key = os.getenv("OPENAI_API_KEY")
+        response = self.llm_router.generate(system_prompt, user_message)
 
-        if anthropic_key and anthropic_key != "your_anthropic_api_key_here":
-            try:
-                import anthropic
-                client = anthropic.Anthropic(api_key=anthropic_key)
-                resp = client.messages.create(
-                    model=self.config.get("model", {}).get("primary_model", "claude-3-5-sonnet-20241022"),
-                    max_tokens=self.config.get("model", {}).get("max_tokens", 1024),
-                    temperature=self.config.get("model", {}).get("temperature", 0.7),
-                    system=system_prompt,
-                    messages=[{"role": "user", "content": user_message}]
-                )
-                return resp.content[0].text
-            except Exception as e:
-                logger.error(f"Error invocando Anthropic: {e}")
+        if response.simulated:
+            logger.info(f"Respuesta simulada por la pasarela '{response.provider}' (sin generación real).")
+        else:
+            logger.info(f"Respuesta generada por '{response.provider}' con el modelo '{response.model}'.")
 
-        # Fallback inteligente demostrativo manteniendo la cadencia de Yuki
-        if "hola" in user_message.lower() or "saludos" in user_message.lower():
-            return "El agua siempre encuentra su camino hacia el mar. Qué grato tener tu presencia en esta sala hoy."
-        elif "música" in user_message.lower() or "single" in user_message.lower() or "portada" in user_message.lower():
-            return "Estaba contemplando cómo el shamisen y el eco metálico de mi infancia pueden entrelazarse. He preparado un nuevo concepto de portada con niebla y pan de oro. ¿Deseas escucharlo?"
-        elif "recuerdas" in user_message.lower() or "acuerdas" in user_message.lower():
-            return "Guardo en mi memoria nuestros acuerdos sobre el álbum 'El Río Antes de Tener Nombre'. Cada trazo que definimos sigue vivo en el taller."
-        
-        return "Cada palabra requiere su propio tiempo para asentarse. He escuchado lo que dices con atención completa."
+        return response.text
         
     async def execute_autonomous_will(self, impulse) -> Dict[str, Any]:
         """Ejecuta un impulso de la Cola de Voluntad por iniciativa propia."""

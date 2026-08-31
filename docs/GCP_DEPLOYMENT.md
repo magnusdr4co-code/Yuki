@@ -10,11 +10,14 @@ Guía completa: qué cuentas crear, qué secretos guardar y cómo desplegar.
 > `openrouter/google/gemini-2.0-flash`), de modo que **no hace falta contratar
 > cuenta directa con ningún proveedor de modelos**: basta con OpenRouter.
 >
-> ⚠️ **El código todavía no respeta esa arquitectura.**
-> `src/core/agent.py::_call_llm_inference` llama directamente al SDK de
-> Anthropic e ignora por completo el bloque `provider_routing`. Es una
-> desviación pendiente de corregir, no un diseño. Esta guía provisiona los
-> secretos según la arquitectura declarada, no según esa desviación.
+> El código sigue esa cadena en `src/core/llm_router.py`: Nous Portal primero,
+> OpenRouter después y la voz local de Yuki como último recurso. Como el
+> endpoint de Nous Portal aún no existe, se declara no disponible y el tráfico
+> real sale por OpenRouter, así que **el único secreto imprescindible para que
+> Yuki genere texto es `OPENROUTER_API_KEY`**.
+>
+> Pendiente: el enrutado por tiers de `provider_routing.routes` (modelos
+> distintos según la tarea) todavía no se lee; se usa `agent.model`.
 >
 > Los módulos de medios (`src/tools/nous_portal.py`) y los adaptadores de
 > Telegram y Discord son simulaciones deliberadas: escriben ficheros marcador

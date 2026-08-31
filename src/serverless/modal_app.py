@@ -18,7 +18,7 @@ try:
         .pip_install(
             "pydantic",
             "pyyaml",
-            "anthropic",
+            # OpenRouter habla el protocolo de OpenAI: un solo SDK para el agregador.
             "openai",
             "aiohttp",
             "sqlite-utils",
