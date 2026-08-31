@@ -10,9 +10,11 @@ hermes:
 
 provider_routing:
   enabled: true
-  default_aggregator: "openrouter"
-  
+  default_aggregator: "nous_portal"   # principal
+  fallback_aggregator: "openrouter"   # auxiliar
+
   api_keys:
+    nous_portal: "${NOUS_PORTAL_API_KEY}"   # OAuth: refresh token en ~/.hermes/auth.json
     openrouter: "${OPENROUTER_API_KEY}"
     anthropic: "${ANTHROPIC_API_KEY}"
     google: "${GEMINI_API_KEY}"
@@ -23,26 +25,50 @@ provider_routing:
     tier_1_fast_and_cheap:
       description: "Tareas rápidas: lectura de feeds, moderación y formateo"
       models:
-        - "openrouter/google/gemini-2.0-flash"
-        - "openrouter/deepseek/deepseek-chat"
-        - "openrouter/qwen/qwen-2.5-72b-instruct"
+        - "nous/google/gemini-flash"
+        - "nous/deepseek/deepseek-chat"
       max_tokens: 400
       temperature: 0.3
+      reasoning:
+        effort: "none"
 
     tier_2_creative_frontier:
       description: "Tareas complejas y de frontera: composición musical, poesía y modelado dialéctico Honcho"
       models:
-        - "openrouter/anthropic/claude-3.5-sonnet"
-        - "openrouter/google/gemini-2.0-pro-exp"
-        - "openrouter/openai/gpt-4o"
-      max_tokens: 1500
+        - "nous/anthropic/claude-sonnet-4.6"
+      max_tokens: 800
       temperature: 0.75
+      reasoning:
+        effort: "low"
+
+    tier_2_nuclear:
+      description: "Síntesis profunda: memoria diaria, reflexión de tendencias y diagnóstico del Ma"
+      models:
+        - "nous/openai/gpt-5.1"
+        - "nous/google/gemini-3-pro"
+      max_tokens: 1500
+      temperature: 0.7
+      reasoning:
+        effort: "high"        # verificar usage.reasoning_tokens > 0
+
+# Cadena auxiliar: sólo entra si el Portal falla, se cae o agota créditos.
+# Cada activación debe quedar registrada, nunca sustituir en silencio.
+fallback_providers:
+  - provider: openrouter
+    model: "anthropic/claude-sonnet-4.5"
+  - provider: anthropic
+    model: "claude-sonnet-4-6"
 
 tools:
   gateway: "nous_portal"
-  nous_portal_url: "https://api.nousportal.com/v1"
+  nous_portal_url: "https://inference-api.nousresearch.com/v1"
   skills_directory: "./skills"
-  frontier_defaults:
-    vision: "gemini_image"
-    music: "flow_audio"
-    voice: "gemini_multimodal_audio"
+  # Backends reales del Tool Gateway (ver skills/HERRAMIENTAS.md)
+  gateway_backends:
+    image: "fal/flux-2-pro"
+    web: "firecrawl"
+    voice: "openai_tts"
+    transcription: "whisper"
+    browser: "browser_use"
+    sandbox: "modal"
+    music: null          # no disponible en el Tool Gateway: usar src/tools/midi_generator.py

@@ -10,35 +10,43 @@ agent:
   default_language: "es-ES"
   fallback_language: "en-US"
   model:
-    provider: "openrouter" # o "anthropic", "google", "openai", "nous"
-    primary_model: "anthropic/claude-3.5-sonnet"
-    fallback_model: "google/gemini-2.0-flash"
+    provider: "nous"            # Nous Portal es el agregador principal
+    base_url: "https://inference-api.nousresearch.com/v1"
+    primary_model: "anthropic/claude-sonnet-4.6"
+    fallback_provider: "openrouter"   # auxiliar: sólo si el Portal falla o agota créditos
+    fallback_model: "anthropic/claude-sonnet-4.5"
     temperature: 0.72
     max_tokens: 1024
 
 # Enrutamiento Inteligente para optimización de costes, latencia y modelos de frontera
+# Jerarquía: Nous Portal es el agregador principal; OpenRouter es el auxiliar de respaldo.
 provider_routing:
   enabled: true
-  aggregator: "openrouter"
+  aggregator: "nous_portal"
+  fallback_aggregator: "openrouter"
   routes:
-    feed_summary:
-      tier: "fast_and_cheap"
-      preferred_model: "google/gemini-2.0-flash"
+    feed_cleanup:
+      tier: "tier_0_reflex"
       max_tokens: 350
       temperature: 0.3
     social_formatting:
-      tier: "fast_and_cheap"
-      preferred_model: "deepseek/deepseek-chat"
+      tier: "tier_0_reflex"
       max_tokens: 250
       temperature: 0.4
     music_composition:
-      tier: "creative_and_deep"
-      preferred_model: "anthropic/claude-3.5-sonnet"
-      max_tokens: 1500
+      tier: "tier_1_creative"
+      max_tokens: 800
       temperature: 0.8
+    poetry_and_ceremony:
+      tier: "tier_1_creative"
+      max_tokens: 800
+      temperature: 0.75
     dialectic_synthesis:
-      tier: "creative_and_deep"
-      preferred_model: "google/gemini-2.0-pro-exp"
+      tier: "tier_2_nuclear"
+      max_tokens: 1000
+      temperature: 0.7
+    daily_synthesis:
+      tier: "tier_2_nuclear"
       max_tokens: 1000
       temperature: 0.7
 
@@ -75,26 +83,28 @@ nous_portal:
     voice: "./output/voice"
     music: "./output/music"
     posts: "./output/posts"
-  frontier_engines:
-    vision:
-      default_provider: "gemini_image" # "gemini_image", "seedream", "flux_pro"
+  # Backends reales del Tool Gateway. Catálogo canónico: skills/HERRAMIENTAS.md
+  tool_gateway:
+    image:
+      default_model: "fal/flux-2-pro"
       models:
-        gemini_image: "google/imagen-3-generate-002"
-        seedream: "bytedance/seedream-v2.5-hd"
-        flux_pro: "fal-ai/flux-pro/v1.1-ultra"
-    music:
-      default_engine: "flow_audio" # "flow_audio", "suno_v4", "midi_only"
-      models:
-        flow_audio: "deepmind/flow-audio-craft-v2"
-        suno_v4: "suno/v4-studio"
+        - "fal/flux-2-pro"        # portadas y arte de alta fidelidad
+        - "fal/nano-banana-pro"   # composición con texto legible
+        - "fal/ideogram-v3"       # tipografía y carteles
+        - "fal/recraft-v4"        # vectorial y estilo plano
     voice:
-      default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"
-      voice_id: "yuki_serene_alto"
+      engine: "openai_tts"
+      transcription: "whisper"
       cadence_pause_ms: 350
+      output_format: "ogg_opus"   # transcodificado obligatorio con ffmpeg
     web_search:
       provider: "firecrawl"
-      max_results: 5
+      max_results: 4
       scrape_mode: "markdown"
+    browser: "browser_use"        # último recurso
+    sandbox: "modal"
+    video: null                   # desactivado: consume la cuota de salida de red
+    music: null                   # no disponible: usar src/tools/midi_generator.py
 
 scheduler:
   timezone: "Europe/Madrid"

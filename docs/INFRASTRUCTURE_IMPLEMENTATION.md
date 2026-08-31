@@ -29,7 +29,7 @@ Regla de oro de la arquitectura: **Nous Portal es el núcleo cognitivo y multimo
 
 ---
 
-## 1. Investigación: OpenRouter como proveedor multimodal y nuclear
+## 1. Investigación: OpenRouter como proveedor multimodal y nuclear (rol auxiliar)
 
 > Esta sección es la investigación que sustenta D-2 y D-3. Tras comparar con Nous Portal (§1.bis), OpenRouter queda como **respaldo cognitivo y ruta de escape**, no como pasarela principal. Los *tiers* y el control de razonamiento de §1.2 y §1.3 se aplican igual sea cual sea la pasarela que atienda la petición.
 

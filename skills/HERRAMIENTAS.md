@@ -3,6 +3,8 @@
 *Fuente única de verdad sobre **qué herramienta existe, cómo se invoca y qué hacer cuando falla**. Toda habilidad de `skills/` declara su contrato contra este catálogo.*
 
 > Deriva de las decisiones D-1 a D-6 de [`docs/INFRASTRUCTURE_IMPLEMENTATION.md`](../docs/INFRASTRUCTURE_IMPLEMENTATION.md).
+> **Jerarquía de pasarelas.** **Nous Portal es el agregador principal**: todo —modelos, imagen, voz, web, navegador y sandbox— sale por él. **OpenRouter es auxiliar**: entra sólo cuando el Portal falla, se cae o agota créditos, nunca por preferencia, comodidad o "probar otro modelo". Toda activación del auxiliar queda registrada y se comunica en la respuesta.
+>
 > **Regla previa a todo:** si una herramienta no aparece en esta tabla, **no existe**. No inventes endpoints ni modelos, no sustituyas en silencio una herramienta por otra y no devuelvas resultados simulados como si fueran reales.
 
 ---

@@ -2,7 +2,7 @@
 
 Este manual cubre todas las opciones de despliegue en producción para **Yuki**, garantizando un consumo mínimo de recursos y alta disponibilidad.
 
-> Para el plan de infraestructura en producción (OpenRouter como proveedor multimodal y nuclear, Google Cloud como hogar del contenedor Hermes, y el inventario mínimo de cuentas), consulta [`INFRASTRUCTURE_IMPLEMENTATION.md`](INFRASTRUCTURE_IMPLEMENTATION.md).
+> Para el plan de infraestructura en producción (Nous Portal como agregador principal con OpenRouter de respaldo, Google Cloud como hogar del contenedor Hermes, y el inventario mínimo de cuentas), consulta [`INFRASTRUCTURE_IMPLEMENTATION.md`](INFRASTRUCTURE_IMPLEMENTATION.md).
 
 ---
 
