@@ -1,0 +1,69 @@
+# ==========================================
+# Contexto de build de Yuki
+# Sin este fichero, `COPY . .` hornea secretos y basura en la imagen.
+# ==========================================
+
+# Secretos — NUNCA deben entrar en la imagen (usa Secret Manager)
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+service-account*.json
+
+# Historial de git (~3.6MB y metadatos innecesarios)
+.git
+.gitignore
+.gitattributes
+.github
+
+# Estado en runtime: la imagen debe arrancar limpia, no con la memoria
+# de la máquina de quien construyó
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/vital_state.json
+data/honcho_profile.json
+media_cache/
+
+# Artefactos generados por Yuki
+output/art/*
+output/voice/*
+output/music/*
+output/posts/*
+!output/**/.gitkeep
+
+# Python
+**/__pycache__/
+**/*.py[cod]
+**/*.so
+**/*.egg-info/
+build/
+dist/
+.eggs/
+venv/
+.venv/
+env/
+ENV/
+
+# Testing
+tests/
+**/.pytest_cache/
+.coverage
+htmlcov/
+
+# Editor / SO
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
+*.swp
+.cursorrules
+
+# Documentación (no se necesita en runtime)
+docs/
+*.md
+!SOUL.md
+!MEMORY.md
+!README.md

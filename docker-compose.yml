@@ -1,20 +1,26 @@
-version: '3.8'
+# Despliegue autoalojado (VPS ~$5/mes).
+# Dos procesos sobre la misma imagen: el Salón web y la presencia autónoma.
+# En Cloud Run el equivalente es un Service + Cloud Scheduler (ver docs/GCP_DEPLOYMENT.md).
 
 services:
-  yuki-agent:
+  yuki-salon:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: yuki_digital_diva
+    image: yuki-digital-diva:latest
+    container_name: yuki_salon
     restart: unless-stopped
     env_file:
       - .env
+    environment:
+      PORT: 8080
+    command: ["python", "cli.py", "web"]
     volumes:
-      - ./data:/app/data
-      - ./media_cache:/app/media_cache
-      - ./SOUL.md:/app/SOUL.md
-      - ./MEMORY.md:/app/MEMORY.md
-      - ./config.yaml:/app/config.yaml
+      - yuki-data:/app/data
+      - yuki-output:/app/output
+      - ./SOUL.md:/app/SOUL.md:ro
+      - ./MEMORY.md:/app/MEMORY.md:ro
+      - ./config.yaml:/app/config.yaml:ro
     ports:
       - "8080:8080"
     deploy:
@@ -23,3 +29,29 @@ services:
           memory: 384M
         reservations:
           memory: 128M
+
+  yuki-daemon:
+    image: yuki-digital-diva:latest
+    container_name: yuki_daemon
+    restart: unless-stopped
+    depends_on:
+      - yuki-salon
+    env_file:
+      - .env
+    command: ["python", "cli.py", "run-daemon"]
+    volumes:
+      - yuki-data:/app/data
+      - yuki-output:/app/output
+      - ./SOUL.md:/app/SOUL.md:ro
+      - ./MEMORY.md:/app/MEMORY.md:ro
+      - ./config.yaml:/app/config.yaml:ro
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+
+volumes:
+  yuki-data:
+  yuki-output:

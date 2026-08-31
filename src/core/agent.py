@@ -17,7 +17,7 @@ from ..memory.memory_manager import MemoryManager
 from ..honcho.dialectic import HonchoDialecticClient
 from ..tools.nous_portal import NousPortalClient
 from ..tools.media_creator import MediaCreatorTool
-from ..scheduler.cron_engine import CronEngine
+from ..scheduler.cron_engine import CronEngine, CronParseError
 from ..scheduler.tasks import AutonomousTasks
 from .prompt_builder import PromptBuilder
 from .vital_state import VitalState
@@ -113,8 +113,16 @@ class YukiAgent:
                 "spontaneous_monologue": self.tasks.spontaneous_monologue
             }
 
-            if action in func_map:
+            if action not in func_map:
+                logger.warning(f"Acción cron desconocida '{action}' en la tarea '{name}'; se omite.")
+                continue
+
+            try:
                 self.cron.register_job(name, cron_expr, func_map[action], enabled=enabled)
+            except CronParseError as e:
+                # Una expresión mal escrita no debe impedir que Yuki despierte:
+                # se omite esa tarea y el resto sigue vivo.
+                logger.error(f"Expresión cron inválida en la tarea '{name}': {e}")
 
     async def generate_response(
         self,

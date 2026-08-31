@@ -52,12 +52,13 @@ output/posts/*.md
 !output/music/.gitkeep
 !output/posts/.gitkeep
 
-# Local data & temp DBs
-data/test_*.db*
-data/benchmark_*.db*
-data/perf_test.db*
-*.db-shm
-*.db-wal
+# Estado en runtime: la memoria y el estado vital de Yuki son propios de cada
+# despliegue, no del repositorio. Un clon limpio arranca con valores por defecto.
+data/*.db
+data/*.db-shm
+data/*.db-wal
+data/vital_state.json
+data/honcho_profile.json
 media_cache/
 
 # OS / Editor

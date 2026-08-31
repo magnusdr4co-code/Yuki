@@ -144,6 +144,30 @@ Yuki/
 
 ---
 
+## 🚦 Estado de Implementación
+
+Qué está conectado de verdad y qué es todavía andamiaje. Consúltalo antes de
+contratar servicios de pago o de prometer una demo.
+
+| Módulo | Estado | Nota |
+|---|---|---|
+| Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco |
+| Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
+| Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
+| Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT` |
+| Generación con Anthropic | ✅ Real | Requiere `ANTHROPIC_API_KEY`; si falta, responde con voz predefinida |
+| Enrutamiento OpenRouter (`provider_routing`) | ⚠️ Sin implementar | Declarado en `config.yaml`, no lo lee ningún código |
+| Nous Portal: imagen, música, voz | ⚠️ Simulado | `src/tools/nous_portal.py` escribe ficheros de marcador, no llama a ninguna API |
+| Firecrawl / búsqueda web | ⚠️ Simulado | Sin cliente HTTP |
+| Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
+| Adaptadores Telegram y Discord | ⚠️ Simulado | Registran en log; no usan `python-telegram-bot` ni `discord.py` |
+
+En todo el código no hay ninguna llamada HTTP saliente salvo la del SDK de
+Anthropic. El siguiente paso natural para que Yuki cree de verdad es
+implementar el cliente HTTP de `NousPortalClient`.
+
+---
+
 ## 📚 Documentación Técnica Detallada
 
 - 📖 [Arquitectura Integral del Sistema (`docs/ARCHITECTURE.md`)](docs/ARCHITECTURE.md)
@@ -153,3 +177,4 @@ Yuki/
 - ⚡ [Motor de Memoria FTS5 y Benchmark de Rendimiento (`docs/FAST_MEMORY_FTS5.md`)](docs/FAST_MEMORY_FTS5.md)
 - ⏰ [Planificador Cron y Rutinas Autónomas 24/7 (`docs/AUTONOMOUS_CRON.md`)](docs/AUTONOMOUS_CRON.md)
 - 🚀 [Guía de Despliegue en VPS y Serverless (`docs/DEPLOYMENT_GUIDE.md`)](docs/DEPLOYMENT_GUIDE.md)
+- ☁️ [Despliegue en Google Cloud: cuentas, secretos y Cloud Run (`docs/GCP_DEPLOYMENT.md`)](docs/GCP_DEPLOYMENT.md)

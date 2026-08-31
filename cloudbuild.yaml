@@ -1,0 +1,112 @@
+# ==========================================
+# Pipeline de build y despliegue de Yuki en Google Cloud
+#   gcloud builds submit --config cloudbuild.yaml
+# ==========================================
+
+substitutions:
+  _REGION: europe-southwest1        # Madrid — coincide con la zona horaria de Yuki
+  _REPO: yuki
+  _SERVICE: yuki-salon
+  _SERVICE_ACCOUNT: yuki-runtime
+  _BUCKET: ""                       # bucket GCS para /app/data (ver docs/GCP_DEPLOYMENT.md)
+
+options:
+  logging: CLOUD_LOGGING_ONLY
+  machineType: E2_HIGHCPU_8
+
+images:
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+  - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest'
+
+steps:
+  # 1. Pruebas: una imagen que no pasa los tests no llega a producción.
+  - id: tests
+    name: python:3.11-slim
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        pip install --no-cache-dir -q pytest pytest-asyncio pyyaml python-dotenv
+        python -m pytest tests/ -q
+
+  # 2. Construcción de la imagen
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args:
+      - build
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:latest'
+      - '.'
+
+  # 3. Publicación en Artifact Registry
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args:
+      - push
+      - '--all-tags'
+      - '${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}'
+
+  # 4. Despliegue del Salón como servicio Cloud Run
+  #    max-instances=1 es deliberado: la memoria es SQLite y admite un solo escritor.
+  - id: deploy-salon
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: gcloud
+    args:
+      - run
+      - deploy
+      - '${_SERVICE}'
+      - '--image=${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}'
+      - '--region=${_REGION}'
+      - '--platform=managed'
+      - '--service-account=${_SERVICE_ACCOUNT}@${PROJECT_ID}.iam.gserviceaccount.com'
+      - '--memory=512Mi'
+      - '--cpu=1'
+      - '--min-instances=0'
+      - '--max-instances=1'
+      - '--concurrency=8'
+      - '--timeout=120s'
+      - '--no-allow-unauthenticated'
+      - '--set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db'
+      - '--set-secrets=ANTHROPIC_API_KEY=yuki-anthropic-api-key:latest,HONCHO_API_KEY=yuki-honcho-api-key:latest,TELEGRAM_BOT_TOKEN=yuki-telegram-bot-token:latest,DISCORD_BOT_TOKEN=yuki-discord-bot-token:latest'
+      - '--add-volume=name=yuki-data,type=cloud-storage,bucket=${_BUCKET}'
+      - '--add-volume-mount=volume=yuki-data,mount-path=/app/data'
+
+  # 5. Tareas autónomas como Cloud Run Job (lo dispara Cloud Scheduler).
+  #    Evita tener una instancia encendida 24/7 solo para mirar el reloj.
+  - id: deploy-job
+    name: gcr.io/google.com/cloudsdktool/cloud-sdk
+    entrypoint: bash
+    args:
+      - -c
+      - |
+        set -e
+        IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
+        SA="${_SERVICE_ACCOUNT}@${PROJECT_ID}.iam.gserviceaccount.com"
+        SECRETS="ANTHROPIC_API_KEY=yuki-anthropic-api-key:latest,HONCHO_API_KEY=yuki-honcho-api-key:latest,TELEGRAM_BOT_TOKEN=yuki-telegram-bot-token:latest,DISCORD_BOT_TOKEN=yuki-discord-bot-token:latest"
+
+        for TASK in nocturnal_trend_reflection morning_inspiration_drop daily_memory_synthesis echo_ritual; do
+          JOB="yuki-$(echo $TASK | tr '_' '-')"
+          if gcloud run jobs describe "$JOB" --region="${_REGION}" >/dev/null 2>&1; then
+            ACTION=update
+          else
+            ACTION=create
+          fi
+          gcloud run jobs $ACTION "$JOB" \
+            --image="$IMAGE" \
+            --region="${_REGION}" \
+            --service-account="$SA" \
+            --memory=512Mi \
+            --cpu=1 \
+            --max-retries=1 \
+            --task-timeout=600s \
+            --set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db \
+            --set-secrets="$SECRETS" \
+            --add-volume=name=yuki-data,type=cloud-storage,bucket=${_BUCKET} \
+            --add-volume-mount=volume=yuki-data,mount-path=/app/data \
+            --command=python \
+            --args=cli.py,cron-task,--name,$TASK
+        done
+
+timeout: 1800s
