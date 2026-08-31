@@ -23,3 +23,17 @@ Permite a **Yuki** realizar su ritual nocturno de cierre, revisando los encuentr
    - Redacta un párrafo en primera persona (máximo 400 caracteres) con su voz íntima y serena.
 4. **Persistencia y Actualización:**
    - Guarda el registro con alta importancia (`importance: 2.0`) y actualiza el índice FTS5.
+
+## Herramientas
+
+> Contrato de herramientas según [`skills/HERRAMIENTAS.md`](../HERRAMIENTAS.md). Si una herramienta no está listada ahí, no existe.
+
+| Paso | Herramienta | Detalle |
+|---|---|---|
+| Recolectar la jornada | `local.memory` | Lectura directa de `memories` por fecha, sin pasar por el modelo |
+| Destilar | `portal.chat` → `tier_2_nuclear` | `reasoning: high`. Es la reflexión más profunda del día y justifica el coste. Verifica `usage.reasoning_tokens > 0` |
+| Persistir | `local.memory` | Categoría `daily_synthesis`, `importance: 2.0` |
+
+**Sin red más allá del modelo.** Nada de `portal.web` aquí: la síntesis mira hacia dentro, no hacia internet.
+
+**Si `portal.chat` y su respaldo fallan:** no escribas una síntesis vacía ni de relleno. Deja el día sin registro y avísalo; una memoria falsa contamina todas las recuperaciones futuras.
