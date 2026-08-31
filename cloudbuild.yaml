@@ -9,6 +9,13 @@ substitutions:
   _SERVICE: yuki-salon
   _SERVICE_ACCOUNT: yuki-runtime
   _BUCKET: ""                       # bucket GCS para /app/data (ver docs/GCP_DEPLOYMENT.md)
+  # Secretos inyectados como variables de entorno. El orden refleja la
+  # arquitectura declarada en hermes_config.yaml: Nous Portal como pasarela
+  # de herramientas y OpenRouter como agregador de LLM.
+  # Recorta esta lista a los secretos que hayas creado de verdad: gcloud
+  # falla si referencias uno que no existe en Secret Manager.
+  _SECRETS: >-
+    NOUS_PORTAL_API_KEY=yuki-nous-portal-api-key:latest,OPENROUTER_API_KEY=yuki-openrouter-api-key:latest,HONCHO_API_KEY=yuki-honcho-api-key:latest,TELEGRAM_BOT_TOKEN=yuki-telegram-bot-token:latest,DISCORD_BOT_TOKEN=yuki-discord-bot-token:latest
 
 options:
   logging: CLOUD_LOGGING_ONLY
@@ -69,7 +76,7 @@ steps:
       - '--timeout=120s'
       - '--no-allow-unauthenticated'
       - '--set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db'
-      - '--set-secrets=ANTHROPIC_API_KEY=yuki-anthropic-api-key:latest,HONCHO_API_KEY=yuki-honcho-api-key:latest,TELEGRAM_BOT_TOKEN=yuki-telegram-bot-token:latest,DISCORD_BOT_TOKEN=yuki-discord-bot-token:latest'
+      - '--set-secrets=${_SECRETS}'
       - '--add-volume=name=yuki-data,type=cloud-storage,bucket=${_BUCKET}'
       - '--add-volume-mount=volume=yuki-data,mount-path=/app/data'
 
@@ -84,7 +91,7 @@ steps:
         set -e
         IMAGE="${_REGION}-docker.pkg.dev/${PROJECT_ID}/${_REPO}/${_SERVICE}:${SHORT_SHA}"
         SA="${_SERVICE_ACCOUNT}@${PROJECT_ID}.iam.gserviceaccount.com"
-        SECRETS="ANTHROPIC_API_KEY=yuki-anthropic-api-key:latest,HONCHO_API_KEY=yuki-honcho-api-key:latest,TELEGRAM_BOT_TOKEN=yuki-telegram-bot-token:latest,DISCORD_BOT_TOKEN=yuki-discord-bot-token:latest"
+        SECRETS="${_SECRETS}"
 
         for TASK in nocturnal_trend_reflection morning_inspiration_drop daily_memory_synthesis echo_ritual; do
           JOB="yuki-$(echo $TASK | tr '_' '-')"

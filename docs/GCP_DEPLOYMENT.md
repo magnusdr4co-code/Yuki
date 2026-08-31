@@ -2,13 +2,25 @@
 
 Guía completa: qué cuentas crear, qué secretos guardar y cómo desplegar.
 
-> **Antes de empezar — estado real del proyecto.** El código de medios
-> (`src/tools/nous_portal.py`) y los adaptadores de Telegram y Discord son
-> todavía simulaciones: escriben ficheros y registran logs, pero no llaman a
-> ninguna API externa. La única integración real es Anthropic. Crea ahora las
-> cuentas de Google Cloud y de Anthropic; **espera** a dar de alta las de pago
-> de FAL, Suno, Nous Portal o Firecrawl hasta que exista el cliente HTTP que
-> las consuma. Ver `README.md` para el estado por módulo.
+> **Antes de empezar — proveedores.** La arquitectura declarada en
+> `hermes_config.yaml` y `config.yaml` es: **Nous Portal** como pasarela de
+> herramientas (`gateway: nous_portal`) y **OpenRouter** como agregador de LLM
+> (`default_aggregator: openrouter`). Los modelos concretos se nombran siempre
+> a través del agregador (`openrouter/anthropic/claude-3.5-sonnet`,
+> `openrouter/google/gemini-2.0-flash`), de modo que **no hace falta contratar
+> cuenta directa con ningún proveedor de modelos**: basta con OpenRouter.
+>
+> ⚠️ **El código todavía no respeta esa arquitectura.**
+> `src/core/agent.py::_call_llm_inference` llama directamente al SDK de
+> Anthropic e ignora por completo el bloque `provider_routing`. Es una
+> desviación pendiente de corregir, no un diseño. Esta guía provisiona los
+> secretos según la arquitectura declarada, no según esa desviación.
+>
+> Los módulos de medios (`src/tools/nous_portal.py`) y los adaptadores de
+> Telegram y Discord son simulaciones deliberadas: escriben ficheros marcador
+> y registran en log. **Espera** a dar de alta las cuentas de pago de FAL,
+> Suno o Firecrawl hasta que exista el cliente HTTP que las consuma. Ver
+> `README.md` para el estado por módulo.
 
 ---
 
@@ -116,11 +128,24 @@ create_secret() {
     || printf '%s' "$2" | gcloud secrets versions add "$1" --data-file=-
 }
 
-create_secret yuki-anthropic-api-key   "sk-ant-..."
+# Pasarela de herramientas y agregador de LLM: el núcleo de la arquitectura
+create_secret yuki-nous-portal-api-key "..."
+create_secret yuki-openrouter-api-key  "sk-or-..."
+
+# Modelado dialéctico y adaptadores sociales
 create_secret yuki-honcho-api-key      "..."
 create_secret yuki-telegram-bot-token  "..."
 create_secret yuki-discord-bot-token   "..."
+
+# Opcional: acceso directo a un proveedor, saltándose el agregador.
+# La arquitectura no lo requiere; OpenRouter ya da acceso a estos modelos.
+# create_secret yuki-anthropic-api-key "sk-ant-..."
+# create_secret yuki-gemini-api-key    "..."
 ```
+
+Crea solo los secretos que vayas a usar y recorta en consecuencia la
+sustitución `_SECRETS` de `cloudbuild.yaml`: `gcloud` falla al desplegar si
+referencias un secreto que no existe.
 
 Para rotar una clave más adelante basta con `gcloud secrets versions add`; el
 servicio la recoge en el siguiente arranque porque está anclado a `:latest`.
@@ -231,7 +256,8 @@ Pon un tope de gasto antes de dejarlo solo:
 **Facturación → Presupuestos y alertas → Crear presupuesto** (p. ej. 10 €/mes
 con aviso al 50 %, 90 % y 100 %). El gasto real de este despliegue debería ser
 de céntimos; lo que puede dispararse son las llamadas al LLM, que se facturan
-aparte en Anthropic.
+aparte en OpenRouter (y en Nous Portal cuando se implemente la generación de
+medios).
 
 ---
 

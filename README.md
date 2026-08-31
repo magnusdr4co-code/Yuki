@@ -155,16 +155,24 @@ contratar servicios de pago o de prometer una demo.
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
 | Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT` |
-| Generación con Anthropic | ✅ Real | Requiere `ANTHROPIC_API_KEY`; si falta, responde con voz predefinida |
-| Enrutamiento OpenRouter (`provider_routing`) | ⚠️ Sin implementar | Declarado en `config.yaml`, no lo lee ningún código |
+| Generación de texto | ⚠️ Desviado del diseño | `_call_llm_inference` llama directo al SDK de Anthropic; si falta la clave, responde con voz predefinida |
+| Enrutamiento OpenRouter (`provider_routing`) | ⚠️ Sin implementar | Declarado en `config.yaml` y `hermes_config.yaml`; ningún código lo lee |
+| Pasarela Nous Portal como gateway | ⚠️ Sin implementar | `gateway: nous_portal` declarado; el cliente no hace peticiones |
 | Nous Portal: imagen, música, voz | ⚠️ Simulado | `src/tools/nous_portal.py` escribe ficheros de marcador, no llama a ninguna API |
 | Firecrawl / búsqueda web | ⚠️ Simulado | Sin cliente HTTP |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
 | Adaptadores Telegram y Discord | ⚠️ Simulado | Registran en log; no usan `python-telegram-bot` ni `discord.py` |
 
-En todo el código no hay ninguna llamada HTTP saliente salvo la del SDK de
-Anthropic. El siguiente paso natural para que Yuki cree de verdad es
-implementar el cliente HTTP de `NousPortalClient`.
+**Sobre los proveedores.** La arquitectura declarada es Nous Portal como
+pasarela de herramientas y OpenRouter como agregador de LLM; los modelos se
+nombran siempre a través del agregador (`openrouter/anthropic/claude-3.5-sonnet`),
+así que no se necesita cuenta directa con ningún proveedor de modelos. El
+código actual no cumple esa arquitectura: invoca el SDK de Anthropic
+directamente. Es una deuda pendiente, no una decisión de diseño.
+
+En todo el código no hay ninguna llamada HTTP saliente salvo la de ese SDK.
+Los pasos naturales para cerrar la brecha son implementar el cliente de
+`NousPortalClient` y hacer que `_call_llm_inference` respete `provider_routing`.
 
 ---
 

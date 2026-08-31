@@ -125,10 +125,18 @@ put_secret() {
   fi
 }
 
-put_secret yuki-anthropic-api-key  ANTHROPIC_API_KEY
-put_secret yuki-honcho-api-key     HONCHO_API_KEY
-put_secret yuki-telegram-bot-token TELEGRAM_BOT_TOKEN
-put_secret yuki-discord-bot-token  DISCORD_BOT_TOKEN
+# Orden segun la arquitectura declarada en hermes_config.yaml:
+# la pasarela de herramientas es Nous Portal y el agregador de LLM es OpenRouter.
+put_secret yuki-nous-portal-api-key NOUS_PORTAL_API_KEY
+put_secret yuki-openrouter-api-key  OPENROUTER_API_KEY
+put_secret yuki-honcho-api-key      HONCHO_API_KEY
+put_secret yuki-gemini-api-key      GEMINI_API_KEY
+put_secret yuki-telegram-bot-token  TELEGRAM_BOT_TOKEN
+put_secret yuki-discord-bot-token   DISCORD_BOT_TOKEN
+
+# Opcional: solo si algun dia se quiere acceso directo a un proveedor,
+# saltandose el agregador. La arquitectura no lo requiere.
+put_secret yuki-anthropic-api-key   ANTHROPIC_API_KEY
 
 # --- Resumen ---------------------------------------------------------------
 cat <<SUMMARY
