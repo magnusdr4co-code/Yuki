@@ -9,6 +9,12 @@ substitutions:
   _SERVICE: yuki-salon
   _SERVICE_ACCOUNT: yuki-runtime
   _BUCKET: ""                       # bucket GCS para /app/data (ver docs/GCP_DEPLOYMENT.md)
+  # Vertex AI: la ruta que sirve los modelos con cargo al crédito de Google
+  # Cloud. Vacío = inactiva, y Yuki sale por OpenRouter como siempre. Ponle el
+  # PROJECT_ID para activarla. Va aquí y no en un `gcloud run update` suelto
+  # porque `--set-env-vars` reemplaza la lista entera en cada despliegue.
+  _VERTEX_PROJECT_ID: ""
+  _VERTEX_LOCATION: "global"
   # Secretos inyectados como variables de entorno. El orden refleja la
   # arquitectura declarada en hermes_config.yaml: Nous Portal como pasarela
   # de herramientas y OpenRouter como agregador de LLM.
@@ -75,7 +81,7 @@ steps:
       - '--concurrency=8'
       - '--timeout=120s'
       - '--no-allow-unauthenticated'
-      - '--set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db'
+      - '--set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db,VERTEX_PROJECT_ID=${_VERTEX_PROJECT_ID},VERTEX_LOCATION=${_VERTEX_LOCATION}'
       - '--set-secrets=${_SECRETS}'
       - '--add-volume=name=yuki-data,type=cloud-storage,bucket=${_BUCKET}'
       - '--add-volume-mount=volume=yuki-data,mount-path=/app/data'
@@ -108,7 +114,7 @@ steps:
             --cpu=1 \
             --max-retries=1 \
             --task-timeout=600s \
-            --set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db \
+            --set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db,VERTEX_PROJECT_ID=${_VERTEX_PROJECT_ID},VERTEX_LOCATION=${_VERTEX_LOCATION} \
             --set-secrets="$SECRETS" \
             --add-volume=name=yuki-data,type=cloud-storage,bucket=${_BUCKET} \
             --add-volume-mount=volume=yuki-data,mount-path=/app/data \

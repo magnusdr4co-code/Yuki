@@ -14,6 +14,11 @@ sqlite-utils>=3.36
 # de OpenAI, así que este único SDK cubre toda la cadena de modelos.
 openai>=1.35.0
 
+# Vertex AI (Gemini Enterprise Agent Platform). Habla el protocolo de OpenAI,
+# así que reutiliza el SDK de arriba; lo único que hace falta aparte son las
+# credenciales del proyecto. No se necesita google-cloud-aiplatform.
+google-auth>=2.30.0
+
 # Social Adapters
 python-telegram-bot>=21.3
 discord.py>=2.3.2

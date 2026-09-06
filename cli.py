@@ -284,6 +284,92 @@ def cmd_benchmark():
     if os.path.exists(test_db):
         os.remove(test_db)
 
+# Tarifas de referencia para estimar el gasto contra el crédito. Son las
+# introductorias de Gemini 3.x Flash, vigentes hasta el 31/12/2026; a partir de
+# ahí suben. Sirven para orientar, no para facturar: la cifra que manda es la
+# del panel de facturación de Google Cloud.
+VERTEX_PRECIO_ENTRADA_POR_MILLON = 0.75
+VERTEX_PRECIO_SALIDA_POR_MILLON = 3.75
+
+# Carga autónoma declarada en config.yaml: agency_loop_tick cada 20 min (72),
+# spontaneous_monologue cada 3 h (8) y los cuatro rituales diarios.
+LLAMADAS_CRON_POR_DIA = 84
+
+
+def cmd_vertex_check():
+    """Comprueba de extremo a extremo la ruta de Vertex y estima el gasto."""
+    import yaml
+    from src.core.llm_router import LLMRouter, VertexProvider
+
+    print_banner()
+    print(f"{YELLOW}{BOLD}☁️  Comprobación de Vertex AI (Gemini Enterprise Agent Platform){RESET}\n")
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    router = LLMRouter(config=config)
+    vertex = next((p for p in router.providers if p.name == "vertex_ai"), None)
+
+    if vertex is None:
+        print(f"{RED}✗ La cadena no incluye la pasarela de Vertex.{RESET}\n")
+        return
+
+    print(f"{DIM}Cadena de pasarelas: {' → '.join(p.name for p in router.providers)}{RESET}")
+    print(f"{DIM}Proyecto: {vertex.project_id or '(sin declarar)'}{RESET}")
+    print(f"{DIM}Región:   {vertex.location}{RESET}")
+    print(f"{DIM}Modelos:  {vertex.primary_model} → {vertex.fallback_model}{RESET}\n")
+
+    if not vertex.is_available():
+        print(f"{RED}✗ Vertex no está activa.{RESET}")
+        print(f"{DIM}  Declara el proyecto en VERTEX_PROJECT_ID o en config.yaml (vertex_ai.project_id).{RESET}")
+        print(f"{DIM}  El tráfico sale mientras tanto por la siguiente pasarela de la cadena.{RESET}\n")
+        return
+
+    print(f"{DIM}Obteniendo credenciales del proyecto (ADC)...{RESET}")
+    if not vertex._access_token():
+        print(f"{RED}✗ Sin credenciales utilizables.{RESET}")
+        print(f"{DIM}  En local:     gcloud auth application-default login{RESET}")
+        print(f"{DIM}  En Cloud Run: cuenta de servicio con roles/aiplatform.user{RESET}\n")
+        return
+    print(f"{GREEN}✓ Credenciales obtenidas.{RESET}\n")
+
+    print(f"{DIM}Enviando una petición real a {vertex.primary_model}...{RESET}")
+    t0 = time.perf_counter()
+    resp = vertex.generate(
+        "Eres Yuki, una artista digital. Responde en una sola frase, con tu cadencia pausada.",
+        "Preséntate en una frase."
+    )
+    dt = time.perf_counter() - t0
+
+    if resp is None:
+        print(f"{RED}✗ La llamada falló. Revisa el log para el motivo exacto.{RESET}")
+        print(f"{DIM}  Causas habituales: modelo no disponible en la región, API de Vertex sin habilitar{RESET}")
+        print(f"{DIM}  (gcloud services enable aiplatform.googleapis.com) o falta roles/aiplatform.user.{RESET}\n")
+        return
+
+    print(f"{GREEN}{BOLD}✓ Respuesta real de Vertex en {dt:.2f}s{RESET}")
+    print(f"{CYAN}  «{resp.text.strip()}»{RESET}\n")
+
+    entrada, salida = resp.input_tokens, resp.output_tokens
+    coste_llamada = (entrada / 1_000_000 * VERTEX_PRECIO_ENTRADA_POR_MILLON
+                     + salida / 1_000_000 * VERTEX_PRECIO_SALIDA_POR_MILLON)
+
+    print("=" * 70)
+    print(f"{BOLD}{'Modelo servido':<28}{RESET} {resp.model}")
+    print(f"{BOLD}{'Tokens (entrada/salida)':<28}{RESET} {entrada} / {salida}")
+    print(f"{BOLD}{'Coste de esta llamada':<28}{RESET} ${coste_llamada:.6f}")
+
+    if entrada or salida:
+        dia = coste_llamada * LLAMADAS_CRON_POR_DIA
+        print(f"{BOLD}{'Cron autónomo (84/día)':<28}{RESET} ${dia:.2f}/día  ·  ${dia * 90:.2f} en 90 días")
+        if dia * 90 > 0:
+            print(f"{BOLD}{'Sobre un crédito de $300':<28}{RESET} {dia * 90 / 300 * 100:.1f}%")
+    print("=" * 70)
+    print(f"{DIM}Tarifas introductorias de Gemini 3.x Flash, vigentes hasta el 31/12/2026.{RESET}")
+    print(f"{DIM}Extrapolación desde una sola llamada: el gasto real depende del tamaño{RESET}")
+    print(f"{DIM}de cada prompt. La cifra que manda es la del panel de facturación.{RESET}\n")
+
+
 def cmd_daemon():
     """Inicia el servicio en segundo plano (Daemon Cron + Bots de mensajería)."""
     async def _daemon_loop():
@@ -323,6 +409,7 @@ def main():
     cron_p.add_argument("--name", default="morning_inspiration_drop", help="Nombre de la tarea")
 
     subparsers.add_parser("memory-benchmark", help="Ejecutar benchmark de memoria SQLite FTS5 vs OpenClaw")
+    subparsers.add_parser("vertex-check", help="Probar la ruta de Vertex AI y estimar el gasto del crédito")
     subparsers.add_parser("run-daemon", help="Ejecutar daemon de presencia continua 24/7")
 
     args = parser.parse_args()
@@ -349,6 +436,8 @@ def main():
         cmd_cron_task(args.name)
     elif args.command == "memory-benchmark":
         cmd_benchmark()
+    elif args.command == "vertex-check":
+        cmd_vertex_check()
     elif args.command == "run-daemon":
         cmd_daemon()
     else:

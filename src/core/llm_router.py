@@ -4,15 +4,22 @@ Enrutador de proveedores de lenguaje para Yuki.
 La arquitectura declarada en `hermes_config.yaml` y `config.yaml` es:
 
   1. Nous Portal — pasarela unificada de herramientas (`gateway: nous_portal`)
-  2. OpenRouter  — agregador de modelos (`default_aggregator: openrouter`)
+  2. Vertex AI   — acceso directo a Gemini con cargo al crédito de Google Cloud
+  3. OpenRouter  — agregador de modelos (`default_aggregator: openrouter`)
 
 Se recorren en ese orden: si una pasarela no está disponible, se cae a la
 siguiente. El último recurso es la voz local de Yuki, que no necesita red y
 mantiene su cadencia aunque no haya ninguna clave configurada.
 
-Los modelos se nombran siempre a través del agregador
-(`anthropic/claude-3.5-sonnet`, `google/gemini-2.0-flash`), de modo que no
-hace falta contratar cuenta directa con ningún proveedor.
+Vertex es opcional y se activa solo con configurar un proyecto
+(`VERTEX_PROJECT_ID`). Sin él se declara no disponible y la cadena se comporta
+exactamente como antes, saliendo por OpenRouter. Esa es la propiedad que
+importa cuando se corre con un crédito acotado: al agotarse, se quita la
+variable y Yuki sigue hablando sin tocar código.
+
+Los modelos se nombran a través del agregador
+(`anthropic/claude-3.5-sonnet`, `google/gemini-2.0-flash`) o, en la ruta de
+Vertex, con el publisher de Google (`google/gemini-3.7-flash`).
 """
 
 import os
@@ -27,6 +34,17 @@ PLACEHOLDER_MARKERS = ("your_", "_here", "changeme")
 
 OPENROUTER_BASE_URL = "https://openrouter.ai/api/v1"
 NOUS_PORTAL_BASE_URL = "https://api.nousportal.com/v1"
+
+# Vertex expone un endpoint compatible con el protocolo de OpenAI, así que el
+# SDK `openai` que ya está en requirements.txt sirve también para esta ruta.
+VERTEX_ENDPOINT_TEMPLATE = (
+    "https://{location}-aiplatform.googleapis.com/v1/"
+    "projects/{project_id}/locations/{location}/endpoints/openapi"
+)
+VERTEX_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
+DEFAULT_VERTEX_LOCATION = "global"
+DEFAULT_VERTEX_PRIMARY_MODEL = "google/gemini-3.7-flash"
+DEFAULT_VERTEX_FALLBACK_MODEL = "google/gemini-3.6-flash"
 
 
 def is_usable_key(value: Optional[str]) -> bool:
@@ -49,12 +67,45 @@ def normalize_model(model: str) -> str:
     return model[len(prefix):] if model.startswith(prefix) else model
 
 
+def normalize_vertex_model(model: str) -> str:
+    """
+    Deja el nombre como lo espera el endpoint OpenAI de Vertex.
+
+    Vertex nombra los modelos de Google con el prefijo del publisher
+    (`google/gemini-3.7-flash`). Se admite escribirlos con o sin él, y con el
+    prefijo del agregador delante, para poder copiar valores de
+    `hermes_config.yaml` sin retocarlos:
+
+        vertex/gemini-3.7-flash        -> google/gemini-3.7-flash
+        openrouter/google/gemini-2.0-flash -> google/gemini-2.0-flash
+        gemini-3.7-flash               -> google/gemini-3.7-flash
+    """
+    if not model:
+        return model
+
+    normalized = model.strip()
+    for prefix in ("vertex_ai/", "vertex/", "openrouter/"):
+        if normalized.startswith(prefix):
+            normalized = normalized[len(prefix):]
+            break
+
+    # Sin publisher, se asume Google: es el único que sirve Gemini.
+    if "/" not in normalized:
+        normalized = f"google/{normalized}"
+
+    return normalized
+
+
 @dataclass
 class LLMResponse:
     text: str
     provider: str
     model: str = ""
     simulated: bool = False
+    # Consumo declarado por el proveedor. Sirve para vigilar el gasto contra
+    # un crédito acotado; queda a cero cuando la pasarela no lo informa.
+    input_tokens: int = 0
+    output_tokens: int = 0
 
 
 class LLMProvider(ABC):
@@ -117,6 +168,149 @@ class NousPortalProvider(LLMProvider):
         )
 
 
+class VertexProvider(LLMProvider):
+    """
+    Vertex AI (rebautizado *Gemini Enterprise Agent Platform*) — segundo eslabón.
+
+    Existe para que Yuki pueda consumir los modelos de Gemini con cargo a los
+    créditos de Google Cloud. El matiz que justifica esta clase: el Gemini API
+    de AI Studio (`GEMINI_API_KEY`) quedó **excluido** del crédito de prueba,
+    mientras que Vertex lo sigue consumiendo. Por eso aquí no se autentica con
+    una clave sino con las credenciales del proyecto (ADC o cuenta de
+    servicio), que es la vía que sí descuenta del crédito.
+
+    Se sitúa por delante de OpenRouter y por detrás de Nous Portal: mientras
+    haya proyecto configurado, el tráfico sale por aquí; cuando el crédito se
+    agote basta con quitar `VERTEX_PROJECT_ID` (o poner `enabled: false`) y la
+    cadena vuelve sola a OpenRouter, sin tocar código.
+
+    Configuración (`config.yaml`, sección `vertex_ai`, o entorno):
+      · `VERTEX_PROJECT_ID` / `GOOGLE_CLOUD_PROJECT` — proyecto de facturación.
+      · `VERTEX_LOCATION` — región; `global` reparte entre las disponibles.
+      · `GOOGLE_APPLICATION_CREDENTIALS` — sólo si no se usa `gcloud auth
+        application-default login` ni la identidad de Cloud Run.
+    """
+
+    name = "vertex_ai"
+
+    def __init__(self, project_id: Optional[str] = None, location: Optional[str] = None,
+                 primary_model: str = DEFAULT_VERTEX_PRIMARY_MODEL,
+                 fallback_model: str = DEFAULT_VERTEX_FALLBACK_MODEL,
+                 temperature: float = 0.72, max_tokens: int = 1024,
+                 enabled: bool = True, credentials: Any = None,
+                 base_url: Optional[str] = None):
+        # Un valor vacío en config.yaml no debe tapar la variable de entorno:
+        # en Cloud Run el proyecto llega por el entorno, no por el fichero.
+        self.project_id = (project_id or os.getenv("VERTEX_PROJECT_ID")
+                           or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
+        self.location = location or os.getenv("VERTEX_LOCATION") or DEFAULT_VERTEX_LOCATION
+        self.primary_model = normalize_vertex_model(primary_model)
+        self.fallback_model = normalize_vertex_model(fallback_model)
+        self.temperature = temperature
+        self.max_tokens = max_tokens
+        self.enabled = enabled
+        self._credentials = credentials
+        # Sólo para pruebas y endpoints privados: por defecto se compone a
+        # partir del proyecto y la región.
+        self._base_url_override = base_url
+
+    @property
+    def base_url(self) -> str:
+        if self._base_url_override:
+            return self._base_url_override
+        return VERTEX_ENDPOINT_TEMPLATE.format(location=self.location, project_id=self.project_id)
+
+    def is_available(self) -> bool:
+        # Comprobación barata y sin red: se mira sólo la configuración. Si las
+        # credenciales fallan más tarde, `generate` devuelve None y la cadena
+        # sigue hacia OpenRouter.
+        return self.enabled and is_usable_key(self.project_id)
+
+    def _access_token(self) -> Optional[str]:
+        """
+        Token OAuth de las credenciales por defecto (ADC).
+
+        Los tokens caducan en torno a una hora y el daemon de Yuki vive días,
+        así que se renueva cada vez que deja de ser válido.
+        """
+        try:
+            # Importación diferida y mínima: unas credenciales ya inyectadas y
+            # vigentes no necesitan que google-auth esté siquiera instalado.
+            if self._credentials is None:
+                from google.auth import default as google_auth_default
+                self._credentials, detected_project = google_auth_default(scopes=list(VERTEX_SCOPES))
+                if not is_usable_key(self.project_id) and detected_project:
+                    self.project_id = detected_project
+
+            if not self._credentials.valid:
+                from google.auth.transport.requests import Request
+                self._credentials.refresh(Request())
+
+            return self._credentials.token
+        except (KeyboardInterrupt, SystemExit):
+            raise
+        except ImportError:
+            logger.error(
+                "El paquete 'google-auth' no está instalado; no se puede usar Vertex. "
+                "Instálalo con: pip install google-auth"
+            )
+            return None
+        except BaseException as e:
+            # No basta con `Exception`. google-auth arrastra extensiones
+            # nativas (cryptography, compilada con pyo3) y, cuando esa pila
+            # está mal instalada, el fallo llega como PanicException, que
+            # hereda de BaseException y atraviesa un `except Exception`.
+            # Yuki corre 24/7: un entorno roto debe degradar la cadena hacia
+            # OpenRouter, nunca tumbar el daemon.
+            logger.error(
+                f"No se pudieron obtener credenciales de Google Cloud: {e!r}. "
+                "Ejecuta 'gcloud auth application-default login' o asigna una "
+                "cuenta de servicio con el rol roles/aiplatform.user."
+            )
+            return None
+
+    def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
+        if not self.is_available():
+            return None
+
+        token = self._access_token()
+        if not token:
+            return None
+
+        try:
+            from openai import OpenAI
+        except ImportError:
+            logger.error("El paquete 'openai' no está instalado; no se puede usar Vertex.")
+            return None
+
+        client = OpenAI(api_key=token, base_url=self.base_url)
+
+        models = [m for m in (self.primary_model, self.fallback_model) if m]
+        for model in models:
+            try:
+                resp = client.chat.completions.create(
+                    model=model,
+                    temperature=self.temperature,
+                    max_tokens=self.max_tokens,
+                    messages=[
+                        {"role": "system", "content": system_prompt},
+                        {"role": "user", "content": user_message},
+                    ],
+                )
+                usage = getattr(resp, "usage", None)
+                return LLMResponse(
+                    text=resp.choices[0].message.content,
+                    provider=self.name,
+                    model=model,
+                    input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                    output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                )
+            except Exception as e:
+                logger.error(f"Error invocando Vertex con el modelo '{model}': {e}")
+
+        return None
+
+
 class OpenRouterProvider(LLMProvider):
     """
     Agregador OpenRouter — el camino real hacia los modelos.
@@ -168,7 +362,14 @@ class OpenRouterProvider(LLMProvider):
                         {"role": "user", "content": user_message},
                     ],
                 )
-                return LLMResponse(text=resp.choices[0].message.content, provider=self.name, model=model)
+                usage = getattr(resp, "usage", None)
+                return LLMResponse(
+                    text=resp.choices[0].message.content,
+                    provider=self.name,
+                    model=model,
+                    input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
+                    output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                )
             except Exception as e:
                 logger.error(f"Error invocando OpenRouter con el modelo '{model}': {e}")
 
@@ -222,9 +423,19 @@ class LLMRouter:
         model_cfg = config.get("agent", {}).get("model") or config.get("model", {}) or {}
 
         nous_cfg = config.get("nous_portal", {}) or {}
+        vertex_cfg = config.get("vertex_ai", {}) or {}
 
         self.providers = providers if providers is not None else [
             NousPortalProvider(base_url=nous_cfg.get("base_url", NOUS_PORTAL_BASE_URL)),
+            VertexProvider(
+                project_id=vertex_cfg.get("project_id"),
+                location=vertex_cfg.get("location"),
+                primary_model=vertex_cfg.get("primary_model", DEFAULT_VERTEX_PRIMARY_MODEL),
+                fallback_model=vertex_cfg.get("fallback_model", DEFAULT_VERTEX_FALLBACK_MODEL),
+                temperature=vertex_cfg.get("temperature", model_cfg.get("temperature", 0.72)),
+                max_tokens=vertex_cfg.get("max_tokens", model_cfg.get("max_tokens", 1024)),
+                enabled=vertex_cfg.get("enabled", True),
+            ),
             OpenRouterProvider(
                 primary_model=model_cfg.get("primary_model", "anthropic/claude-3.5-sonnet"),
                 fallback_model=model_cfg.get("fallback_model", "google/gemini-2.0-flash"),

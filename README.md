@@ -90,6 +90,9 @@ python3 cli.py chat
 # Ejecutar el benchmark comparativo de memoria (FTS5 vs OpenClaw)
 python3 cli.py memory-benchmark
 
+# Comprobar la ruta de Vertex AI y estimar el gasto del crédito de Google Cloud
+python3 cli.py vertex-check
+
 # Probar la generación de portadas y notas de voz
 python3 cli.py media-test
 
@@ -157,7 +160,8 @@ contratar servicios de pago o de prometer una demo.
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
 | Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT` |
 | Generación de texto vía OpenRouter | ✅ Real | Peticiones HTTP reales al agregador, con modelo de respaldo si el primario falla |
-| Cadena de pasarelas | ✅ Real | Nous Portal → OpenRouter → voz local, en `src/core/llm_router.py` |
+| Generación de texto vía Vertex AI | ✅ Real | Endpoint compatible con OpenAI, autenticado con credenciales del proyecto (ADC). Opcional: inactiva hasta declarar `VERTEX_PROJECT_ID` |
+| Cadena de pasarelas | ✅ Real | Nous Portal → Vertex → OpenRouter → voz local, en `src/core/llm_router.py` |
 | Pasarela Nous Portal | ⚠️ Interfaz lista, mock | El endpoint no existe aún; `NOUS_PORTAL_MODE=mock` para trabajar sin red |
 | Enrutado por tiers (`provider_routing.routes`) | ⚠️ Sin implementar | Se usa `agent.model`; los tiers por tarea (feed, formateo, composición) siguen sin leerse |
 | Nous Portal: imagen, música, voz | ⚠️ Simulado | `src/tools/nous_portal.py` escribe ficheros de marcador, no llama a ninguna API |
@@ -177,6 +181,20 @@ todavía no existe, se declara no disponible por defecto y el tráfico real sale
 por OpenRouter; con `NOUS_PORTAL_MODE=mock` responde simulado para desarrollo
 sin red. Si no hay ninguna clave, Yuki conserva su voz local y nunca se queda
 muda.
+
+**Vertex AI es una ruta opcional para gastar crédito de Google Cloud.** Se
+activa solo con declarar `VERTEX_PROJECT_ID`; sin él la cadena se comporta
+exactamente como antes. Importa el matiz de facturación: el Gemini API de AI
+Studio (`GEMINI_API_KEY`) quedó excluido del crédito de prueba en marzo de
+2026, mientras que Vertex sí lo consume — por eso esta ruta se autentica con
+las credenciales del proyecto y no con una clave. Compruébala de extremo a
+extremo, con estimación de gasto incluida:
+
+```bash
+python3 cli.py vertex-check
+```
+
+Detalle completo en [`docs/GCP_DEPLOYMENT.md`](docs/GCP_DEPLOYMENT.md#servir-los-modelos-desde-el-crédito).
 
 Lo que falta para cerrar la arquitectura: implementar `_call_remote` de
 `NousPortalProvider` cuando exista el endpoint, el cliente HTTP de
