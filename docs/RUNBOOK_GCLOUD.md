@@ -32,6 +32,7 @@ No recorras el repositorio entero. Cinco ficheros bastan, y en este orden:
 | `src/tools/vertex_media.py` | Los tres motores de medios |
 | `docs/GCP_DEPLOYMENT.md`, sección *Servir los modelos desde el crédito* | El porqué de la ruta elegida |
 | `AGENTS.md` | Las reglas que no puedes romper (ver §7) |
+| `docs/INFORME_CREDITO_GCLOUD.md` | Qué se ha verificado ya, y los tres defectos que impedían que el crédito se consumiera |
 
 ---
 
@@ -132,8 +133,10 @@ Esta es la razón de ser del encargo. Cada fila se fijó sobre documentación o 
 | 3 | `imagen-4.0-generate-001` existe | `vertex_ai.media.image_model` | Media | Prueba `imagen-3.0-generate-002` |
 | 4 | `gemini-omni-flash-preview` existe y acepta `interactions` | `vertex_ai.media.video_model` | **Baja — está en *preview*** | Ver §4.bis |
 | 5 | `gemini-2.5-flash-tts` existe con voz `Aoede` y `es-es` | `vertex_ai.media.tts_model` | Media-alta | Prueba `gemini-3.1-flash-tts-preview` |
-| 6 | La región `global` sirve los cinco modelos | `vertex_ai.location` | **Baja** | Ver §4.ter |
-| 7 | El SDK acepta `genai.Client(enterprise=True, ...)` | — (código) | Media | El código ya cae solo a `vertexai=True`; comprueba en el log que no falle |
+| 6 | La región `global` sirve los cinco modelos | `vertex_ai.location` | **Baja** | Ver §4.ter. El *endpoint* `global` ya está verificado (§1.ter); qué modelos sirve, no |
+| 7 | El SDK acepta `genai.Client(enterprise=True, ...)` | — (código) | ✅ **Verificado** | `enterprise` es un parámetro real en `google-genai` 2.22, alias de `vertexai`. El fallback cubre las 1.x |
+
+> Los supuestos 1 a 5 siguen sin verificar: hacen falta credenciales de un proyecto real. Lo que sí se ha comprobado sin gastar un céntimo está en **`docs/INFORME_CREDITO_GCLOUD.md`**.
 
 ### Cómo verificar de verdad
 
