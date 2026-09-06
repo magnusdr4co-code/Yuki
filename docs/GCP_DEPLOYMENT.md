@@ -322,6 +322,12 @@ gcloud run services update yuki-salon --region="$REGION" \
 
 ### Qué modelo poner
 
+> **¿Vas a delegar este paso en un agente con acceso a `gcloud`?** Hay un
+> encargo autocontenido en [`docs/RUNBOOK_GCLOUD.md`](RUNBOOK_GCLOUD.md): lista
+> los supuestos sin verificar, cómo comprobar cada uno y qué corregir. No
+> presupone conocimiento de este repositorio.
+
+
 `config.yaml` (sección `vertex_ai`) trae `google/gemini-3.7-flash` con
 `google/gemini-3.6-flash` de respaldo. **Confirma los identificadores antes de
 fijarlos**, porque la familia Gemini se mueve rápido:
