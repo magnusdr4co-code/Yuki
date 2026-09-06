@@ -19,6 +19,13 @@ openai>=1.35.0
 # credenciales del proyecto. No se necesita google-cloud-aiplatform.
 google-auth>=2.30.0
 
+# Medios de frontera sobre Vertex (src/tools/vertex_media.py). Opcionales: sin
+# ellos Yuki sigue arrancando y la pasarela de medios cae a sus marcadores.
+#   google-genai            -> Imagen (portadas) y Gemini Omni Flash (vídeo)
+#   google-cloud-texttospeech -> Gemini TTS, con salida OGG Opus nativa
+google-genai>=1.9.0
+google-cloud-texttospeech>=2.16.0
+
 # Social Adapters
 python-telegram-bot>=21.3
 discord.py>=2.3.2

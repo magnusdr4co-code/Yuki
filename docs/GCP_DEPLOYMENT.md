@@ -74,12 +74,15 @@ gcloud services enable \
   secretmanager.googleapis.com \
   cloudscheduler.googleapis.com \
   storage.googleapis.com \
-  aiplatform.googleapis.com
+  aiplatform.googleapis.com \
+  texttospeech.googleapis.com
 ```
 
-`aiplatform.googleapis.com` es Vertex AI (*Gemini Enterprise Agent Platform*).
-Habilítala solo si vas a servir los modelos desde el crédito de Google Cloud;
-ver [Servir los modelos desde el crédito](#servir-los-modelos-desde-el-crédito).
+`aiplatform.googleapis.com` es Vertex AI (*Gemini Enterprise Agent Platform*):
+sirve el texto, la imagen y el vídeo. `texttospeech.googleapis.com` es Cloud
+Text-to-Speech, que sirve la voz de Yuki con Gemini TTS. Habilítalas solo si vas
+a servir los modelos desde el crédito de Google Cloud; ver
+[Servir los modelos desde el crédito](#servir-los-modelos-desde-el-crédito).
 
 ---
 
@@ -329,8 +332,37 @@ gcloud ai models list --region="$REGION"
 
 Un apunte de encaje: **Gemini Omni no sirve para esto**. Es un modelo de
 generación y edición de vídeo (entra texto/imagen/vídeo, sale vídeo con audio) y
-se factura por segundo de vídeo, no por token. Su sitio es la columna de medios
-(`src/tools/nous_portal.py`), no el cerebro de Yuki.
+se factura por segundo de vídeo, no por token. Su sitio es la columna de medios,
+que se configura aparte —ver [Los medios](#los-medios-imagen-vídeo-y-voz)—, no
+el cerebro de Yuki.
+
+### Los medios: imagen, vídeo y voz
+
+La misma configuración sirve `src/tools/vertex_media.py`. Tres motores bajo
+`vertex_ai.media` en `config.yaml`:
+
+| Herramienta | Modelo por defecto | Coste orientativo | Notas |
+|---|---|---|---|
+| `vertex.image` | `imagen-4.0-generate-001` | ≈0,04 USD/imagen | Portadas e ilustración |
+| `vertex.video` | `gemini-omni-flash-preview` | **≈0,10 USD/segundo** | 3–10 s. Ver aviso abajo |
+| `vertex.tts` | `gemini-2.5-flash-tts` | por caracteres | OGG Opus nativo: sin ffmpeg |
+
+La voz gana dos cosas por esta ruta: sale ya en **OGG Opus**, que es el formato
+que Telegram reproduce como nota de voz nativa, así que desaparece el paso de
+transcodificado con `ffmpeg`; y la cadencia de Yuki se pide **en lenguaje
+natural** ("pausas deliberadas, elige cada palabra antes de decirla") en vez de
+con marcado SSML, que es más fiel a la pausa elegida de `SOUL.md`.
+
+> **Aviso de gasto sobre el vídeo.** Omni se factura por segundo de vídeo
+> producido: diez segundos rondan 1 USD, más que miles de respuestas de texto.
+> Por eso ninguna tarea del cron lo invoca —con 84 disparos diarios, un descuido
+> funde el crédito en una tarde— y la habilidad `/animar-portada` sólo se ejecuta
+> a petición explícita del productor. El resultado devuelve `estimated_cost_usd`
+> para dejar constancia.
+
+Sin proyecto declarado, los tres caen a marcadores de texto **declarados como
+tales** (`simulated: true`): nunca se devuelve una ruta de marcador ni una URL
+inventada como si fuera un medio real.
 
 ### Al agotarse el crédito
 

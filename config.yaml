@@ -59,6 +59,18 @@ vertex_ai:
   fallback_model: "google/gemini-3.6-flash"
   temperature: 0.72
   max_tokens: 1024
+  # Medios servidos por el mismo proyecto y el mismo crédito.
+  media:
+    image_model: "imagen-4.0-generate-001"
+    # Gemini Omni Flash: genera y edita VÍDEO con audio nativo, facturado por
+    # segundo (~0,10 USD/s). No es un modelo de texto: el cerebro de Yuki lo
+    # sirve `primary_model`, no éste.
+    video_model: "gemini-omni-flash-preview"
+    # Gemini TTS emite OGG Opus nativo, así que en esta ruta no hace falta el
+    # transcodificado con ffmpeg que exige el catálogo para portal.tts.
+    tts_model: "gemini-2.5-flash-tts"
+    voice: "Aoede"
+    language_code: "es-es"
 
 memory:
   backend: "sqlite_fts5"

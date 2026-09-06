@@ -99,13 +99,21 @@ class MediaCreatorTool:
             lighting_style=lighting,
             mood_params=mood_params
         )
+        # `status`, `simulated` y `note` viajan siempre hacia arriba: quien
+        # muestre esto al productor tiene que poder distinguir una portada de un
+        # marcador y de un fallo. Las claves que sólo existen en el camino feliz
+        # se leen con `get` para que un error no reviente con un KeyError.
         return {
             "track_title": track_title,
             "provider": provider,
-            "model_used": result["model"],
-            "cover_url": result["image_url"],
-            "local_path": result["local_path"],
-            "prompt_used": result["prompt_used"],
+            "status": result.get("status"),
+            "simulated": result.get("simulated", False),
+            "note": result.get("note"),
+            "error": result.get("error"),
+            "model_used": result.get("model"),
+            "cover_url": result.get("image_url"),
+            "local_path": result.get("local_path"),
+            "prompt_used": result.get("prompt_used", prompt),
             "season_used": season["sekki"]
         }
 
@@ -123,13 +131,21 @@ class MediaCreatorTool:
             engine=engine,
             mood_params=mood_params
         )
+        # `ssml_payload` sólo existe en la ruta de respaldo: Gemini TTS toma la
+        # cadencia en lenguaje natural y no genera SSML. Leerlo con corchetes
+        # rompía la síntesis en cuanto Vertex estaba configurado.
         return {
-            "audio_url": result["audio_url"],
-            "local_path": result["local_path"],
-            "duration": result["duration_seconds"],
+            "audio_url": result.get("audio_url"),
+            "local_path": result.get("local_path"),
+            "duration": result.get("duration_seconds", 0.0),
             "transcript": message_text,
-            "ssml": result["ssml_payload"],
-            "provider": engine
+            "ssml": result.get("ssml_payload"),
+            "style_prompt": result.get("style_prompt"),
+            "status": result.get("status"),
+            "simulated": result.get("simulated", False),
+            "note": result.get("note"),
+            "error": result.get("error"),
+            "provider": result.get("provider", engine)
         }
 
     async def compose_beat_structure(
@@ -203,6 +219,27 @@ class MediaCreatorTool:
             "track_data": track_data
         }
 
+    @staticmethod
+    def describir_recurso(result: Dict[str, Any]) -> str:
+        """
+        Cómo aparece un medio en el paquete de lanzamiento.
+
+        Un recurso que falló no tiene ruta, y escribir `None` en el markdown
+        haría pasar por completo un lanzamiento al que le falta la portada. Un
+        marcador tampoco es la obra: se dice que lo es.
+        """
+        if result.get("status") == "error":
+            return f"⚠️ NO GENERADO — {result.get('error', 'sin detalle')}"
+
+        ruta = result.get("local_path")
+        if not ruta:
+            return "⚠️ NO GENERADO — sin fichero"
+
+        if result.get("simulated"):
+            return f"`{ruta}` — ⚠️ marcador de texto, no el medio real"
+
+        return f"`{ruta}`"
+
     async def execute_single_release_pipeline(
         self,
         title: str,
@@ -254,10 +291,10 @@ class MediaCreatorTool:
 > {lyrics.replace(chr(10), chr(10) + '> ')}
 
 ## Recursos del Workspace:
-- 🎵 Render de Audio ({music_engine}): `{music_res['audio_rendered_path']}`
+- 🎵 Render de Audio ({music_engine}): `{music_res['audio_rendered_path']}` — ⚠️ marcador: no hay motor de música contratado, la pista real es el MIDI
 - 🎼 Pista MIDI multipista: `{music_res['midi_path']}`
-- 🎨 Portada ({image_provider}): `{art_res['local_path']}`
-- 🎙️ Nota de Voz (Gemini SSML): `{voice_res['local_path']}`
+- 🎨 Portada ({image_provider}): {self.describir_recurso(art_res)}
+- 🎙️ Nota de Voz: {self.describir_recurso(voice_res)}
 """)
 
         return {

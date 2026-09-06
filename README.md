@@ -164,7 +164,8 @@ contratar servicios de pago o de prometer una demo.
 | Cadena de pasarelas | ✅ Real | Nous Portal → Vertex → OpenRouter → voz local, en `src/core/llm_router.py` |
 | Pasarela Nous Portal | ⚠️ Interfaz lista, mock | El endpoint no existe aún; `NOUS_PORTAL_MODE=mock` para trabajar sin red |
 | Enrutado por tiers (`provider_routing.routes`) | ⚠️ Sin implementar | Se usa `agent.model`; los tiers por tarea (feed, formateo, composición) siguen sin leerse |
-| Nous Portal: imagen, música, voz | ⚠️ Simulado | `src/tools/nous_portal.py` escribe ficheros de marcador, no llama a ninguna API |
+| Imagen, vídeo y voz vía Vertex AI | ✅ Real | `src/tools/vertex_media.py`: Imagen (portadas), Gemini Omni Flash (vídeo) y Gemini TTS (voz en OGG Opus nativo). Opcional: inactivo hasta declarar `VERTEX_PROJECT_ID` |
+| Nous Portal: imagen, música, voz | ⚠️ Marcador | Sin Vertex configurado, `src/tools/nous_portal.py` escribe ficheros de marcador **declarados como simulados**. La música no tiene motor contratado en ninguna ruta: usa `local.midi` |
 | Firecrawl / búsqueda web | ⚠️ Simulado | Sin cliente HTTP |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
 | Adaptadores Telegram y Discord | ⚠️ Simulado | Registran en log; no usan `python-telegram-bot` ni `discord.py` |
@@ -196,10 +197,22 @@ python3 cli.py vertex-check
 
 Detalle completo en [`docs/GCP_DEPLOYMENT.md`](docs/GCP_DEPLOYMENT.md#servir-los-modelos-desde-el-crédito).
 
+**Medios reales.** Con el proyecto declarado, Yuki pinta portadas con Imagen,
+anima vídeo con Gemini Omni Flash y habla con Gemini TTS. Sin él, escribe
+marcadores y **lo dice**: todo resultado lleva `simulated`, y ya no se devuelven
+URLs de un CDN que no existe. Ojo al vídeo, que se factura por segundo
+(≈0,10 USD/s) y por eso ninguna tarea del cron lo invoca.
+
+```bash
+python3 cli.py skill generar-portada --concept "niebla sobre asfalto"
+python3 cli.py skill sintesis-vocal  --text "El agua encuentra su camino."
+python3 cli.py skill animar-portada  --duration 6 --image-path output/art/<portada>.png
+```
+
 Lo que falta para cerrar la arquitectura: implementar `_call_remote` de
-`NousPortalProvider` cuando exista el endpoint, el cliente HTTP de
-`NousPortalClient` para imagen, música y voz, y el enrutado por tiers de
-`provider_routing.routes`.
+`NousPortalProvider` cuando exista el endpoint, un motor de música (ninguna
+pasarela contratada sirve audio musical hoy; las partituras salen de
+`local.midi`), y el enrutado por tiers de `provider_routing.routes`.
 
 ---
 

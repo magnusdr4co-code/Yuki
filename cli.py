@@ -72,6 +72,32 @@ def cmd_chat():
 
     asyncio.run(_chat_loop())
 
+def _informar_medio(result: dict, etiqueta: str, path=None, extra: str = None):
+    """
+    Informa de un medio sin disfrazar su naturaleza.
+
+    Un marcador de texto no es una portada, y un fallo no es un archivo. La
+    versión anterior imprimía "URL CDN" para las tres cosas por igual.
+    """
+    estado = result.get("status")
+
+    if estado == "error":
+        print(f"{RED}❌ {etiqueta}: no se pudo generar.{RESET}")
+        print(f"{DIM}   {result.get('error', 'sin detalle')}{RESET}")
+        return
+
+    if result.get("simulated"):
+        print(f"{YELLOW}⚠️  {etiqueta}: es un marcador de texto, no un medio real.{RESET}")
+        print(f"{DIM}   {result.get('note', '')}{RESET}")
+    else:
+        print(f"{GREEN}✅ {etiqueta} — generado con {result.get('model') or result.get('provider') or '?'}:{RESET}")
+
+    if path:
+        print(f"   Archivo: {path}")
+    if extra:
+        print(f"{DIM}   {extra}{RESET}")
+
+
 def cmd_skill(skill_name: str, extra_args: dict):
     """Ejecuta una habilidad estándar de skills/."""
     async def _run_skill():
@@ -95,8 +121,9 @@ def cmd_skill(skill_name: str, extra_args: dict):
             print(f"\n{GREEN}{BOLD}🎉 ¡Lanzamiento de Sencillo Completado Exitosamente!{RESET}")
             print(f"   • Archivo Maestro de Lanzamiento: {result['post_package']}")
             print(f"   • Archivo MIDI multipista:        {result['music']['midi_path']} ({result['music']['midi_bytes']} bytes)")
-            print(f"   • Carátula FAL.ai:                {result['art']['local_path']}")
-            print(f"   • Nota de Voz SSML:               {result['voice']['local_path']}")
+            describir = agent.media_creator.describir_recurso
+            print(f"   • Portada:                        {describir(result['art'])}")
+            print(f"   • Nota de voz:                    {describir(result['voice'])}")
             print(f"\n{MAGENTA}{BOLD}📜 Lírica Waka Creada:{RESET}\n{result['lyrics']}")
 
         elif skill_name == "componer-beat":
@@ -112,16 +139,28 @@ def cmd_skill(skill_name: str, extra_args: dict):
             title = extra_args.get("title", "El Río Antes de Tener Nombre")
             concept = extra_args.get("concept", "Niebla matutina, reflejos de neón y lluvia sobre asfalto.")
             result = await agent.media_creator.create_single_cover(track_title=title, visual_concept=concept)
-            print(f"{GREEN}✅ Portada creada con FAL.ai vía Nous Portal:{RESET}")
-            print(f"   Archivo local: {result['local_path']}")
-            print(f"   URL CDN:       {result['cover_url']}")
+            _informar_medio(result, "Portada", result.get("local_path"))
 
         elif skill_name == "sintesis-vocal":
             text = extra_args.get("text", "El agua siempre encuentra su camino hacia el mar.")
             result = await agent.media_creator.generate_voice_reply(message_text=text)
-            print(f"{GREEN}✅ Nota de voz sintetizada con marcado SSML:{RESET}")
-            print(f"   Archivo local: {result['local_path']}")
-            print(f"   URL CDN:       {result['audio_url']} (Duración: {result['duration']:.1f}s)")
+            _informar_medio(result, "Nota de voz", result.get("local_path"),
+                            extra=f"Duración ≈ {result['duration']:.1f}s")
+
+        elif skill_name == "animar-portada":
+            motion = extra_args.get("concept", "la niebla avanza mientras el pan de oro capta la luz")
+            duracion = int(extra_args.get("duration", 6))
+            imagen = extra_args.get("image_path") or None
+
+            coste = duracion * 0.10
+            print(f"{YELLOW}⚠️  El vídeo se factura por segundo: {duracion}s ≈ ${coste:.2f}.{RESET}")
+
+            result = await agent.nous_portal.generate_video_frontier(
+                prompt=motion, duration_seconds=duracion, image_path=imagen
+            )
+            _informar_medio(result, "Vídeo", result.get("local_path"),
+                            extra=(f"Coste estimado ${result['estimated_cost_usd']:.2f}"
+                                   if result.get("estimated_cost_usd") else None))
 
         elif skill_name == "ikebana-curaduria":
             raw_text = extra_args.get("text", "Lanzamos nuevo single escucha ya dale like comparte")
@@ -404,6 +443,10 @@ def main():
     skill_p.add_argument("--mood", default="lluvia sobre metal", help="Atmósfera musical")
     skill_p.add_argument("--guest", default="Visitante", help="Nombre del invitado")
     skill_p.add_argument("--intention", default="buscar serenidad", help="Intención de la ceremonia")
+    skill_p.add_argument("--duration", default=6, type=int,
+                         help="Duración del vídeo en segundos (3-10). Se factura por segundo")
+    skill_p.add_argument("--image-path", dest="image_path", default=None,
+                         help="Portada de partida para /animar-portada")
 
     cron_p = subparsers.add_parser("cron-task", help="Ejecutar tarea autónoma")
     cron_p.add_argument("--name", default="morning_inspiration_drop", help="Nombre de la tarea")
@@ -429,7 +472,9 @@ def main():
             "bpm": args.bpm,
             "mood": args.mood,
             "guest": args.guest,
-            "intention": args.intention
+            "intention": args.intention,
+            "duration": args.duration,
+            "image_path": args.image_path
         }
         cmd_skill(args.name, extra)
     elif args.command == "cron-task":
