@@ -38,13 +38,36 @@ NOUS_PORTAL_BASE_URL = "https://api.nousportal.com/v1"
 # Vertex expone un endpoint compatible con el protocolo de OpenAI, así que el
 # SDK `openai` que ya está en requirements.txt sirve también para esta ruta.
 VERTEX_ENDPOINT_TEMPLATE = (
-    "https://{location}-aiplatform.googleapis.com/v1/"
-    "projects/{project_id}/locations/{location}/endpoints/openapi"
+    "https://{host}/v1/projects/{project_id}/locations/{location}/endpoints/openapi"
 )
 VERTEX_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
 DEFAULT_VERTEX_LOCATION = "global"
+VERTEX_GLOBAL_LOCATION = "global"
+VERTEX_GLOBAL_HOST = "aiplatform.googleapis.com"
 DEFAULT_VERTEX_PRIMARY_MODEL = "google/gemini-3.7-flash"
 DEFAULT_VERTEX_FALLBACK_MODEL = "google/gemini-3.6-flash"
+
+# Clave de AI Studio. No se usa para nada aquí: sólo se mira para poder avisar,
+# porque tenerla puesta es la vía más fácil de facturar fuera del crédito.
+AI_STUDIO_KEY_VARS = ("GEMINI_API_KEY", "GOOGLE_API_KEY")
+
+
+def vertex_host(location: str) -> str:
+    """
+    Host de Vertex para una región.
+
+    `global` es el caso especial y **no lleva prefijo**: el host es
+    `aiplatform.googleapis.com` a secas. Componer `global-aiplatform.
+    googleapis.com` devuelve un 404 de Google —el nombre resuelve por el
+    comodín `*.googleapis.com`, pero ahí no hay API que responda—, y como
+    `generate` traga el fallo y devuelve `None`, la cadena caía calladamente
+    a OpenRouter: el crédito de Google Cloud no se consumía nunca. Es la
+    misma regla que aplica el SDK `google-genai` en la ruta de medios.
+    """
+    normalized = (location or DEFAULT_VERTEX_LOCATION).strip() or DEFAULT_VERTEX_LOCATION
+    if normalized == VERTEX_GLOBAL_LOCATION:
+        return VERTEX_GLOBAL_HOST
+    return f"{normalized}-aiplatform.googleapis.com"
 
 
 def is_usable_key(value: Optional[str]) -> bool:
@@ -53,6 +76,20 @@ def is_usable_key(value: Optional[str]) -> bool:
         return False
     lowered = value.strip().lower()
     return not any(marker in lowered for marker in PLACEHOLDER_MARKERS)
+
+
+def ai_studio_key_in_use() -> Optional[str]:
+    """
+    Nombre de la variable de AI Studio que esté puesta, si la hay.
+
+    El Gemini API de AI Studio se factura como producto propio («Gemini API»
+    en el panel), no como Vertex AI, y queda fuera del crédito. Si aparece en
+    el entorno, alguien está gastando por esa vía.
+    """
+    for var in AI_STUDIO_KEY_VARS:
+        if is_usable_key(os.getenv(var)):
+            return var
+    return None
 
 
 def normalize_model(model: str) -> str:
@@ -213,12 +250,20 @@ class VertexProvider(LLMProvider):
         # Sólo para pruebas y endpoints privados: por defecto se compone a
         # partir del proyecto y la región.
         self._base_url_override = base_url
+        # Los avisos sobre el crédito se emiten una vez por proceso: Yuki corre
+        # 24/7 y repetirlos en cada petición ahogaría el log.
+        self._aviso_ai_studio_emitido = False
+        self._aviso_degradacion_emitido = False
 
     @property
     def base_url(self) -> str:
         if self._base_url_override:
             return self._base_url_override
-        return VERTEX_ENDPOINT_TEMPLATE.format(location=self.location, project_id=self.project_id)
+        return VERTEX_ENDPOINT_TEMPLATE.format(
+            host=vertex_host(self.location),
+            project_id=self.project_id,
+            location=self.location,
+        )
 
     def is_available(self) -> bool:
         # Comprobación barata y sin red: se mira sólo la configuración. Si las
@@ -269,23 +314,68 @@ class VertexProvider(LLMProvider):
             )
             return None
 
+    def _avisar_de_ai_studio(self) -> None:
+        """
+        Avisa si hay una clave de AI Studio en el entorno.
+
+        No la usa nadie en este módulo, pero su sola presencia significa que
+        algún proceso puede estar llamando a `generativelanguage.googleapis.com`.
+        Ese tráfico aparece en el panel bajo el producto **Gemini API**, no bajo
+        Vertex AI, y se factura fuera del crédito. Verlo ahí es justo la señal
+        de que la alineación con el crédito no está funcionando.
+        """
+        if self._aviso_ai_studio_emitido:
+            return
+        var = ai_studio_key_in_use()
+        if var:
+            self._aviso_ai_studio_emitido = True
+            logger.warning(
+                f"{var} está definida. El Gemini API de AI Studio se factura como "
+                "producto aparte («Gemini API» en el panel) y queda fuera del crédito "
+                "de Google Cloud. Yuki no la usa: si ves gasto en ese producto, viene "
+                "de otro sitio. Quítala del entorno para descartarlo."
+            )
+
+    def _avisar_de_degradacion(self, motivo: str) -> None:
+        """
+        Deja constancia de que Vertex estaba configurada y aun así no sirvió.
+
+        Es el fallo que más caro sale de los silenciosos: la cadena continúa,
+        Yuki responde con normalidad por OpenRouter y nada delata que el
+        crédito de Google Cloud no se está tocando. Se dice una vez, alto.
+        """
+        if self._aviso_degradacion_emitido:
+            return
+        self._aviso_degradacion_emitido = True
+        logger.warning(
+            f"Vertex está configurada (proyecto '{self.project_id}', región "
+            f"'{self.location}') pero no atendió la petición: {motivo}. La cadena "
+            "sale por la siguiente pasarela, así que EL CRÉDITO DE GOOGLE CLOUD NO "
+            "SE ESTÁ CONSUMIENDO. Diagnostícalo con: python cli.py vertex-check"
+        )
+
     def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
         if not self.is_available():
             return None
 
+        self._avisar_de_ai_studio()
+
         token = self._access_token()
         if not token:
+            self._avisar_de_degradacion("no hay credenciales del proyecto utilizables")
             return None
 
         try:
             from openai import OpenAI
         except ImportError:
             logger.error("El paquete 'openai' no está instalado; no se puede usar Vertex.")
+            self._avisar_de_degradacion("falta el paquete 'openai'")
             return None
 
         client = OpenAI(api_key=token, base_url=self.base_url)
 
         models = [m for m in (self.primary_model, self.fallback_model) if m]
+        ultimo_error = "sin modelos declarados"
         for model in models:
             try:
                 resp = client.chat.completions.create(
@@ -306,8 +396,10 @@ class VertexProvider(LLMProvider):
                     output_tokens=getattr(usage, "completion_tokens", 0) or 0,
                 )
             except Exception as e:
+                ultimo_error = f"{model}: {e}"
                 logger.error(f"Error invocando Vertex con el modelo '{model}': {e}")
 
+        self._avisar_de_degradacion(ultimo_error)
         return None
 
 

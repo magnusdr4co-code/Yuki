@@ -8,6 +8,7 @@ por válida.
 
 import sys
 import os
+import logging
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -23,6 +24,8 @@ from src.core.llm_router import (
     normalize_model,
     normalize_vertex_model,
     local_voice_response,
+    vertex_host,
+    ai_studio_key_in_use,
 )
 
 
@@ -418,6 +421,94 @@ def test_vertex_endpoint_is_built_from_project_and_location():
 
 def test_vertex_location_defaults_to_global():
     assert VertexProvider(project_id="yuki-diva").location == "global"
+
+
+def test_vertex_global_endpoint_has_no_region_prefix():
+    """
+    Regresión: la región `global` es la que traen config.yaml, .env.example y
+    cloudbuild.yaml, y su host NO lleva prefijo. Con `global-aiplatform.
+    googleapis.com` Google devuelve un 404, `generate` se lo traga y la cadena
+    cae a OpenRouter sin decir nada: el crédito de Google Cloud no se toca.
+    """
+    p = VertexProvider(project_id="yuki-diva", location="global")
+    assert p.base_url == (
+        "https://aiplatform.googleapis.com/v1/"
+        "projects/yuki-diva/locations/global/endpoints/openapi"
+    )
+    assert "global-aiplatform" not in p.base_url
+
+
+def test_vertex_host_por_region():
+    assert vertex_host("global") == "aiplatform.googleapis.com"
+    assert vertex_host("") == "aiplatform.googleapis.com"
+    assert vertex_host("europe-southwest1") == "europe-southwest1-aiplatform.googleapis.com"
+    assert vertex_host("us-central1") == "us-central1-aiplatform.googleapis.com"
+
+
+def test_vertex_default_provider_uses_global_endpoint():
+    """El proveedor que arma el router por defecto también apunta al host bueno."""
+    vertex = [p for p in LLMRouter(config={"vertex_ai": {"project_id": "yuki-diva"}}).providers
+              if p.name == "vertex_ai"][0]
+    assert vertex.base_url.startswith("https://aiplatform.googleapis.com/")
+
+
+# --- Aviso de facturación fuera del crédito ---
+
+def test_ai_studio_key_detectada(monkeypatch):
+    """
+    Una clave de AI Studio en el entorno significa gasto bajo el producto
+    «Gemini API», que está fuera del crédito de Google Cloud.
+    """
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "AIzaClaveDePrueba")
+    assert ai_studio_key_in_use() == "GEMINI_API_KEY"
+
+
+def test_ai_studio_key_ignora_marcadores(monkeypatch):
+    """El hueco de `.env.example` no cuenta como clave puesta."""
+    monkeypatch.delenv("GOOGLE_API_KEY", raising=False)
+    monkeypatch.setenv("GEMINI_API_KEY", "your_gemini_key_here")
+    assert ai_studio_key_in_use() is None
+
+
+def test_ai_studio_key_ausente(monkeypatch):
+    for var in ("GEMINI_API_KEY", "GOOGLE_API_KEY"):
+        monkeypatch.delenv(var, raising=False)
+    assert ai_studio_key_in_use() is None
+
+
+def test_vertex_avisa_cuando_se_degrada_a_openrouter(caplog):
+    """
+    Vertex configurada + fallo = el crédito no se consume. Ese hecho tiene que
+    quedar escrito: es el fallo silencioso que dispara esta investigación.
+    """
+    class SinCredenciales(VertexProvider):
+        def _access_token(self):
+            return None
+
+    p = SinCredenciales(project_id="yuki-diva", location="global")
+    with caplog.at_level(logging.WARNING, logger="Yuki.LLMRouter"):
+        assert p.generate("Eres Yuki.", "Hola") is None
+
+    mensajes = " ".join(r.message for r in caplog.records)
+    assert "CRÉDITO DE GOOGLE CLOUD NO SE ESTÁ CONSUMIENDO" in mensajes
+    assert "vertex-check" in mensajes
+
+
+def test_el_aviso_de_degradacion_no_se_repite(caplog):
+    """Yuki corre 24/7: el aviso se dice una vez, no en cada petición."""
+    class SinCredenciales(VertexProvider):
+        def _access_token(self):
+            return None
+
+    p = SinCredenciales(project_id="yuki-diva")
+    with caplog.at_level(logging.WARNING, logger="Yuki.LLMRouter"):
+        for _ in range(5):
+            p.generate("Eres Yuki.", "Hola")
+
+    avisos = [r for r in caplog.records
+              if "NO SE ESTÁ CONSUMIENDO" in r.message]
+    assert len(avisos) == 1
 
 
 # --- Configuración leída desde config.yaml ---

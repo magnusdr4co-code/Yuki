@@ -46,6 +46,36 @@ Hay dos formas de llamar a Gemini y **sólo una consume el crédito de prueba**:
 
 Por eso el código **no** se autentica con una clave. Si en algún momento te tienta rellenar `GEMINI_API_KEY` para "que funcione antes", estarás facturando fuera del crédito. No lo hagas.
 
+### 1.bis Cómo se lee el panel de facturación
+
+La columna del panel que resuelve la duda es **Product**, no las de ahorros:
+
+| Lo que ves en *Product* | Qué API es | ¿Toca el crédito? |
+|---|---|---|
+| **Vertex AI** | `aiplatform.googleapis.com` | Sí |
+| **Gemini API** | `generativelanguage.googleapis.com` (AI Studio) | No |
+
+Una línea con el producto **Gemini API** significa que el gasto salió por AI Studio, y **Yuki no llama nunca a esa API**: viene de otro proceso, de otra herramienta o de una clave suelta. Que las columnas de ahorro estén a cero no prueba nada por sí solo: los créditos de prueba no se restan ahí, sino en la fila de promociones y créditos del informe de costes. Lo que hay que mirar es el producto.
+
+Si aparece gasto bajo *Gemini API*:
+
+1. `python3 cli.py vertex-check` — avisa si hay `GEMINI_API_KEY`/`GOOGLE_API_KEY` en el entorno.
+2. Quita esa variable del `.env`, del despliegue de Cloud Run y de los Jobs.
+3. Revisa qué otra cosa comparte proyecto: `hermes_config.yaml` declara `google: "${GEMINI_API_KEY}"` para la ruta de emergencia del agregador, y cualquier herramienta externa (Gemini CLI, AI Studio) apuntada al mismo proyecto factura ahí.
+
+### 1.ter El endpoint: dónde se rompía la alineación
+
+El host de Vertex depende de la región, y **`global` es el caso especial: no lleva prefijo.**
+
+```
+global              -> https://aiplatform.googleapis.com/...
+europe-southwest1   -> https://europe-southwest1-aiplatform.googleapis.com/...
+```
+
+Hasta esta corrección, `VertexProvider` componía siempre `{location}-aiplatform.googleapis.com`, de modo que con la región `global` —la que traen `config.yaml`, `.env.example` y `cloudbuild.yaml`, y la que este runbook recomienda probar primero— llamaba a `global-aiplatform.googleapis.com`. Ese nombre **resuelve** (comodín `*.googleapis.com`) pero devuelve un **404** de Google. `generate` se tragaba el fallo, devolvía `None` y la cadena caía a OpenRouter sin decir nada: Yuki respondía con normalidad y el crédito de Google Cloud no se tocaba jamás.
+
+Ya está corregido, con test de regresión (`test_vertex_global_endpoint_has_no_region_prefix`), y `vertex-check` imprime ahora el endpoint resuelto. Si Vertex está configurada y aun así falla, el log lo dice en voz alta en vez de degradarse en silencio.
+
 ---
 
 ## 2. Cuenta y proyecto
