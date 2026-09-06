@@ -1,8 +1,9 @@
 """
 Tests del enrutador de pasarelas de lenguaje.
 
-Verifican el orden declarado por la arquitectura (Nous Portal → OpenRouter →
-voz local) y que ninguna clave de marcador de posición se tome por válida.
+Verifican el orden declarado por la arquitectura (Nous Portal → Vertex →
+OpenRouter → voz local) y que ninguna clave de marcador de posición se tome
+por válida.
 """
 
 import sys
@@ -15,12 +16,27 @@ from src.core.llm_router import (
     LLMResponse,
     LLMProvider,
     NousPortalProvider,
+    VertexProvider,
     OpenRouterProvider,
     LocalVoiceProvider,
     is_usable_key,
     normalize_model,
+    normalize_vertex_model,
     local_voice_response,
 )
+
+
+@pytest.fixture(autouse=True)
+def entorno_vertex_limpio(monkeypatch):
+    """
+    Aísla los tests de un Google Cloud configurado en la máquina.
+
+    Sin esto, un `GOOGLE_CLOUD_PROJECT` real en el entorno del desarrollador
+    activaría la pasarela de Vertex y cambiaría el resultado de los tests que
+    comprueban la cadena por defecto.
+    """
+    for var in ("VERTEX_PROJECT_ID", "GOOGLE_CLOUD_PROJECT", "VERTEX_LOCATION"):
+        monkeypatch.delenv(var, raising=False)
 
 
 # --- Validación de claves ---
@@ -196,7 +212,21 @@ def test_router_never_returns_empty_text():
 
 def test_default_chain_follows_declared_architecture():
     router = LLMRouter(config={})
-    assert [p.name for p in router.providers] == ["nous_portal", "openrouter", "voz_local"]
+    assert [p.name for p in router.providers] == [
+        "nous_portal", "vertex_ai", "openrouter", "voz_local",
+    ]
+
+
+def test_vertex_is_inert_without_a_project():
+    """
+    La propiedad que sostiene todo lo demás: sin proyecto declarado, la cadena
+    se comporta igual que antes de existir esta pasarela. Es lo que permite
+    agotar el crédito sin que Yuki se quede muda.
+    """
+    router = LLMRouter(config={})
+    vertex = [p for p in router.providers if p.name == "vertex_ai"][0]
+    assert not vertex.is_available()
+    assert vertex.generate("sistema", "hola") is None
 
 
 def test_router_reads_model_from_agent_section():
@@ -303,3 +333,359 @@ def test_openrouter_emits_a_correct_request():
     assert resp.provider == "openrouter"
     assert resp.simulated is False
     assert resp.text == "La lluvia sobre el metal también canta."
+
+
+# --- Vertex AI ---
+
+def test_vertex_unavailable_without_project():
+    p = VertexProvider(project_id="")
+    assert not p.is_available()
+    assert p.generate("sistema", "hola") is None
+
+
+def test_vertex_rejects_placeholder_project():
+    p = VertexProvider(project_id="your_project_id_here")
+    assert not p.is_available()
+
+
+def test_vertex_available_with_project():
+    assert VertexProvider(project_id="yuki-diva").is_available()
+
+
+def test_vertex_can_be_switched_off_while_project_remains():
+    """
+    Al agotarse el crédito interesa apagar la ruta sin borrar la configuración,
+    para poder volver a encenderla sin recordar el identificador del proyecto.
+    """
+    p = VertexProvider(project_id="yuki-diva", enabled=False)
+    assert not p.is_available()
+
+
+def test_vertex_reads_project_from_environment(monkeypatch):
+    """En Cloud Run el proyecto llega por el entorno, no por config.yaml."""
+    monkeypatch.setenv("VERTEX_PROJECT_ID", "yuki-diva")
+    assert VertexProvider().is_available()
+
+
+def test_vertex_empty_config_value_does_not_mask_environment(monkeypatch):
+    """
+    `config.yaml` trae `project_id: ""`. Ese vacío no debe tapar la variable de
+    entorno, que es como se declara el proyecto en despliegue.
+    """
+    monkeypatch.setenv("VERTEX_PROJECT_ID", "yuki-diva")
+    p = VertexProvider(project_id="")
+    assert p.project_id == "yuki-diva"
+    assert p.is_available()
+
+
+def test_vertex_prefers_explicit_project_over_environment(monkeypatch):
+    monkeypatch.setenv("VERTEX_PROJECT_ID", "del-entorno")
+    assert VertexProvider(project_id="explicito").project_id == "explicito"
+
+
+# --- Nombres de modelo en Vertex ---
+
+@pytest.mark.parametrize("declarado,esperado", [
+    ("gemini-3.7-flash", "google/gemini-3.7-flash"),          # sin publisher
+    ("google/gemini-3.7-flash", "google/gemini-3.7-flash"),   # ya canónico
+    ("vertex/gemini-3.7-flash", "google/gemini-3.7-flash"),   # prefijo de ruta
+    ("vertex_ai/gemini-3.6-flash", "google/gemini-3.6-flash"),
+    ("openrouter/google/gemini-2.0-flash", "google/gemini-2.0-flash"),
+])
+def test_vertex_model_names_are_normalized(declarado, esperado):
+    assert normalize_vertex_model(declarado) == esperado
+
+
+def test_vertex_normalizes_models_at_construction():
+    p = VertexProvider(
+        project_id="yuki-diva",
+        primary_model="gemini-3.7-flash",
+        fallback_model="vertex/gemini-3.6-flash",
+    )
+    assert p.primary_model == "google/gemini-3.7-flash"
+    assert p.fallback_model == "google/gemini-3.6-flash"
+
+
+# --- Endpoint compuesto ---
+
+def test_vertex_endpoint_is_built_from_project_and_location():
+    p = VertexProvider(project_id="yuki-diva", location="europe-southwest1")
+    assert p.base_url == (
+        "https://europe-southwest1-aiplatform.googleapis.com/v1/"
+        "projects/yuki-diva/locations/europe-southwest1/endpoints/openapi"
+    )
+
+
+def test_vertex_location_defaults_to_global():
+    assert VertexProvider(project_id="yuki-diva").location == "global"
+
+
+# --- Configuración leída desde config.yaml ---
+
+def test_router_reads_vertex_section():
+    config = {
+        "vertex_ai": {
+            "enabled": True,
+            "project_id": "yuki-diva",
+            "location": "europe-southwest1",
+            "primary_model": "google/gemini-3.7-flash",
+            "fallback_model": "google/gemini-3.6-flash",
+            "temperature": 0.5,
+            "max_tokens": 800,
+        }
+    }
+    vertex = [p for p in LLMRouter(config=config).providers if p.name == "vertex_ai"][0]
+
+    assert vertex.is_available()
+    assert vertex.project_id == "yuki-diva"
+    assert vertex.location == "europe-southwest1"
+    assert vertex.primary_model == "google/gemini-3.7-flash"
+    assert vertex.temperature == 0.5
+    assert vertex.max_tokens == 800
+
+
+def test_vertex_falls_back_to_agent_model_settings():
+    """Sin ajustes propios, hereda temperatura y longitud de `agent.model`."""
+    config = {
+        "agent": {"model": {"temperature": 0.9, "max_tokens": 1500}},
+        "vertex_ai": {"project_id": "yuki-diva"},
+    }
+    vertex = [p for p in LLMRouter(config=config).providers if p.name == "vertex_ai"][0]
+
+    assert vertex.temperature == 0.9
+    assert vertex.max_tokens == 1500
+
+
+def test_real_config_yaml_keeps_vertex_inert_until_configured():
+    """
+    El repositorio no debe traer un proyecto escrito: se declara al desplegar.
+    Así, quien clone el repo sigue saliendo por OpenRouter sin sorpresas.
+    """
+    import yaml
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    vertex = [p for p in LLMRouter(config=config).providers if p.name == "vertex_ai"][0]
+    assert not vertex.is_available()
+
+
+# --- Orden de la cadena con Vertex activa ---
+
+def test_vertex_takes_precedence_over_openrouter():
+    """
+    Con proyecto declarado, el tráfico sale por Vertex: es lo que hace que el
+    gasto se cargue al crédito de Google Cloud y no a OpenRouter.
+    """
+    config = {"vertex_ai": {"project_id": "yuki-diva"}}
+    nombres = [p.name for p in LLMRouter(config=config).providers]
+    assert nombres.index("vertex_ai") < nombres.index("openrouter")
+
+
+def test_openrouter_still_rescues_when_vertex_fails():
+    """Cuando se agote el crédito, Yuki no puede quedarse muda."""
+    vertex = ProveedorFalso("vertex_ai", True, None)   # disponible pero falla
+    openrouter = ProveedorFalso("openrouter", True, "desde el agregador")
+    router = LLMRouter(providers=[vertex, openrouter, LocalVoiceProvider()])
+
+    resp = router.generate("sistema", "hola")
+
+    assert vertex.llamado
+    assert resp.provider == "openrouter"
+
+
+# --- Integración real de la ruta de Vertex ---
+
+class CredencialesFalsas:
+    """Sustituye a las credenciales de Google Cloud en las pruebas."""
+
+    def __init__(self, token="ya29.token-de-prueba", valid=True):
+        self.token = token
+        self.valid = valid
+        self.refrescada = False
+
+    def refresh(self, request):
+        self.refrescada = True
+        self.valid = True
+        self.token = "ya29.token-renovado"
+
+
+def test_vertex_emits_a_correct_request():
+    """
+    Comprueba que la petición sale bien formada contra el endpoint compatible
+    con OpenAI de Vertex: la ruta con `/endpoints/openapi/chat/completions`, el
+    token OAuth como portador (no una clave de API) y el modelo con publisher.
+    """
+    pytest.importorskip("openai", reason="El SDK openai no está instalado")
+
+    import json
+    import threading
+    from http.server import BaseHTTPRequestHandler, HTTPServer
+
+    recibido = {}
+
+    class FalsoVertex(BaseHTTPRequestHandler):
+        def do_POST(self):
+            n = int(self.headers.get("Content-Length", 0))
+            recibido.update(json.loads(self.rfile.read(n)))
+            recibido["_ruta"] = self.path
+            recibido["_auth"] = self.headers.get("Authorization")
+            body = json.dumps({
+                "id": "chatcmpl-1",
+                "object": "chat.completion",
+                "choices": [{
+                    "index": 0,
+                    "message": {"role": "assistant", "content": "La nieve cae despacio sobre el taller."},
+                    "finish_reason": "stop",
+                }],
+                "usage": {"prompt_tokens": 312, "completion_tokens": 48, "total_tokens": 360},
+            }).encode()
+            self.send_response(200)
+            self.send_header("Content-Type", "application/json")
+            self.send_header("Content-Length", str(len(body)))
+            self.end_headers()
+            self.wfile.write(body)
+
+        def log_message(self, *args):
+            pass
+
+    servidor = HTTPServer(("127.0.0.1", 0), FalsoVertex)
+    threading.Thread(target=servidor.serve_forever, daemon=True).start()
+
+    try:
+        proveedor = VertexProvider(
+            project_id="yuki-diva",
+            location="europe-southwest1",
+            primary_model="gemini-3.7-flash",
+            temperature=0.72,
+            max_tokens=1024,
+            credentials=CredencialesFalsas(),
+            base_url=(f"http://127.0.0.1:{servidor.server_address[1]}"
+                      "/v1/projects/yuki-diva/locations/europe-southwest1/endpoints/openapi"),
+        )
+        resp = proveedor.generate("Eres Yuki.", "Háblame de la nieve")
+    finally:
+        servidor.shutdown()
+        servidor.server_close()
+
+    assert recibido["_ruta"] == (
+        "/v1/projects/yuki-diva/locations/europe-southwest1/endpoints/openapi/chat/completions"
+    )
+    assert recibido["_auth"] == "Bearer ya29.token-de-prueba"   # OAuth, no clave de API
+    assert recibido["model"] == "google/gemini-3.7-flash"       # publisher añadido
+    assert recibido["temperature"] == 0.72
+    assert recibido["max_tokens"] == 1024
+    assert [m["role"] for m in recibido["messages"]] == ["system", "user"]
+
+    assert resp is not None
+    assert resp.provider == "vertex_ai"
+    assert resp.simulated is False
+    assert resp.text == "La nieve cae despacio sobre el taller."
+    # El consumo se propaga: es lo que permite vigilar el crédito.
+    assert resp.input_tokens == 312
+    assert resp.output_tokens == 48
+
+
+@pytest.fixture
+def transporte_de_auth_simulado(monkeypatch):
+    """
+    Sustituye `google.auth.transport.requests` por un doble.
+
+    La renovación real arrastra `cryptography`, que no está garantizado en
+    todos los entornos. Este stub deja el test comprobando la lógica que
+    importa —que se renueve, y sólo cuando hace falta— sin depender de la
+    pila de TLS instalada.
+    """
+    import types
+
+    stub = types.ModuleType("google.auth.transport.requests")
+    stub.Request = lambda *a, **k: object()
+    monkeypatch.setitem(sys.modules, "google.auth.transport.requests", stub)
+    return stub
+
+
+def test_vertex_refreshes_an_expired_token(transporte_de_auth_simulado):
+    """
+    El daemon vive días y los tokens de Google caducan en torno a una hora:
+    sin renovación, Yuki se quedaría sin voz a mitad de la primera noche.
+    """
+    credenciales = CredencialesFalsas(valid=False)
+    proveedor = VertexProvider(project_id="yuki-diva", credentials=credenciales)
+
+    assert proveedor._access_token() == "ya29.token-renovado"
+    assert credenciales.refrescada
+
+
+def test_vertex_does_not_refresh_a_valid_token():
+    credenciales = CredencialesFalsas(valid=True)
+    proveedor = VertexProvider(project_id="yuki-diva", credentials=credenciales)
+
+    assert proveedor._access_token() == "ya29.token-de-prueba"
+    assert not credenciales.refrescada
+
+
+def test_vertex_returns_none_when_credentials_fail(monkeypatch):
+    """Sin credenciales no se aborta: la cadena debe poder seguir hacia OpenRouter."""
+    proveedor = VertexProvider(project_id="yuki-diva")
+    monkeypatch.setattr(proveedor, "_access_token", lambda: None)
+    assert proveedor.generate("sistema", "hola") is None
+
+
+class CredencialesQueEstallan:
+    """
+    Doble de unas credenciales sobre una pila nativa rota.
+
+    `cryptography` se compila con pyo3, y cuando su binding falla lanza
+    `PanicException`, que hereda de `BaseException` y por tanto atraviesa un
+    `except Exception`. Se reproduce aquí con `BaseException` a secas.
+    """
+
+    valid = False
+
+    @property
+    def token(self):
+        raise BaseException("Python API call failed")
+
+    def refresh(self, request):
+        raise BaseException("Python API call failed")
+
+
+def test_vertex_survives_a_broken_native_auth_stack(transporte_de_auth_simulado):
+    """
+    Un entorno con la pila de auth rota no puede tumbar a Yuki: el daemon
+    corre 24/7 y debe poder seguir hacia la pasarela siguiente.
+    """
+    proveedor = VertexProvider(project_id="yuki-diva", credentials=CredencialesQueEstallan())
+
+    assert proveedor._access_token() is None
+    assert proveedor.generate("sistema", "hola") is None
+
+
+def test_broken_vertex_does_not_leave_yuki_mute(transporte_de_auth_simulado):
+    """La cadena completa sigue respondiendo aunque Vertex esté inservible."""
+    router = LLMRouter(providers=[
+        VertexProvider(project_id="yuki-diva", credentials=CredencialesQueEstallan()),
+        LocalVoiceProvider(),
+    ])
+
+    resp = router.generate("sistema", "hola")
+
+    assert resp.provider == "voz_local"
+    assert resp.text
+
+
+@pytest.mark.parametrize("interrupcion", [KeyboardInterrupt, SystemExit])
+def test_vertex_does_not_swallow_interrupts(interrupcion, transporte_de_auth_simulado):
+    """
+    Blindar contra BaseException no puede llegar a tragarse un Ctrl+C: haría
+    imposible parar el daemon.
+    """
+    class CredencialesInterrumpidas:
+        valid = False
+
+        def refresh(self, request):
+            raise interrupcion()
+
+    proveedor = VertexProvider(project_id="yuki-diva", credentials=CredencialesInterrumpidas())
+
+    with pytest.raises(interrupcion):
+        proveedor._access_token()

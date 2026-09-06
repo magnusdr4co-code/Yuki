@@ -48,7 +48,10 @@ class YukiAgent:
         )
 
         # 3. Herramientas Nous Portal
-        self.nous_portal = NousPortalClient(api_key=os.getenv("NOUS_PORTAL_API_KEY"))
+        self.nous_portal = NousPortalClient(
+            api_key=os.getenv("NOUS_PORTAL_API_KEY"),
+            config=self.config,
+        )
         self.media_creator = MediaCreatorTool(self.nous_portal)
 
         # 4. Constructor de Prompts

@@ -73,8 +73,16 @@ gcloud services enable \
   artifactregistry.googleapis.com \
   secretmanager.googleapis.com \
   cloudscheduler.googleapis.com \
-  storage.googleapis.com
+  storage.googleapis.com \
+  aiplatform.googleapis.com \
+  texttospeech.googleapis.com
 ```
+
+`aiplatform.googleapis.com` es Vertex AI (*Gemini Enterprise Agent Platform*):
+sirve el texto, la imagen y el vídeo. `texttospeech.googleapis.com` es Cloud
+Text-to-Speech, que sirve la voz de Yuki con Gemini TTS. Habilítalas solo si vas
+a servir los modelos desde el crédito de Google Cloud; ver
+[Servir los modelos desde el crédito](#servir-los-modelos-desde-el-crédito).
 
 ---
 
@@ -103,6 +111,11 @@ gcloud projects add-iam-policy-binding "$PROJECT_ID" \
 gcloud projects add-iam-policy-binding "$PROJECT_ID" \
   --member="serviceAccount:${SA}" \
   --role="roles/logging.logWriter"
+
+# Invocar los modelos de Gemini (solo si usas la ruta de Vertex)
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:${SA}" \
+  --role="roles/aiplatform.user"
 ```
 
 Una segunda identidad, solo para que Cloud Scheduler pueda invocar los Jobs:
@@ -258,9 +271,110 @@ gcloud run jobs executions list --job=yuki-morning-inspiration-drop --region="$R
 Pon un tope de gasto antes de dejarlo solo:
 **Facturación → Presupuestos y alertas → Crear presupuesto** (p. ej. 10 €/mes
 con aviso al 50 %, 90 % y 100 %). El gasto real de este despliegue debería ser
-de céntimos; lo que puede dispararse son las llamadas al LLM, que se facturan
-aparte en OpenRouter (y en Nous Portal cuando se implemente la generación de
-medios).
+de céntimos; lo que puede dispararse son las llamadas al LLM. Se facturan aparte
+en OpenRouter (y en Nous Portal cuando se implemente la generación de medios),
+salvo que uses la ruta de Vertex, en cuyo caso caen dentro de este mismo
+presupuesto: ver [Servir los modelos desde el crédito](#servir-los-modelos-desde-el-crédito).
+
+---
+
+## Servir los modelos desde el crédito
+
+Por defecto Yuki habla por OpenRouter, que se factura aparte. Si quieres que el
+cerebro salga del crédito de Google Cloud, el camino es **Vertex AI**.
+
+### El matiz que decide si el crédito se gasta
+
+Hay dos formas de llamar a Gemini y solo una consume el crédito:
+
+| Ruta | Autenticación | ¿Consume el crédito de prueba? |
+|---|---|---|
+| Gemini API (AI Studio) | `GEMINI_API_KEY` | **No.** Excluido desde marzo de 2026 |
+| Vertex AI | Credenciales del proyecto (ADC) | **Sí** |
+
+Por eso `src/core/llm_router.py` no autentica esta ruta con una clave, sino con
+las credenciales del proyecto. Si rellenas `GEMINI_API_KEY` esperando gastar el
+crédito, te lo facturarán aparte.
+
+### Activarla
+
+```bash
+gcloud services enable aiplatform.googleapis.com
+gcloud auth application-default login    # en local; en Cloud Run no hace falta
+
+export VERTEX_PROJECT_ID="$PROJECT_ID"
+export VERTEX_LOCATION="global"          # o una región: europe-southwest1
+
+python3 cli.py vertex-check
+```
+
+`vertex-check` comprueba la cadena entera —configuración, credenciales y una
+petición real— e informa del consumo en tokens y de la proyección de gasto del
+cron autónomo sobre 90 días.
+
+En Cloud Run se declara como variable del servicio, y la identidad `yuki-runtime`
+ya lleva `roles/aiplatform.user` del paso 2:
+
+```bash
+gcloud run services update yuki-salon --region="$REGION" \
+  --update-env-vars="VERTEX_PROJECT_ID=${PROJECT_ID},VERTEX_LOCATION=global"
+```
+
+### Qué modelo poner
+
+`config.yaml` (sección `vertex_ai`) trae `google/gemini-3.7-flash` con
+`google/gemini-3.6-flash` de respaldo. **Confirma los identificadores antes de
+fijarlos**, porque la familia Gemini se mueve rápido:
+
+```bash
+gcloud ai models list --region="$REGION"
+```
+
+Un apunte de encaje: **Gemini Omni no sirve para esto**. Es un modelo de
+generación y edición de vídeo (entra texto/imagen/vídeo, sale vídeo con audio) y
+se factura por segundo de vídeo, no por token. Su sitio es la columna de medios,
+que se configura aparte —ver [Los medios](#los-medios-imagen-vídeo-y-voz)—, no
+el cerebro de Yuki.
+
+### Los medios: imagen, vídeo y voz
+
+La misma configuración sirve `src/tools/vertex_media.py`. Tres motores bajo
+`vertex_ai.media` en `config.yaml`:
+
+| Herramienta | Modelo por defecto | Coste orientativo | Notas |
+|---|---|---|---|
+| `vertex.image` | `imagen-4.0-generate-001` | ≈0,04 USD/imagen | Portadas e ilustración |
+| `vertex.video` | `gemini-omni-flash-preview` | **≈0,10 USD/segundo** | 3–10 s. Ver aviso abajo |
+| `vertex.tts` | `gemini-2.5-flash-tts` | por caracteres | OGG Opus nativo: sin ffmpeg |
+
+La voz gana dos cosas por esta ruta: sale ya en **OGG Opus**, que es el formato
+que Telegram reproduce como nota de voz nativa, así que desaparece el paso de
+transcodificado con `ffmpeg`; y la cadencia de Yuki se pide **en lenguaje
+natural** ("pausas deliberadas, elige cada palabra antes de decirla") en vez de
+con marcado SSML, que es más fiel a la pausa elegida de `SOUL.md`.
+
+> **Aviso de gasto sobre el vídeo.** Omni se factura por segundo de vídeo
+> producido: diez segundos rondan 1 USD, más que miles de respuestas de texto.
+> Por eso ninguna tarea del cron lo invoca —con 84 disparos diarios, un descuido
+> funde el crédito en una tarde— y la habilidad `/animar-portada` sólo se ejecuta
+> a petición explícita del productor. El resultado devuelve `estimated_cost_usd`
+> para dejar constancia.
+
+Sin proyecto declarado, los tres caen a marcadores de texto **declarados como
+tales** (`simulated: true`): nunca se devuelve una ruta de marcador ni una URL
+inventada como si fuera un medio real.
+
+### Al agotarse el crédito
+
+La ruta es opcional por diseño. Basta con quitar `VERTEX_PROJECT_ID` o poner
+`vertex_ai.enabled: false`: la cadena vuelve sola a OpenRouter sin tocar código.
+Y aunque no hagas nada, si Vertex falla el enrutador cae a la pasarela
+siguiente; Yuki no se queda muda.
+
+Cuidado con lo contrario: **el crédito caduca a los 90 días pero el cron sigue
+corriendo**. `agency_loop_tick` dispara 72 veces al día. Si activas la cuenta de
+pago, eso factura desde el día 91 sin que nadie lo mire — de ahí el presupuesto
+con alertas del apartado 7.
 
 ---
 

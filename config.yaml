@@ -42,6 +42,36 @@ provider_routing:
       max_tokens: 1000
       temperature: 0.7
 
+# Acceso directo a Gemini a través de Vertex AI (Gemini Enterprise Agent
+# Platform). Es la vía que consume el crédito de Google Cloud: el Gemini API de
+# AI Studio quedó excluido de él en marzo de 2026.
+#
+# Se activa solo cuando hay proyecto (aquí o en VERTEX_PROJECT_ID). Mientras
+# esté vacío, la cadena de `src/core/llm_router.py` sale por OpenRouter igual
+# que antes. Al agotarse el crédito, vacía el proyecto o pon `enabled: false`.
+vertex_ai:
+  enabled: true
+  project_id: ""              # o la variable de entorno VERTEX_PROJECT_ID
+  location: "global"          # o una región concreta: europe-southwest1
+  # Confirma los identificadores disponibles antes de fijarlos:
+  #   gcloud ai models list --region=<region>
+  primary_model: "google/gemini-3.7-flash"
+  fallback_model: "google/gemini-3.6-flash"
+  temperature: 0.72
+  max_tokens: 1024
+  # Medios servidos por el mismo proyecto y el mismo crédito.
+  media:
+    image_model: "imagen-4.0-generate-001"
+    # Gemini Omni Flash: genera y edita VÍDEO con audio nativo, facturado por
+    # segundo (~0,10 USD/s). No es un modelo de texto: el cerebro de Yuki lo
+    # sirve `primary_model`, no éste.
+    video_model: "gemini-omni-flash-preview"
+    # Gemini TTS emite OGG Opus nativo, así que en esta ruta no hace falta el
+    # transcodificado con ffmpeg que exige el catálogo para portal.tts.
+    tts_model: "gemini-2.5-flash-tts"
+    voice: "Aoede"
+    language_code: "es-es"
+
 memory:
   backend: "sqlite_fts5"
   database_path: "data/yuki_memory.db"

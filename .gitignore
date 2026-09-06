@@ -46,10 +46,12 @@ output/voice/*.ogg
 output/voice/*.mp3
 output/music/*.mp3
 output/music/*.wav
+output/video/*.mp4
 output/posts/*.md
 !output/art/.gitkeep
 !output/voice/.gitkeep
 !output/music/.gitkeep
+!output/video/.gitkeep
 !output/posts/.gitkeep
 
 # Estado en runtime: la memoria y el estado vital de Yuki son propios de cada

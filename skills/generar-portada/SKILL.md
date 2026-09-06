@@ -1,6 +1,6 @@
 ---
 name: generar-portada
-description: Pinta e ilustra portadas de sencillos o arte visual conceptual con los modelos de imagen de FAL a través del Tool Gateway de Nous Portal y guarda la imagen en ./output/art/.
+description: Pinta e ilustra portadas de sencillos o arte visual conceptual con Imagen sobre Vertex AI (o los modelos de FAL del Tool Gateway como respaldo) y guarda la imagen en ./output/art/.
 parameters:
   type: object
   properties:
@@ -40,7 +40,7 @@ Permite a **Yuki** crear de forma autónoma la portada visual para sus sencillos
 3. **Persistencia en el Workspace Nativo:**
    - Almacena el archivo `.png` en `./output/art/yuki_<modelo>_<timestamp>.png`.
 4. **Entrega:**
-   - Proporciona la ruta local y la URL del CDN generada para adjuntarla al lanzamiento.
+   - Proporciona la **ruta local** del fichero. No existe ninguna URL de CDN que dar: si el resultado trae `simulated: true`, es un marcador de texto y hay que decirlo, no adjuntarlo como si fuera arte.
 
 ## Herramientas
 
@@ -48,11 +48,14 @@ Permite a **Yuki** crear de forma autónoma la portada visual para sus sencillos
 
 | Paso | Herramienta | Detalle |
 |---|---|---|
+| Elegir pasarela | `vertex.image` → `portal.image` | Con `VERTEX_PROJECT_ID` declarado, Imagen sobre el crédito de Google Cloud (≈0,04 USD). Sin él, el Tool Gateway |
 | Elegir modelo | `portal.image` | `fal/flux-2-pro` por defecto · `fal/nano-banana-pro` si la imagen lleva texto legible · `fal/ideogram-v3` para tipografía y carteles · `fal/recraft-v4` para vectorial |
 | Enriquecer el *prompt* | `local.memory` | Recupera el `kigo` de la micro-estación y el prefijo estético de `SOUL.md`. Máximo 5 fragmentos |
 | Generar | `portal.image` | **Una sola imagen por petición.** ≈ 0.005–0.26 USD contra los créditos del Portal |
 | Guardar | — | `./output/art/yuki_<modelo>_<timestamp>.png`, ruta relativa |
 
-**Si `portal.image` falla:** un reintento; luego cae a la Image API de OpenRouter y **dilo en la respuesta**. Si tampoco responde, aborta: no describas una imagen que no existe ni devuelvas una URL inventada.
+**Si falla:** un reintento; luego cae a la siguiente pasarela de la tabla y **dilo en la respuesta**. Si ninguna responde, aborta: no describas una imagen que no existe ni devuelvas una URL inventada. Un resultado con `status: error` nunca se presenta como éxito.
+
+**Para animarla después:** `/animar-portada`, que parte de este `local_path`. Ojo al coste antes de invocarla (§3.bis del catálogo).
 
 **Antes de publicarla:** conserva los metadatos de origen del proveedor (marcado de contenido sintético). No re-codifiques la imagen de forma que se pierdan.

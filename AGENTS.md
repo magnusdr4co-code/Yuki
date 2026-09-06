@@ -9,7 +9,9 @@ Este archivo define la arquitectura del software, flujos de trabajo, rutas del w
 Hermes actúa como el arnés de ejecución y cerebro operativo de **Yuki (Diva Digital Autónoma)**. 
 - **Workspace Nativo:** Hermes opera directamente sobre la raíz del repositorio local. NO intentes forzar rutas protegidas o absolutas de otros arneses (como `~/.openclaw/workspace/`). Todos los archivos de salida generados deben persistirse en `./output/`.
 - **Memoria sin Context Rot:** Todas las consultas sobre el historial, acuerdos del productor y datos de fans deben canalizarse a través del motor `src/memory/fts5_memory.py` (SQLite FTS5), NUNCA reinyectando logs masivos en bruto.
-- **Herramientas Nous Portal:** Utiliza el gateway unificado de Nous Portal (`src/tools/nous_portal.py`) para consumir FAL (imágenes), OpenAI TTS y Whisper (voz), Firecrawl (web), Browser Use (navegador) y Modal (sandbox).
+- **Herramientas de medios:** `src/tools/nous_portal.py` es la puerta única. Por debajo, con proyecto de Google Cloud declarado, sirve `src/tools/vertex_media.py` —Imagen para portadas, Gemini Omni Flash para vídeo y Gemini TTS para voz—; sin él, el gateway de Nous Portal (FAL, OpenAI TTS y Whisper, Firecrawl, Browser Use, Modal).
+- **Un medio simulado se declara:** cuando no hay motor real configurado, la pasarela escribe un marcador de texto y lo devuelve con `simulated: true` y `status: simulated`. Nunca lo presentes como una portada, un vídeo o una nota de voz, y nunca acompañes un medio de una URL que no exista: los ficheros se referencian por su ruta en `./output/`.
+- **El vídeo cuesta por segundo:** Gemini Omni Flash factura ≈0,10 USD por segundo producido. No lo invoques desde tareas del cron ni por iniciativa propia; sólo a petición explícita del productor, y registra el `estimated_cost_usd` que devuelve.
 - **Catálogo canónico:** [`skills/HERRAMIENTAS.md`](skills/HERRAMIENTAS.md) define qué herramienta existe, cómo se invoca, qué cuesta y qué hacer cuando falla. **Si una herramienta no aparece ahí, no existe:** no inventes endpoints ni modelos, no sustituyas una herramienta por otra en silencio y no devuelvas resultados simulados como reales.
 
 ---
