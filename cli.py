@@ -10,6 +10,7 @@ import os
 import sys
 import json
 import argparse
+from pathlib import Path
 
 from src.core.agent import YukiAgent
 from src.memory.fts5_memory import FTS5MemoryEngine
@@ -473,6 +474,41 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_virtualize(output_path=None, as_json=False):
+    """
+    Gemelo virtual de la instancia: capacidades efectivas y limitadores.
+
+    No toca la red ni gasta crédito: lee configuración, entorno y disco. Corre
+    igual en la VM de producción, en la réplica local
+    (`deploy/virtual/docker-compose.virtual.yml`) y en CI, así que las tres
+    respuestas se pueden comparar tal cual.
+    """
+    import yaml
+    from src.core.virtual_instance import VirtualInstance
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    instancia = VirtualInstance(config)
+    contenido = json.dumps(instancia.to_dict(), ensure_ascii=False, indent=2) if as_json \
+        else instancia.render_markdown()
+
+    if output_path:
+        destino = Path(output_path)
+        destino.parent.mkdir(parents=True, exist_ok=True)
+        destino.write_text(contenido + "\n", encoding="utf-8")
+        print(f"{GREEN}Informe escrito en {destino}{RESET}")
+    else:
+        print(contenido)
+
+    resumen = instancia.summary()
+    if not as_json:
+        color = RED if resumen["limitadores_bloqueantes"] else YELLOW
+        print(f"\n{color}Limitadores abiertos: {resumen['limitadores_abiertos']} "
+              f"(bloqueantes: {resumen['limitadores_bloqueantes']}){RESET}")
+    return instancia
+
+
 def main():
     parser = argparse.ArgumentParser(description="CLI de Yuki - Diva Digital Autónoma (Hermes Agent)")
     subparsers = parser.add_subparsers(dest="command", help="Comando a ejecutar")
@@ -506,6 +542,13 @@ def main():
     subparsers.add_parser("vertex-check", help="Probar la ruta de Vertex AI y estimar el gasto del crédito")
     subparsers.add_parser("run-daemon", help="Ejecutar daemon de presencia continua 24/7")
 
+    virt = subparsers.add_parser(
+        "virtualize",
+        help="Gemelo virtual de la instancia: capacidades reales y limitadores (sin red)",
+    )
+    virt.add_argument("--output", help="Escribe el informe en un fichero en vez de la salida estándar")
+    virt.add_argument("--json", action="store_true", help="Emite JSON en vez de Markdown")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -536,6 +579,8 @@ def main():
         cmd_vertex_check()
     elif args.command == "run-daemon":
         cmd_daemon()
+    elif args.command == "virtualize":
+        cmd_virtualize(output_path=args.output, as_json=args.json)
     else:
         parser.print_help()
 

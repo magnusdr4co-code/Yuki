@@ -202,6 +202,7 @@ class YukiAgent:
         active_role: Optional[str] = None,
         is_internal_thought: bool = False,
         producer_tools: bool = False,
+        route: Optional[str] = None,
     ) -> str:
         """
         Ciclo de respuesta de 'Mente Rápida':
@@ -278,7 +279,7 @@ class YukiAgent:
             # Nunca bloquear el gateway Discord esperando inferencia síncrona.
             system_prompt += ("\nEn este turno no hay herramientas de ejecución. No afirmes haber creado "
                               "archivos ni prometas avisos futuros. Declara cualquier acción no disponible.")
-            response_text = await asyncio.to_thread(self._call_llm_inference, system_prompt, message)
+            response_text = await asyncio.to_thread(self._call_llm_inference, system_prompt, message, route)
 
         response_decision = await asyncio.to_thread(
             self.model_armor.sanitize_model_response,
@@ -316,13 +317,14 @@ class YukiAgent:
 
         return response_text
 
-    def _call_llm_inference(self, system_prompt: str, user_message: str) -> str:
+    def _call_llm_inference(self, system_prompt: str, user_message: str,
+                            route: Optional[str] = None) -> str:
         """
         Invocación a la cadena de pasarelas declarada en la arquitectura:
         Nous Portal primero, OpenRouter como agregador, y la voz local de Yuki
         como último recurso cuando no hay red ni claves configuradas.
         """
-        response = self.llm_router.generate(system_prompt, user_message)
+        response = self.llm_router.generate(system_prompt, user_message, route=route)
 
         if response.simulated:
             logger.info(f"Respuesta simulada por la pasarela '{response.provider}' (sin generación real).")

@@ -1,6 +1,6 @@
 # Estado de producción — Yuki
 
-**Verificado:** 2026-09-07 (Europe/Madrid)  
+**Verificado:** 2026-09-07 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)  
 **Proyecto:** `yuki-prod`  
 **Instancia:** `yuki-agent` · Compute Engine `e2-small` · `europe-southwest1-a`
 
@@ -43,8 +43,13 @@ La prueba de importación dentro de `yuki-daemon` confirmó esta ruta tras el de
 
 ## Límites conocidos
 
-- La producción multimedia se ejecuta en memoria; un reinicio no reanuda un trabajo ya
-  iniciado. Biblioteca conserva los recursos y resultados que sí alcanzaron a guardarse.
+- La producción multimedia es ahora un trabajo durable: cada paso facturable se registra
+  en `data/media_jobs/` —el disco persistente de la VM— antes de gastar, y el adaptador
+  reanuda al conectar el gateway lo que quedó a medias, sin regenerar lo ya verificado.
+  Sigue dependiendo de que el proceso vuelva a arrancar: no hay worker externo que
+  retome el trabajo si la instancia no vuelve.
+- Un paso agotado tras tres intentos cierra el trabajo indicando cuál falló, en vez de
+  reintentarse indefinidamente contra el crédito.
 - Los errores de proveedor, formato o adjunto se deben comunicar con el fallo concreto.
   No deben convertirse en prosa que niegue capacidades disponibles.
 - La generación de vídeo y música consume crédito del proyecto: se ejecuta únicamente
@@ -58,3 +63,6 @@ La prueba de importación dentro de `yuki-daemon` confirmó esta ruta tras el de
 4. Comprobar `GET /health` y el log de conexión de Discord.
 5. Ejecutar la prueba pura de intención `looks_like_media_delivery_request` con una orden
    breve de canción y vídeo; no generar medios reales como parte de una prueba de humo.
+6. Ejecutar `python3 cli.py virtualize` dentro de la VM y contrastar el informe con el de
+   la réplica local (`deploy/virtual/docker-compose.virtual.yml`): las diferencias que
+   aparezcan son exactamente lo que aporta el entorno de producción.

@@ -23,11 +23,29 @@ from .discord_intents import (
     looks_like_media_delivery_request as _looks_like_media_delivery_request,
 )
 from .discord_text import split_discord_text
+from ..tools.media_jobs import MediaJobStore, describe_job as describe_media_job
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
 # ID por defecto de Dextrure (Juanlu)
 DEFAULT_PAIRED_PRODUCER_ID = "235796491988369408"
+
+# Guion del encargo audiovisual. Vive aquí y no dentro del bucle porque el
+# número de segmentos define los pasos del trabajo durable: cambiarlo cambia
+# lo que un reinicio considera "ya hecho".
+MEDIA_STORYBOARD = (
+    "Exterior del muelle: lluvia sobre acero oxidado, la escarcha empieza a aparecer.",
+    "Entrada al Salón: vapor de té, seda oscura y reflejos de urushi sobre hierro.",
+    "Interior: la intérprete respira y el poema encuentra su estribillo entre cuerdas tensas.",
+    "Salida: agua, niebla y una luz contenida sobre el metal; final pausado, sin corte brusco.",
+)
+
+# Pasos facturables del encargo multimedia, en orden de ejecución.
+MEDIA_JOB_STEPS = (
+    [("cancion", "cancion")]
+    + [(f"clip_{i}", "clip") for i in range(1, len(MEDIA_STORYBOARD) + 1)]
+    + [("montaje", "montaje"), ("entrega", "entrega")]
+)
 
 def _parse_id_set(raw_env: str) -> Set[str]:
     if not raw_env:
@@ -60,6 +78,9 @@ class DiscordAdapter:
         self.pairing_path = _resolve_pairing_path()
         self._workflow_tasks: Set[object] = set()
         self._producer_lock = asyncio.Lock()
+        # Los encargos multimedia se persisten antes de gastar crédito, así que
+        # un reinicio los reanuda en vez de perderlos.
+        self.media_jobs = MediaJobStore()
 
         intents = discord.Intents.none()
         intents.guilds = True
@@ -85,6 +106,12 @@ class DiscordAdapter:
                 list(self.paired_producer_ids),
                 [str(g.id) for g in self.client.guilds],
             )
+            try:
+                reanudados = await self.resume_pending_media_jobs()
+                if reanudados:
+                    logger.warning("Reanudados %d trabajos multimedia tras el arranque.", reanudados)
+            except Exception:
+                logger.exception("Fallo reanudando trabajos multimedia")
 
         @self.client.event
         async def on_message(message: discord.Message):
@@ -309,6 +336,7 @@ class DiscordAdapter:
                 f"• **Estado Vital:** {vital}\n"
                 f"• **Canal:** DM privada con herramientas de Biblioteca y producción.\n"
                 f"• **Tareas de producción activas:** {len(self._workflow_tasks)}\n"
+                f"• **Trabajos multimedia reanudables:** {len(self.media_jobs.resumable(author_id))}\n"
                 "• No hay shell ni auto-configuración general habilitados."
             )
 
@@ -409,13 +437,64 @@ class DiscordAdapter:
         """El trabajo pesado no bloquea el gateway; los binarios se entregan en el mismo DM."""
         if origin_channel is None:
             return "❌ No tengo un canal de DM para entregar los archivos."
-        task = asyncio.create_task(self._run_dm_media_delivery(author_id, author_name, content, origin_channel))
+        job = self.media_jobs.create(
+            requester_id=author_id,
+            order=content,
+            channel_id=getattr(origin_channel, "id", None),
+            steps=MEDIA_JOB_STEPS,
+        )
+        self._spawn_media_job(job, author_id, author_name, content, origin_channel)
+        return (
+            "⚡ Producción multimedia iniciada como trabajo `" + job.id + "`. Generaré primero la canción "
+            "y después los segmentos de vídeo; sólo confirmaré y adjuntaré archivos reales en este DM. "
+            "Si el proceso se reinicia, el trabajo se reanuda desde el último paso verificado."
+        )
+
+    def _spawn_media_job(self, job, author_id: str, author_name: str, content: str, channel) -> None:
+        task = asyncio.create_task(
+            self._run_dm_media_delivery(author_id, author_name, content, channel, job=job)
+        )
         self._workflow_tasks.add(task)
         task.add_done_callback(self._workflow_tasks.discard)
-        return (
-            "⚡ Producción multimedia iniciada. Generaré primero la canción y después los segmentos "
-            "de vídeo; sólo confirmaré y adjuntaré archivos reales en este DM."
-        )
+
+    async def resume_pending_media_jobs(self) -> int:
+        """
+        Reanuda tras un reinicio los trabajos multimedia que quedaron a medias.
+
+        Se llama al conectar el gateway. Los pasos ya verificados no se vuelven a
+        generar —Veo se factura por segundo—, así que reanudar cuesta sólo lo que
+        falta. Un trabajo sin canal recuperable se cierra como abandonado en vez
+        de quedarse colgado prometiendo una entrega que nadie hará.
+        """
+        reanudados = 0
+        for job in self.media_jobs.resumable():
+            if job.requester_id not in self.paired_producer_ids:
+                self.media_jobs.abandon(job, "el solicitante ya no es un Productor emparejado")
+                continue
+            channel = await self._recover_dm_channel(job)
+            if channel is None:
+                self.media_jobs.abandon(job, "no se pudo recuperar el DM de entrega")
+                continue
+            job.resumed += 1
+            self.media_jobs.save(job)
+            logger.warning(
+                "Reanudando trabajo multimedia %s (%s), reanudación nº %d",
+                job.id, describe_media_job(job), job.resumed,
+            )
+            self._spawn_media_job(job, job.requester_id, "productor", job.order, channel)
+            reanudados += 1
+        return reanudados
+
+    async def _recover_dm_channel(self, job):
+        """Recupera el DM del Productor; sin canal no hay entrega que reanudar."""
+        try:
+            user = self.client.get_user(int(job.requester_id)) or await self.client.fetch_user(int(job.requester_id))
+            if user is None:
+                return None
+            return user.dm_channel or await user.create_dm()
+        except (ValueError, AttributeError, discord.HTTPException) as exc:
+            logger.warning("No pude recuperar el DM del trabajo %s: %s", job.id, type(exc).__name__)
+            return None
 
     def _library_entry(self, kind: str, keywords: tuple[str, ...]) -> Optional[Dict[str, Any]]:
         """Selecciona una obra existente por metadatos, sin interpretar rutas del usuario."""
@@ -458,83 +537,185 @@ class DiscordAdapter:
         finally:
             Path(listing_path).unlink(missing_ok=True)
 
-    async def _run_dm_media_delivery(self, author_id: str, author_name: str, content: str, channel) -> None:
-        """Genera canción cantada y vídeo desde obras existentes; entrega sólo adjuntos reales."""
+    async def _run_dm_media_delivery(self, author_id: str, author_name: str, content: str, channel,
+                                     job=None) -> None:
+        """
+        Genera canción cantada y vídeo desde obras existentes; entrega sólo adjuntos reales.
+
+        El trabajo es durable: cada paso se persiste en cuanto tiene fichero
+        verificado, así que un reinicio a mitad no repite lo ya generado ni deja
+        el encargo perdido. Reanudar cuesta únicamente los pasos que faltan.
+        """
         async def report(text: str) -> None:
             await self._send_long(channel, text)
+
+        if job is None:
+            job = self.media_jobs.create(
+                requester_id=author_id, order=content,
+                channel_id=getattr(channel, "id", None), steps=MEDIA_JOB_STEPS,
+            )
+        job.channel_id = str(getattr(channel, "id", "")) or job.channel_id
 
         try:
             lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema", "herrumbre"))
             lyrics_path = self._library_file(lyrics_entry)
             if not lyrics_entry or not lyrics_path:
+                self.media_jobs.abandon(job, "sin letra verificable en Biblioteca")
                 await report("❌ No encuentro una letra verificable en la Biblioteca; no generaré una canción sin texto fuente.")
                 return
             lyrics = self.agent.creation_library.read_entry(lyrics_entry["id"]).get("content", "")
             if len(lyrics.strip()) < 80:
+                self.media_jobs.abandon(job, "letra demasiado breve")
                 await report("❌ La letra recuperada es demasiado breve para una canción; no la presentaré como canto completo.")
                 return
 
-            await report("🎵 Generando canción con la letra archivada. El adjunto sólo saldrá si Lyria devuelve audio real.")
-            song_prompt = (
-                "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
-                "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
-                "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
-                "and chorus structure:\n" + lyrics[:12000]
-            )
-            song = await self.agent.nous_portal.generate_music_flow(
-                title="Herrumbre y Escarcha — voz", prompt=song_prompt,
-                engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
-            )
-            song_path = song.get("local_path") if song.get("status") == "success" else None
-            if song_path and Path(song_path).is_file():
-                await asyncio.to_thread(self.agent.creation_library.inventory)
-                if not await self._send_file(channel, song_path, "🎵 Canción con letra — archivo generado"):
-                    await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
+            # --- Paso 1: canción -------------------------------------------------
+            song_step = job.ensure_step("cancion", "cancion")
+            if song_step.is_done():
+                await report(f"🎵 Reanudo el trabajo `{job.id}`: la canción ya estaba generada y verificada; no la regenero.")
+            elif song_step.exhausted():
+                await report(f"⚠️ No repito la canción: ya falló {song_step.attempts} veces ({song_step.error}).")
             else:
-                await report(f"⚠️ No se generó canción: {song.get('error') or song.get('note') or 'sin detalle'}")
+                await report("🎵 Generando canción con la letra archivada. El adjunto sólo saldrá si Lyria devuelve audio real.")
+                song_prompt = (
+                    "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
+                    "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
+                    "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
+                    "and chorus structure:\n" + lyrics[:12000]
+                )
+                song_step.attempts += 1
+                self.media_jobs.save(job)
+                song = await self.agent.nous_portal.generate_music_flow(
+                    title="Herrumbre y Escarcha — voz", prompt=song_prompt,
+                    engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
+                )
+                song_path = song.get("local_path") if song.get("status") == "success" else None
+                if song_path and Path(song_path).is_file():
+                    song_step.mark_done(song_path)
+                    self.media_jobs.save(job)
+                    await asyncio.to_thread(self.agent.creation_library.inventory)
+                else:
+                    detalle = song.get("error") or song.get("note") or "sin detalle"
+                    song_step.mark_failed(detalle)
+                    self.media_jobs.save(job)
+                    await report(f"⚠️ No se generó canción: {detalle}")
+            if song_step.is_done() and not song_step.delivered:
+                if await self._send_file(channel, song_step.path, "🎵 Canción con letra — archivo generado"):
+                    song_step.delivered = True
+                    self.media_jobs.save(job)
+                else:
+                    await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
 
+            # --- Paso 2: segmentos de vídeo --------------------------------------
             script_entry = self._library_entry("palabra", ("guion", "audiovisual", "video"))
             script = ""
             if script_entry:
                 script = self.agent.creation_library.read_entry(script_entry["id"]).get("content", "")
             visual_entry = self._library_entry("visual", ("herrumbre", "salon", "escarcha"))
             visual_path = self._library_file(visual_entry)
-            await report("🎬 Generando cuatro segmentos de 8 s y ensamblándolos; no sustituiré el vídeo por un marcador.")
-            storyboard = [
-                "Exterior del muelle: lluvia sobre acero oxidado, la escarcha empieza a aparecer.",
-                "Entrada al Salón: vapor de té, seda oscura y reflejos de urushi sobre hierro.",
-                "Interior: la intérprete respira y el poema encuentra su estribillo entre cuerdas tensas.",
-                "Salida: agua, niebla y una luz contenida sobre el metal; final pausado, sin corte brusco.",
-            ]
-            clips = []
-            for index, beat in enumerate(storyboard, 1):
+            hechos = sum(1 for i in range(1, len(MEDIA_STORYBOARD) + 1)
+                         if job.ensure_step(f"clip_{i}", "clip").is_done())
+            if hechos:
+                await report(f"🎬 {hechos} de {len(MEDIA_STORYBOARD)} segmentos ya estaban verificados; sólo genero los que faltan.")
+            else:
+                await report("🎬 Generando cuatro segmentos de 8 s y ensamblándolos; no sustituiré el vídeo por un marcador.")
+            clips: List[str] = []
+            for index, beat in enumerate(MEDIA_STORYBOARD, 1):
+                clip_step = job.ensure_step(f"clip_{index}", "clip")
+                if clip_step.is_done():
+                    clips.append(clip_step.path)
+                    continue
+                if clip_step.exhausted():
+                    await report(f"⚠️ Segmento {index} descartado tras {clip_step.attempts} intentos: {clip_step.error}")
+                    break
                 prompt = (
                     "Cinematic 16:9, 24 fps, slow meditative camera, no fast cuts. " + beat +
                     " Guion de referencia: " + (script[:2500] or "Herrumbre y Escarcha, agua, hierro e invierno.")
                 )
+                clip_step.attempts += 1
+                self.media_jobs.save(job)
                 video = await self.agent.nous_portal.generate_video_frontier(
                     prompt=prompt, duration_seconds=8, aspect_ratio="16:9", image_path=visual_path,
                 )
                 path = video.get("local_path") if video.get("status") == "success" else None
                 if path and Path(path).is_file():
+                    clip_step.mark_done(path)
+                    self.media_jobs.save(job)
                     clips.append(path)
                 else:
-                    await report(f"⚠️ Segmento {index} no generado: {video.get('error') or video.get('note') or 'sin detalle'}")
+                    detalle = video.get("error") or video.get("note") or "sin detalle"
+                    clip_step.mark_failed(detalle)
+                    self.media_jobs.save(job)
+                    await report(f"⚠️ Segmento {index} no generado: {detalle}")
                     break
-            final_video = await asyncio.to_thread(self._concat_videos, clips) if len(clips) == 4 else None
+
+            # --- Paso 3: montaje y entrega ---------------------------------------
+            montaje = job.ensure_step("montaje", "montaje")
+            final_video = montaje.path if montaje.is_done() else None
+            if final_video is None and len(clips) == len(MEDIA_STORYBOARD):
+                final_video = await asyncio.to_thread(self._concat_videos, clips)
+                if final_video:
+                    montaje.mark_done(final_video)
+                else:
+                    montaje.mark_failed("ffmpeg no produjo el vídeo final")
+                self.media_jobs.save(job)
             if final_video:
                 await asyncio.to_thread(self.agent.creation_library.inventory)
-                if not await self._send_file(channel, final_video, "🎬 Vídeo final — 32 s, cuatro segmentos ensamblados"):
-                    await report("⚠️ El vídeo se generó, pero Discord rechazó el adjunto; no lo doy por entregado.")
+                if not montaje.delivered:
+                    if await self._send_file(channel, final_video, "🎬 Vídeo final — 32 s, cuatro segmentos ensamblados"):
+                        montaje.delivered = True
+                        self.media_jobs.save(job)
+                    else:
+                        await report("⚠️ El vídeo se generó, pero Discord rechazó el adjunto; no lo doy por entregado.")
             elif clips:
                 await report("⚠️ No pude ensamblar el vídeo final; adjunto sólo los segmentos reales disponibles.")
                 for index, path in enumerate(clips, 1):
-                    await self._send_file(channel, path, f"🎬 Segmento {index}")
+                    clip_step = job.ensure_step(f"clip_{index}", "clip")
+                    if clip_step.delivered:
+                        continue
+                    if await self._send_file(channel, path, f"🎬 Segmento {index}"):
+                        clip_step.delivered = True
+                        self.media_jobs.save(job)
             else:
                 await report("⚠️ No se generó ningún segmento de vídeo; no hay vídeo que adjuntar.")
+
+            # El trabajo sólo se cierra cuando no queda nada por hacer. Cerrarlo
+            # con pasos pendientes sería dar por entregado lo que no existe, y
+            # además impediría reanudarlo tras el siguiente arranque.
+            entrega = job.ensure_step("entrega", "entrega")
+            restantes = [p for p in job.pending_steps() if p.id != "entrega"]
+            agotados = [p for p in job.steps if p.exhausted()]
+            if agotados:
+                # Un paso agotado bloquea el encargo entero: seguir reanudándolo
+                # sólo quemaría crédito en los pasos que sí funcionan. Se cierra
+                # diciendo cuál falló, y hace falta una orden nueva.
+                motivo = f"paso {agotados[0].id} agotado tras {agotados[0].attempts} intentos"
+                self.media_jobs.abandon(job, motivo)
+                await report(
+                    f"⛔ Trabajo `{job.id}` cerrado sin completar: {motivo} "
+                    f"({agotados[0].error}). Lo entregado consta adjunto; para retomarlo hace falta "
+                    "una orden nueva."
+                )
+            elif restantes:
+                self.media_jobs.save(job)
+                await report(
+                    f"⏸️ Trabajo `{job.id}` incompleto: quedan "
+                    f"{', '.join(p.id for p in restantes)}. No los doy por entregados; "
+                    "el trabajo queda registrado y se reanuda en el próximo arranque."
+                )
+                logger.warning("Trabajo multimedia incompleto: %s", describe_media_job(job))
+            else:
+                entrega.mark_done()
+                entrega.delivered = True
+                self.media_jobs.finish(job)
+                logger.info("Trabajo multimedia cerrado: %s", describe_media_job(job))
         except Exception:
             logger.exception("Fallo en producción multimedia por DM")
-            await report("❌ La producción multimedia falló; no doy por generados ni entregados archivos que no consten adjuntos.")
+            self.media_jobs.save(job)
+            await report(
+                "❌ La producción multimedia falló; no doy por generados ni entregados archivos que no consten "
+                f"adjuntos. El trabajo `{job.id}` queda registrado y reanudable desde el último paso verificado."
+            )
 
     async def _run_discord_production(
         self,

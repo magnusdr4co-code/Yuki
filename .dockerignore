@@ -25,6 +25,9 @@ data/*.db-shm
 data/*.db-wal
 data/vital_state.json
 data/honcho_profile.json
+# Trabajos multimedia en curso: son del disco de la instancia, no de la imagen
+data/media_jobs/
+data/runtime_overrides.json
 media_cache/
 
 # Artefactos generados por Yuki

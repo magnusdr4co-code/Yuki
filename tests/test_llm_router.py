@@ -9,6 +9,7 @@ por válida.
 import sys
 import os
 import logging
+import types
 import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -151,12 +152,14 @@ class ProveedorFalso(LLMProvider):
         self._available = available
         self._text = text
         self.llamado = False
+        self.opciones = None
 
     def is_available(self):
         return self._available
 
-    def generate(self, system_prompt, user_message):
+    def generate(self, system_prompt, user_message, options=None):
         self.llamado = True
+        self.opciones = options
         if self._text is None:
             return None
         return LLMResponse(text=self._text, provider=self.name)
@@ -861,3 +864,117 @@ def test_vertex_does_not_swallow_interrupts(interrupcion, transporte_de_auth_sim
 
     with pytest.raises(interrupcion):
         proveedor._access_token()
+
+
+# --- Enrutado por tarea (provider_routing.routes) ---
+
+CONFIG_RUTAS = {
+    "agent": {"model": {"primary_model": "upstage/solar-pro4",
+                        "fallback_model": "qwen/qwen3-30b-a3b",
+                        "temperature": 0.72, "max_tokens": 2048}},
+    "provider_routing": {
+        "enabled": True,
+        "aggregator": "openrouter",
+        "routes": {
+            "feed_summary": {"tier": "fast_and_cheap", "preferred_model": "google/gemini-2.0-flash",
+                             "max_tokens": 350, "temperature": 0.3},
+        },
+    },
+}
+
+
+class ClienteFalso:
+    """Cliente OpenAI-compatible que registra con qué parámetros se le llamó."""
+
+    def __init__(self):
+        self.llamadas = []
+        self.chat = self
+        self.completions = self
+
+    def create(self, **kwargs):
+        self.llamadas.append(kwargs)
+        mensaje = type("M", (), {"content": "texto"})()
+        eleccion = type("C", (), {"message": mensaje, "finish_reason": "stop"})()
+        return type("R", (), {"choices": [eleccion], "usage": None})()
+
+    def with_options(self, **kwargs):
+        return self
+
+
+def test_build_routes_respeta_el_interruptor():
+    from src.core.llm_router import build_routes
+
+    assert set(build_routes(CONFIG_RUTAS)) == {"feed_summary"}
+    apagado = {**CONFIG_RUTAS, "provider_routing": {**CONFIG_RUTAS["provider_routing"], "enabled": False}}
+    assert build_routes(apagado) == {}
+    assert build_routes({}) == {}
+
+
+def test_ruta_impone_modelo_y_ajustes_en_el_agregador(monkeypatch):
+    proveedor = OpenRouterProvider(api_key="sk-real-key", primary_model="upstage/solar-pro4",
+                                   fallback_model="qwen/qwen3-30b-a3b", temperature=0.72, max_tokens=2048)
+    cliente = ClienteFalso()
+    monkeypatch.setattr(proveedor, "_client", lambda: cliente)
+    router = LLMRouter(config=CONFIG_RUTAS, providers=[proveedor])
+
+    router.generate("sistema", "resume esto", route="feed_summary")
+
+    llamada = cliente.llamadas[0]
+    assert llamada["model"] == "google/gemini-2.0-flash"
+    assert llamada["max_tokens"] == 350
+    assert llamada["temperature"] == 0.3
+
+
+def test_sin_ruta_se_usa_la_configuracion_de_agent_model(monkeypatch):
+    proveedor = OpenRouterProvider(api_key="sk-real-key", primary_model="upstage/solar-pro4",
+                                   temperature=0.72, max_tokens=2048)
+    cliente = ClienteFalso()
+    monkeypatch.setattr(proveedor, "_client", lambda: cliente)
+    router = LLMRouter(config=CONFIG_RUTAS, providers=[proveedor])
+
+    router.generate("sistema", "hola")
+
+    assert cliente.llamadas[0]["model"] == "upstage/solar-pro4"
+    assert cliente.llamadas[0]["max_tokens"] == 2048
+
+
+def test_el_modelo_de_la_ruta_no_se_impone_a_vertex(monkeypatch):
+    """Vertex nombra sus modelos con el publisher de Google; el del agregador daría 404."""
+    proveedor = VertexProvider(project_id="yuki-prod", location="global",
+                               primary_model="google/gemini-3.8-flash", fallback_model="")
+    cliente = ClienteFalso()
+    monkeypatch.setattr(proveedor, "_access_token", lambda: "token")
+    # El SDK `openai` no hace falta instalado para comprobar qué se le pediría.
+    monkeypatch.setitem(sys.modules, "openai", types.SimpleNamespace(OpenAI=lambda **kwargs: cliente))
+    router = LLMRouter(config=CONFIG_RUTAS, providers=[proveedor])
+
+    router.generate("sistema", "resume esto", route="feed_summary")
+
+    llamada = cliente.llamadas[0]
+    assert llamada["model"] == "google/gemini-3.8-flash"
+    # Temperatura y techo sí son agnósticos y se aplican.
+    assert llamada["max_tokens"] == 350
+    assert llamada["temperature"] == 0.3
+
+
+def test_ruta_desconocida_avisa_una_vez_y_no_deja_muda_a_yuki(caplog):
+    router = LLMRouter(config=CONFIG_RUTAS, providers=[LocalVoiceProvider()])
+
+    with caplog.at_level(logging.WARNING):
+        primera = router.generate("sistema", "hola", route="ruta_inventada")
+        router.generate("sistema", "hola", route="ruta_inventada")
+
+    assert primera.text
+    avisos = [r for r in caplog.records if "ruta_inventada" in r.getMessage()]
+    assert len(avisos) == 1
+
+
+def test_la_ruta_llega_al_proveedor(monkeypatch):
+    proveedor = ProveedorFalso("openrouter", True, "hecho")
+    router = LLMRouter(config=CONFIG_RUTAS, providers=[proveedor])
+
+    router.generate("sistema", "resume", route="feed_summary")
+
+    assert proveedor.opciones is not None
+    assert proveedor.opciones.name == "feed_summary"
+    assert proveedor.opciones.tier == "fast_and_cheap"

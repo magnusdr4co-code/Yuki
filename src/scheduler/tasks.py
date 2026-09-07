@@ -39,7 +39,10 @@ class AutonomousTasks:
             user_id="autonomous_cron",
             user_name="Noche",
             message=prompt,
-            is_internal_thought=True
+            is_internal_thought=True,
+            # Resumir corrientes ajenas es la tarea más barata del día: sale por
+            # el tier `fast_and_cheap` declarado en config.yaml.
+            route="feed_summary",
         )
         
         logger.info(f"Reflexión nocturna de Yuki: {reflection}")
@@ -78,7 +81,8 @@ class AutonomousTasks:
             user_id="autonomous_cron",
             user_name="Alba",
             message=haiku_prompt,
-            is_internal_thought=True
+            is_internal_thought=True,
+            route="social_formatting",
         )
 
         visual_concept = "Luz dorada de la mañana entrando en un salón de té tradicional con reflejos de lluvia en el cristal."
@@ -132,7 +136,10 @@ class AutonomousTasks:
             user_id="autonomous_cron",
             user_name="Cierre de Jornada",
             message=synthesis_prompt,
-            is_internal_thought=True
+            is_internal_thought=True,
+            # La síntesis del día sí merece el tier profundo: es lo que queda
+            # escrito en memoria y condiciona los días siguientes.
+            route="dialectic_synthesis",
         )
 
         self.agent.memory_manager.save_daily_synthesis(

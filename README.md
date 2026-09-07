@@ -101,6 +101,19 @@ python3 cli.py cron-task --name morning_inspiration_drop
 
 # Iniciar el daemon 24/7 en segundo plano
 python3 cli.py run-daemon
+
+# Ver qué es real y qué es andamiaje en este entorno, con los limitadores abiertos
+python3 cli.py virtualize
+```
+
+### 3.1 Réplica local de la instancia de producción
+```bash
+# Los dos procesos de la VM, con su disco compartido y los límites de una e2-small
+docker compose -f deploy/virtual/docker-compose.virtual.yml up --build
+
+# Sólo el informe de limitadores: arranca, escribe y termina
+docker compose -f deploy/virtual/docker-compose.virtual.yml --profile check \
+  run --rm yuki-virtual-check
 ```
 
 ### 4. Ejecución de Tests Automatizados
@@ -163,11 +176,13 @@ contratar servicios de pago o de prometer una demo.
 | Generación de texto vía Vertex AI | ✅ Real | Endpoint compatible con OpenAI, autenticado con credenciales del proyecto (ADC). Opcional: inactiva hasta declarar `VERTEX_PROJECT_ID` |
 | Cadena de pasarelas | ✅ Real | Nous Portal → Vertex → OpenRouter → voz local, en `src/core/llm_router.py` |
 | Pasarela Nous Portal | ⚠️ Interfaz lista, mock | El endpoint no existe aún; `NOUS_PORTAL_MODE=mock` para trabajar sin red |
-| Enrutado por tiers (`provider_routing.routes`) | ⚠️ Sin implementar | Se usa `agent.model`; los tiers por tarea (feed, formateo, composición) siguen sin leerse |
+| Enrutado por tiers (`provider_routing.routes`) | ✅ Real | `LLMRouter.generate(..., route=...)` aplica modelo preferente, temperatura y `max_tokens` por tarea; el modelo de la ruta sólo se impone al agregador declarado, no a Vertex. Cableado en las rutinas del cron |
 | Imagen, vídeo y voz vía Vertex AI | ✅ Real | `src/tools/vertex_media.py`: Imagen (portadas), Gemini Omni Flash (vídeo) y Gemini TTS (voz en OGG Opus nativo). Opcional: inactivo hasta declarar `VERTEX_PROJECT_ID` |
 | Nous Portal: imagen, música, voz | ⚠️ Marcador | Sin Vertex configurado, `src/tools/nous_portal.py` escribe ficheros de marcador **declarados como simulados**. La música no tiene motor contratado en ninguna ruta: usa `local.midi` |
 | Firecrawl / búsqueda web | ⚠️ Simulado | Sin cliente HTTP |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
+| Cola durable de producción multimedia | ✅ Real | `src/tools/media_jobs.py`: cada paso facturable se persiste antes de gastar y se reanuda tras un reinicio sin regenerar lo verificado |
+| Gemelo virtual de la instancia | ✅ Real | `python3 cli.py virtualize`: capacidades efectivas y limitadores, sin red. Réplica local en `deploy/virtual/` |
 | Adaptador Discord | ✅ Real | WebSocket saliente; responde a menciones y mensajes directos con `discord.py` |
 | Adaptador Telegram | ⚠️ Simulado | Registra en log; aún no usa `python-telegram-bot` |
 
@@ -211,9 +226,12 @@ python3 cli.py skill animar-portada  --duration 6 --image-path output/art/<porta
 ```
 
 Lo que falta para cerrar la arquitectura: implementar `_call_remote` de
-`NousPortalProvider` cuando exista el endpoint, un motor de música (ninguna
-pasarela contratada sirve audio musical hoy; las partituras salen de
-`local.midi`), y el enrutado por tiers de `provider_routing.routes`.
+`NousPortalProvider` cuando exista el endpoint y contratar o construir un motor
+de música de respaldo (hoy la canción cantada depende por entero de una preview
+de Vertex; las partituras salen de `local.midi`). El enrutado por tiers ya se
+aplica. La lista completa de limitadores, con gravedad y vía de salida, está en
+[`docs/VIRTUALIZACION_Y_MEJORAS.md`](docs/VIRTUALIZACION_Y_MEJORAS.md) y se puede
+regenerar para el entorno actual con `python3 cli.py virtualize`.
 
 ---
 
@@ -228,3 +246,4 @@ pasarela contratada sirve audio musical hoy; las partituras salen de
 - 🚀 [Guía de Despliegue en VPS y Serverless (`docs/DEPLOYMENT_GUIDE.md`)](docs/DEPLOYMENT_GUIDE.md)
 - ☁️ [Despliegue en Google Cloud (`docs/GCP_DEPLOYMENT.md`)](docs/GCP_DEPLOYMENT.md)
 - 🛰️ [Runbook: aterrizar Yuki en un proyecto real de GCloud (`docs/RUNBOOK_GCLOUD.md`)](docs/RUNBOOK_GCLOUD.md) — encargo autocontenido para un agente con acceso a `gcloud`
+- 🧪 [Virtualización de la instancia, limitadores y mejoras (`docs/VIRTUALIZACION_Y_MEJORAS.md`)](docs/VIRTUALIZACION_Y_MEJORAS.md) — réplica local, gemelo virtual y hoja de ruta

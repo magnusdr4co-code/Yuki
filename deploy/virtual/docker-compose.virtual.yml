@@ -1,0 +1,84 @@
+# ==========================================================================
+# Réplica local de la instancia de producción `yuki-agent`.
+#
+# Espeja lo que `deploy/gce-startup.sh` levanta en la VM: la misma imagen,
+# los dos mismos contenedores y un único directorio de datos montado en los
+# dos, como el disco persistente de Compute Engine. Los límites de memoria
+# reproducen una `e2-small` (2 GB para toda la máquina), que es donde
+# aparecen los problemas que no se ven en un portátil.
+#
+# Lo que NO se replica, a propósito: Secret Manager, la identidad de servicio
+# de la VM y el crédito de Google Cloud. Sin `VERTEX_PROJECT_ID` los medios
+# devuelven marcadores declarados como simulados, que es justo lo que se
+# quiere para probar la ruta sin gastar un céntimo.
+#
+#   docker compose -f deploy/virtual/docker-compose.virtual.yml up --build
+#   docker compose -f deploy/virtual/docker-compose.virtual.yml \
+#       run --rm yuki-virtual-check
+# ==========================================================================
+
+name: yuki-virtual
+
+x-instancia: &instancia
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  image: yuki-agent:virtual
+  env_file:
+    - path: ../../.env
+      required: false
+  environment:
+    ENVIRONMENT: production
+    LOG_LEVEL: INFO
+    DATABASE_PATH: /app/data/yuki_memory.db
+    NOUS_PORTAL_MODE: ${NOUS_PORTAL_MODE:-disabled}
+    TZ: Europe/Madrid
+    # Marca la réplica para que el gemelo virtual no la confunda con la VM real.
+    YUKI_VIRTUAL_INSTANCE: "1"
+  volumes:
+    # Igual que la VM: un solo disco, con `output/` colgando de él.
+    - yuki-virtual-data:/app/data
+    - type: volume
+      source: yuki-virtual-data
+      target: /app/output
+      volume:
+        subpath: output
+  restart: unless-stopped
+
+services:
+  yuki-salon:
+    <<: *instancia
+    container_name: yuki-virtual-salon
+    command: ["python", "cli.py", "web"]
+    ports:
+      - "${YUKI_VIRTUAL_PORT:-8080}:8080"
+    deploy:
+      resources:
+        limits:
+          # La mitad de la e2-small para cada proceso, como en la VM.
+          memory: 1G
+          cpus: "1.0"
+
+  yuki-daemon:
+    <<: *instancia
+    container_name: yuki-virtual-daemon
+    command: ["python", "cli.py", "run-daemon"]
+    depends_on:
+      - yuki-salon
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  # Perfil de diagnóstico: arranca, escribe el informe de limitadores en el
+  # volumen compartido y termina. No abre puertos ni habla con Discord.
+  yuki-virtual-check:
+    <<: *instancia
+    container_name: yuki-virtual-check
+    restart: "no"
+    profiles: ["check"]
+    command: ["python", "cli.py", "virtualize", "--output", "/app/output/virtual/informe.md"]
+
+volumes:
+  yuki-virtual-data:

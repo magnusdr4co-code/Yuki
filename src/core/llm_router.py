@@ -200,6 +200,54 @@ class LLMResponse:
     finish_reason: str = ""
 
 
+@dataclass
+class RouteOptions:
+    """
+    Ajustes de una tarea concreta, declarados en `provider_routing.routes`.
+
+    Estaban en `config.yaml` desde el principio y no los leía nadie: toda
+    petición salía con el modelo y la temperatura de `agent.model`, así que un
+    resumen de feed costaba lo mismo que una síntesis dialéctica. Esto los
+    aplica.
+
+    `preferred_model` se nombra a través del agregador (`upstage/solar-pro4`),
+    así que **sólo** se pasa a la pasarela agregadora declarada en
+    `provider_routing.aggregator`. Vertex nombra sus modelos con el publisher de
+    Google y rechazaría ese identificador; ahí se aplican únicamente temperatura
+    y `max_tokens`, que sí son agnósticos.
+    """
+
+    name: str
+    tier: str = ""
+    preferred_model: str = ""
+    max_tokens: Optional[int] = None
+    temperature: Optional[float] = None
+
+    def model_for(self, provider_name: str, aggregator: str) -> str:
+        if not self.preferred_model:
+            return ""
+        return self.preferred_model if provider_name == aggregator else ""
+
+
+def build_routes(config: Optional[Dict[str, Any]]) -> Dict[str, RouteOptions]:
+    """Lee `provider_routing.routes`; devuelve vacío si está deshabilitado."""
+    routing = (config or {}).get("provider_routing", {}) or {}
+    if not routing.get("enabled", False):
+        return {}
+    rutas: Dict[str, RouteOptions] = {}
+    for nombre, datos in (routing.get("routes") or {}).items():
+        if not isinstance(datos, dict):
+            continue
+        rutas[str(nombre)] = RouteOptions(
+            name=str(nombre),
+            tier=str(datos.get("tier", "") or ""),
+            preferred_model=normalize_model(str(datos.get("preferred_model", "") or "")),
+            max_tokens=datos.get("max_tokens"),
+            temperature=datos.get("temperature"),
+        )
+    return rutas
+
+
 class LLMProvider(ABC):
     """Contrato mínimo de una pasarela de lenguaje."""
 
@@ -210,8 +258,22 @@ class LLMProvider(ABC):
         """Si esta pasarela puede atender una petición ahora mismo."""
 
     @abstractmethod
-    def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
+    def generate(self, system_prompt: str, user_message: str,
+                 options: Optional[RouteOptions] = None) -> Optional[LLMResponse]:
         """Devuelve la respuesta, o None si falla y hay que caer a la siguiente."""
+
+    def _tuning(self, options: Optional[RouteOptions], aggregator: str = "") -> tuple:
+        """Temperatura, `max_tokens` y modelo preferente efectivos para esta llamada."""
+        temperature = getattr(self, "temperature", 0.72)
+        max_tokens = getattr(self, "max_tokens", 1024)
+        preferido = ""
+        if options is not None:
+            if options.temperature is not None:
+                temperature = options.temperature
+            if options.max_tokens is not None:
+                max_tokens = options.max_tokens
+            preferido = options.model_for(self.name, aggregator)
+        return temperature, max_tokens, preferido
 
 
 class NousPortalProvider(LLMProvider):
@@ -247,7 +309,8 @@ class NousPortalProvider(LLMProvider):
     def is_available(self) -> bool:
         return self.mode == self.MODE_MOCK
 
-    def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
+    def generate(self, system_prompt: str, user_message: str,
+                 options: Optional[RouteOptions] = None) -> Optional[LLMResponse]:
         if self.mode != self.MODE_MOCK:
             return None
 
@@ -421,7 +484,8 @@ class VertexProvider(LLMProvider):
                 "set-service-account <vm> --scopes=cloud-platform"
             )
 
-    def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
+    def generate(self, system_prompt: str, user_message: str,
+                 options: Optional[RouteOptions] = None) -> Optional[LLMResponse]:
         if not self.is_available():
             return None
 
@@ -441,14 +505,19 @@ class VertexProvider(LLMProvider):
 
         client = OpenAI(api_key=token, base_url=self.base_url)
 
+        # Vertex nombra sus modelos con el publisher de Google, así que una ruta
+        # no puede imponerle un identificador del agregador; sí su temperatura y
+        # su techo de salida.
+        temperature, max_tokens, _ = self._tuning(options)
+
         models = [m for m in (self.primary_model, self.fallback_model) if m]
         ultimo_error = "sin modelos declarados"
         for model in models:
             try:
                 resp = client.chat.completions.create(
                     model=model,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message},
@@ -500,7 +569,8 @@ class OpenRouterProvider(LLMProvider):
         from openai import OpenAI
         return OpenAI(api_key=self.api_key, base_url=self.base_url)
 
-    def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
+    def generate(self, system_prompt: str, user_message: str,
+                 options: Optional[RouteOptions] = None) -> Optional[LLMResponse]:
         if not self.is_available():
             return None
 
@@ -510,13 +580,18 @@ class OpenRouterProvider(LLMProvider):
             logger.error("El paquete 'openai' no está instalado; no se puede usar OpenRouter.")
             return None
 
-        models = [m for m in (self.primary_model, self.fallback_model) if m]
+        temperature, max_tokens, preferido = self._tuning(options, aggregator=self.name)
+
+        # El modelo de la ruta va primero; los de `agent.model` quedan detrás
+        # como respaldo, para que una ruta mal escrita degrade en vez de mudar.
+        models = [m for m in (preferido, self.primary_model, self.fallback_model) if m]
+        models = list(dict.fromkeys(models))
         for model in models:
             try:
                 resp = client.chat.completions.create(
                     model=model,
-                    temperature=self.temperature,
-                    max_tokens=self.max_tokens,
+                    temperature=temperature,
+                    max_tokens=max_tokens,
                     messages=[
                         {"role": "system", "content": system_prompt},
                         {"role": "user", "content": user_message},
@@ -564,7 +639,8 @@ class LocalVoiceProvider(LLMProvider):
     def is_available(self) -> bool:
         return True
 
-    def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
+    def generate(self, system_prompt: str, user_message: str,
+                 options: Optional[RouteOptions] = None) -> Optional[LLMResponse]:
         return LLMResponse(
             text=local_voice_response(user_message),
             provider=self.name,
@@ -585,6 +661,13 @@ class LLMRouter:
 
         nous_cfg = config.get("nous_portal", {}) or {}
         vertex_cfg = config.get("vertex_ai", {}) or {}
+
+        # Enrutado por tarea. `aggregator` decide a qué pasarela se le puede
+        # imponer el modelo de la ruta; el resto sólo recibe temperatura y techo.
+        routing_cfg = config.get("provider_routing", {}) or {}
+        self.aggregator = str(routing_cfg.get("aggregator", "openrouter") or "openrouter")
+        self.routes = build_routes(config)
+        self._rutas_desconocidas: set = set()
 
         self.providers = providers if providers is not None else [
             NousPortalProvider(base_url=nous_cfg.get("base_url", NOUS_PORTAL_BASE_URL)),
@@ -646,13 +729,46 @@ class LLMRouter:
                 logger.warning("Pasarela agéntica indisponible: %s", type(exc).__name__)
         raise RuntimeError("Ningún proveedor devolvió un turno de herramientas completo")
 
-    def generate(self, system_prompt: str, user_message: str) -> LLMResponse:
+    def resolve_route(self, route: Optional[str]) -> Optional[RouteOptions]:
+        """
+        Ajustes declarados para una tarea, o `None` si no hay ruta aplicable.
+
+        Una ruta que no existe en la configuración no es un error fatal: se
+        avisa una vez y la petición sale con los valores de `agent.model`. Callar
+        aquí sería el fallo caro —el enrutado parecería activo sin serlo—, y
+        abortar dejaría muda a Yuki por una errata en un YAML.
+        """
+        if not route:
+            return None
+        opciones = self.routes.get(route)
+        if opciones is None:
+            if route not in self._rutas_desconocidas:
+                self._rutas_desconocidas.add(route)
+                estado = "deshabilitado" if not self.routes else "sin esa entrada"
+                logger.warning(
+                    "Ruta '%s' no declarada en provider_routing (%s); se usa la configuración "
+                    "de agent.model.", route, estado,
+                )
+            return None
+        return opciones
+
+    def generate(self, system_prompt: str, user_message: str,
+                 route: Optional[str] = None) -> LLMResponse:
+        options = self.resolve_route(route)
+        if options is not None:
+            logger.info(
+                "Ruta '%s' (tier %s): modelo preferente '%s', max_tokens=%s, temperatura=%s",
+                options.name, options.tier or "sin declarar",
+                options.preferred_model or "el de agent.model",
+                options.max_tokens, options.temperature,
+            )
+
         for provider in self.providers:
             if not provider.is_available():
                 logger.debug(f"Pasarela '{provider.name}' no disponible; se prueba la siguiente.")
                 continue
 
-            response = provider.generate(system_prompt, user_message)
+            response = provider.generate(system_prompt, user_message, options)
             if response is not None and response.text:
                 return response
 

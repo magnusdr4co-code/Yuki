@@ -37,8 +37,13 @@ El reconocimiento tolera órdenes naturales breves como “procede con la canci�
 vídeo”; no exige que el Productor repita “pásamelos”. El log del daemon registra la ruta
 elegida (`canal_produccion` y `media_entrega`) sin registrar contenido ni secretos. Un
 fallo de un proveedor multimedia se comunica como fallo real de ese trabajo, no como una
-afirmación de que Yuki carece de herramientas. Un reinicio corta trabajos multimedia en
-memoria: no existe aún una cola durable que pueda reanudarlos automáticamente.
+afirmación de que Yuki carece de herramientas. Los trabajos multimedia son durables: cada
+paso facturable —canción, cada clip, montaje y entrega— se persiste en `data/media_jobs/`
+antes de gastar y se marca al tener fichero verificado, así que un reinicio reanuda desde
+el último paso y no vuelve a pagar lo hecho. Un paso cuyo fichero desapareció deja de
+contar como hecho; uno que falló tres veces cierra el trabajo nombrando el fallo, y un
+trabajo con pasos pendientes no se cierra como terminado. `!status` informa de los
+trabajos reanudables.
 
 ## Terminal y configuración
 

@@ -61,6 +61,9 @@ data/*.db-shm
 data/*.db-wal
 data/vital_state.json
 data/honcho_profile.json
+# Trabajos multimedia en curso: viven en el disco de la instancia.
+data/media_jobs/
+data/runtime_overrides.json
 media_cache/
 
 # OS / Editor
