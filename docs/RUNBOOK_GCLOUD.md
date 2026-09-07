@@ -32,6 +32,7 @@ No recorras el repositorio entero. Cinco ficheros bastan, y en este orden:
 | `src/tools/vertex_media.py` | Los tres motores de medios |
 | `docs/GCP_DEPLOYMENT.md`, sección *Servir los modelos desde el crédito* | El porqué de la ruta elegida |
 | `AGENTS.md` | Las reglas que no puedes romper (ver §7) |
+| `docs/INFORME_CREDITO_GCLOUD.md` | Qué se ha verificado ya, y los tres defectos que impedían que el crédito se consumiera |
 
 ---
 
@@ -46,11 +47,59 @@ Hay dos formas de llamar a Gemini y **sólo una consume el crédito de prueba**:
 
 Por eso el código **no** se autentica con una clave. Si en algún momento te tienta rellenar `GEMINI_API_KEY` para "que funcione antes", estarás facturando fuera del crédito. No lo hagas.
 
+### 1.bis Cómo se lee el panel de facturación
+
+Dos columnas de la tabla de costes: **Product** dice por qué API salió el gasto, y **Other savings** dice si el crédito lo cubrió.
+
+| Lo que ves en *Product* | Qué API es | ¿Toca el crédito? |
+|---|---|---|
+| **Vertex AI** (aparece como *Agent Platform API* en la lista de APIs) | `aiplatform.googleapis.com` | **Sí** |
+| **Gemini API** | `generativelanguage.googleapis.com` (AI Studio) | **No** |
+
+Verificado contra el panel del productor el 7 de septiembre de 2026: Vertex AI llevaba €0,18 de uso y −€0,18 en *Other savings* (subtotal €0), mientras que Gemini API llevaba €2,01 y €0,00 de descuento. **El crédito funciona; lo que no cubre es AI Studio.**
+
+Una línea con el producto **Gemini API** significa que el gasto salió por AI Studio, y **Yuki no llama nunca a esa API**: viene de otro proceso, de otra herramienta o de una clave suelta.
+
+Si aparece gasto bajo *Gemini API*:
+
+1. `python3 cli.py vertex-check` — avisa si hay `GEMINI_API_KEY`/`GOOGLE_API_KEY` en el entorno.
+2. Quita esa variable del `.env`, del despliegue de Cloud Run y de los Jobs.
+3. En `Billing → Cost table`, **agrupa por proyecto**. Las claves de AI Studio viven en un proyecto propio, con el nombre autogenerado `gen-lang-client-*`, y sus cuentas de servicio llevan el prefijo `ais-gemini-key-*`. Ese gasto no es de Yuki.
+4. `hermes_config.yaml` declara `google: "${GEMINI_API_KEY}"`, pero **ese fichero no lo carga ningún código de este repositorio**: es la plantilla de `~/.hermes/config.yaml`, del harness. Descartado como origen.
+
+### 1.quater Cuidado con los cuatro nombres parecidos
+
+En la lista de APIs habilitadas **no busques «Vertex AI»**: hoy aparece como **«Agent Platform API»**, por el rebautizado a *Gemini Enterprise Agent Platform*.
+
+| Nombre en el panel | Servicio | Papel |
+|---|---|---|
+| **Agent Platform API** | `aiplatform.googleapis.com` | **Vertex AI. La que consume el crédito.** No la desactives |
+| Gemini API | `generativelanguage.googleapis.com` | AI Studio. La que factura fuera del crédito |
+| Gemini for Google Cloud API | Asistencia de Gemini en la consola | Nada que ver con Yuki |
+| Gemini Cloud Assist API | Ídem | Nada que ver con Yuki |
+
+Antes de desactivar ninguna, confirma el nombre del servicio pinchando en ella: los rótulos cambian, los `*.googleapis.com` no.
+
+### 1.ter El endpoint: dónde se rompía la alineación
+
+El host de Vertex depende de la región, y **`global` es el caso especial: no lleva prefijo.**
+
+```
+global              -> https://aiplatform.googleapis.com/...
+europe-southwest1   -> https://europe-southwest1-aiplatform.googleapis.com/...
+```
+
+Hasta esta corrección, `VertexProvider` componía siempre `{location}-aiplatform.googleapis.com`, de modo que con la región `global` —la que traen `config.yaml`, `.env.example` y `cloudbuild.yaml`, y la que este runbook recomienda probar primero— llamaba a `global-aiplatform.googleapis.com`. Ese nombre **resuelve** (comodín `*.googleapis.com`) pero devuelve un **404** de Google. `generate` se tragaba el fallo, devolvía `None` y la cadena caía a OpenRouter sin decir nada: Yuki respondía con normalidad y el crédito de Google Cloud no se tocaba jamás.
+
+Ya está corregido, con test de regresión (`test_vertex_global_endpoint_has_no_region_prefix`), y `vertex-check` imprime ahora el endpoint resuelto. Si Vertex está configurada y aun así falla, el log lo dice en voz alta en vez de degradarse en silencio.
+
 ---
 
 ## 2. Cuenta y proyecto
 
 El productor tiene **dos cuentas de Google**. La que debe quedar activa es **`magnus.dr4co@gmail.com`**. Confírmalo antes de gastar un céntimo: un error aquí carga el gasto al proyecto de la otra cuenta.
+
+La cuenta de facturación es **`01E208-BEDDAC-B94E7E`** y tiene tres proyectos. El de Yuki es **`yuki-prod`** («Yuki Digital Diva»); ése es el valor de `VERTEX_PROJECT_ID`. Los otros dos (`gen-lang-client-0734039446`, generado por AI Studio, y `project-3b69d116-9099-4e2f-a68`) **no** son el sitio donde debe correr Yuki.
 
 ```bash
 gcloud auth login magnus.dr4co@gmail.com
@@ -102,8 +151,10 @@ Esta es la razón de ser del encargo. Cada fila se fijó sobre documentación o 
 | 3 | `imagen-4.0-generate-001` existe | `vertex_ai.media.image_model` | Media | Prueba `imagen-3.0-generate-002` |
 | 4 | `gemini-omni-flash-preview` existe y acepta `interactions` | `vertex_ai.media.video_model` | **Baja — está en *preview*** | Ver §4.bis |
 | 5 | `gemini-2.5-flash-tts` existe con voz `Aoede` y `es-es` | `vertex_ai.media.tts_model` | Media-alta | Prueba `gemini-3.1-flash-tts-preview` |
-| 6 | La región `global` sirve los cinco modelos | `vertex_ai.location` | **Baja** | Ver §4.ter |
-| 7 | El SDK acepta `genai.Client(enterprise=True, ...)` | — (código) | Media | El código ya cae solo a `vertexai=True`; comprueba en el log que no falle |
+| 6 | La región `global` sirve los cinco modelos | `vertex_ai.location` | **Baja** | Ver §4.ter. El *endpoint* `global` ya está verificado (§1.ter); qué modelos sirve, no |
+| 7 | El SDK acepta `genai.Client(enterprise=True, ...)` | — (código) | ✅ **Verificado** | `enterprise` es un parámetro real en `google-genai` 2.22, alias de `vertexai`. El fallback cubre las 1.x |
+
+> Los supuestos 1 a 5 siguen sin verificar: hacen falta credenciales de un proyecto real. Lo que sí se ha comprobado sin gastar un céntimo está en **`docs/INFORME_CREDITO_GCLOUD.md`**.
 
 ### Cómo verificar de verdad
 

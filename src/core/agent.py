@@ -28,6 +28,10 @@ from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
 from .llm_router import LLMRouter
 
+# Identificador del productor cuando `honcho.user_id` no lo declara. Es el mismo
+# literal que ya usaban cli.py, src/web/server.py y src/honcho/dialectic.py.
+DEFAULT_PRODUCER_USER_ID = "producer_manager"
+
 logger = logging.getLogger("Yuki.Agent")
 
 class YukiAgent:
@@ -41,6 +45,10 @@ class YukiAgent:
         
         # 2. Modelado dialéctico Honcho
         honcho_cfg = self.config.get("honcho", {})
+        # Quién es el productor. Lo declara `honcho.user_id` en config.yaml y es
+        # el mismo identificador que usan cli.py, el Salón web y el cliente de
+        # Honcho; se guarda aquí para no repetir el literal por medio código.
+        self.producer_user_id = honcho_cfg.get("user_id", DEFAULT_PRODUCER_USER_ID)
         self.honcho = HonchoDialecticClient(
             api_key=os.getenv("HONCHO_API_KEY"),
             api_url=honcho_cfg.get("api_url", "https://api.honcho.dev/v1"),
@@ -131,6 +139,10 @@ class YukiAgent:
                 # se omite esa tarea y el resto sigue vivo.
                 logger.error(f"Expresión cron inválida en la tarea '{name}': {e}")
 
+    def is_producer(self, user_id: str) -> bool:
+        """Si quien habla es el productor. Decide qué puertas se le abren."""
+        return user_id == self.producer_user_id
+
     async def generate_response(
         self,
         user_id: str,
@@ -150,7 +162,14 @@ class YukiAgent:
         start_time = time.perf_counter()
         
         if hasattr(self, 'presence_controller'):
-            if not self.presence_controller.should_respond(channel_type):
+            # `is_producer` hay que pasarlo: `PresenceController.should_respond`
+            # reserva una excepción para que el productor pueda alcanzar a Yuki
+            # por privado durante `deep_rest`, y sin este argumento esa excepción
+            # era código muerto. El productor se quedaba sin respuesta entre
+            # medianoche y las 2 de la madrugada, igual que un visitante.
+            if not self.presence_controller.should_respond(
+                channel_type, is_producer=self.is_producer(user_id)
+            ):
                 return 'NADA_QUE_DECIR'
 
         # Detección de Tabú

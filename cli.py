@@ -338,7 +338,10 @@ LLAMADAS_CRON_POR_DIA = 84
 def cmd_vertex_check():
     """Comprueba de extremo a extremo la ruta de Vertex y estima el gasto."""
     import yaml
-    from src.core.llm_router import LLMRouter, VertexProvider
+    from src.core.llm_router import (
+        LLMRouter, VertexProvider, ai_studio_key_in_use,
+        gce_service_account_scopes, gce_scopes_permiten_vertex,
+    )
 
     print_banner()
     print(f"{YELLOW}{BOLD}☁️  Comprobación de Vertex AI (Gemini Enterprise Agent Platform){RESET}\n")
@@ -356,13 +359,44 @@ def cmd_vertex_check():
     print(f"{DIM}Cadena de pasarelas: {' → '.join(p.name for p in router.providers)}{RESET}")
     print(f"{DIM}Proyecto: {vertex.project_id or '(sin declarar)'}{RESET}")
     print(f"{DIM}Región:   {vertex.location}{RESET}")
-    print(f"{DIM}Modelos:  {vertex.primary_model} → {vertex.fallback_model}{RESET}\n")
+    print(f"{DIM}Modelos:  {vertex.primary_model} → {vertex.fallback_model}{RESET}")
+    # El endpoint es donde más fácil se rompe la alineación con el crédito: la
+    # región `global` no lleva prefijo en el host, y un host mal compuesto
+    # devuelve un 404 que la cadena se traga cayendo a OpenRouter.
+    print(f"{DIM}Endpoint: {vertex.base_url}{RESET}\n")
+
+    clave_ai_studio = ai_studio_key_in_use()
+    if clave_ai_studio:
+        print(f"{YELLOW}⚠ {clave_ai_studio} está definida en el entorno.{RESET}")
+        print(f"{DIM}  El Gemini API de AI Studio factura bajo el producto «Gemini API»,{RESET}")
+        print(f"{DIM}  no bajo «Vertex AI», y queda fuera del crédito. Yuki no la usa; si{RESET}")
+        print(f"{DIM}  ves gasto en ese producto, sale de otro proceso. Quítala para{RESET}")
+        print(f"{DIM}  descartarlo y deja que Vertex se autentique con las credenciales.{RESET}\n")
 
     if not vertex.is_available():
         print(f"{RED}✗ Vertex no está activa.{RESET}")
         print(f"{DIM}  Declara el proyecto en VERTEX_PROJECT_ID o en config.yaml (vertex_ai.project_id).{RESET}")
         print(f"{DIM}  El tráfico sale mientras tanto por la siguiente pasarela de la cadena.{RESET}\n")
         return
+
+    # Dentro de una VM de Compute Engine los ámbitos de la máquina mandan sobre
+    # los que pide el código: sin `cloud-platform`, Vertex devuelve 403 aunque
+    # el rol de IAM sea correcto. Es un fallo que no se ve desde el programa.
+    scopes = gce_service_account_scopes()
+    if scopes is not None:
+        print(f"{DIM}Ejecutando dentro de una VM de Google Cloud. Ámbitos de la máquina:{RESET}")
+        for scope in scopes:
+            print(f"{DIM}  · {scope}{RESET}")
+        if gce_scopes_permiten_vertex(scopes):
+            print(f"{GREEN}✓ La VM tiene el ámbito 'cloud-platform'.{RESET}\n")
+        else:
+            print(f"{RED}✗ A la VM le falta el ámbito 'cloud-platform'.{RESET}")
+            print(f"{DIM}  Su token no servirá para Vertex por muchos roles de IAM que le des.{RESET}")
+            print(f"{DIM}  Los ámbitos sólo se cambian con la máquina parada:{RESET}")
+            print(f"{DIM}    gcloud compute instances stop <vm> --zone=<zona>{RESET}")
+            print(f"{DIM}    gcloud compute instances set-service-account <vm> --zone=<zona> \\{RESET}")
+            print(f"{DIM}      --scopes=https://www.googleapis.com/auth/cloud-platform{RESET}")
+            print(f"{DIM}    gcloud compute instances start <vm> --zone=<zona>{RESET}\n")
 
     print(f"{DIM}Obteniendo credenciales del proyecto (ADC)...{RESET}")
     if not vertex._access_token():
@@ -387,6 +421,7 @@ def cmd_vertex_check():
         return
 
     print(f"{GREEN}{BOLD}✓ Respuesta real de Vertex en {dt:.2f}s{RESET}")
+    print(f"{DIM}  Este gasto aparece en el panel bajo el producto «Vertex AI».{RESET}")
     print(f"{CYAN}  «{resp.text.strip()}»{RESET}\n")
 
     entrada, salida = resp.input_tokens, resp.output_tokens
