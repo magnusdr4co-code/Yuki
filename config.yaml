@@ -82,6 +82,19 @@ vertex_ai:
     voice: "Aoede"
     language_code: "es-es"
 
+# Arnés de seguridad agnóstico al proveedor. La plantilla se creó en la región
+# regional de Model Armor y cubre prompts y respuestas de Discord, web,
+# Telegram y cron desde el mismo punto del ciclo de respuesta.
+model_armor:
+  enabled: true
+  project_id: ""              # hereda VERTEX_PROJECT_ID en el entorno
+  location: "us-central1"
+  template_id: "yuki-hermes-runtime-v1"
+  # Un fallo de red no debe dejar muda a Yuki; las coincidencias reales sí
+  # bloquean siempre. Puede endurecerse a true en un entorno de alta seguridad.
+  fail_closed: false
+  timeout_seconds: 10
+
 memory:
   backend: "sqlite_fts5"
   database_path: "data/yuki_memory.db"

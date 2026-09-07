@@ -7,6 +7,7 @@ Integra:
 - Planificador Cron 24/7
 """
 
+import asyncio
 import time
 import os
 import yaml
@@ -27,6 +28,7 @@ from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
 from .llm_router import LLMRouter
+from ..security.model_armor import ModelArmorClient
 
 # Identificador del productor cuando `honcho.user_id` no lo declara. Es el mismo
 # literal que ya usaban cli.py, src/web/server.py y src/honcho/dialectic.py.
@@ -97,6 +99,11 @@ class YukiAgent:
 
         # Cadena de pasarelas de lenguaje: Nous Portal → OpenRouter → voz local
         self.llm_router = LLMRouter(config=self.config)
+
+        # Arnés de seguridad delante y detrás del LLM. Model Armor inspecciona
+        # texto sin conocer el proveedor; así quedan cubiertas Discord, web,
+        # Telegram y las tareas autónomas con una sola puerta.
+        self.model_armor = ModelArmorClient.from_config(self.config)
 
         self.cron = CronEngine(timezone=tz)
         self.tasks = AutonomousTasks(self)
@@ -181,6 +188,17 @@ class YukiAgent:
             ):
                 return 'NADA_QUE_DECIR'
 
+        # No guardamos ni enviamos al LLM un prompt que Model Armor haya
+        # marcado. La llamada es síncrona en el cliente de Google, por eso se
+        # saca del event loop para no bloquear las demás conexiones sociales.
+        prompt_decision = await asyncio.to_thread(
+            self.model_armor.sanitize_user_prompt, message
+        )
+        if not prompt_decision.allowed:
+            logger.warning("Prompt rechazado por Model Armor antes de recuperar memoria")
+            return "🔒 No puedo procesar ese mensaje porque activa una protección de seguridad."
+        message = prompt_decision.text
+
         # Detección de Tabú
         if "maruta" in message.lower():
             return "Hay palabras que reducen lo que somos a sombras del pasado. Prefiero recibirte desde la atención de este presente."
@@ -210,6 +228,17 @@ class YukiAgent:
 
         # 4. Generación (simulación o invocación LLM real según API Keys)
         response_text = self._call_llm_inference(system_prompt, message)
+
+        response_decision = await asyncio.to_thread(
+            self.model_armor.sanitize_model_response,
+            response_text,
+            user_prompt=message,
+        )
+        if not response_decision.allowed:
+            logger.warning("Respuesta rechazada por Model Armor antes de publicarla")
+            response_text = "🔒 He retenido esta respuesta porque activa una protección de seguridad."
+        else:
+            response_text = response_decision.text
 
         total_latency_ms = (time.perf_counter() - start_time) * 1000.0
         logger.info(f"⚡ Respuesta generada en {total_latency_ms:.2f}ms (Memoria FTS5: {mem_data['latency_ms']}ms)")
