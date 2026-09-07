@@ -27,6 +27,7 @@ from pathlib import Path
 from typing import Dict, Any, List, Optional
 
 from src.tools.vertex_media import VertexMediaClient
+from src.tools.web_search import FirecrawlSearch
 
 logger = logging.getLogger("Yuki.NousPortal")
 
@@ -62,6 +63,10 @@ class NousPortalClient:
 
         for d in [self.art_dir, self.voice_dir, self.music_dir, self.video_dir, self.posts_dir]:
             os.makedirs(d, exist_ok=True)
+
+        # Buscador real. Sin clave devuelve pistas declaradas como simuladas,
+        # nunca titulares inventados con URL verosímil.
+        self.web_search = FirecrawlSearch.from_config(config)
 
         # Motor real de medios. Inerte mientras no haya proyecto de Google
         # Cloud: entonces esta clase cae a sus marcadores, marcados como tales.
@@ -352,21 +357,17 @@ class NousPortalClient:
         limit: int = 4
     ) -> List[Dict[str, Any]]:
         """
-        Inspecciona noticias y tendencias en tiempo real vía Firecrawl.
+        Inspecciona noticias y tendencias reales mediante Firecrawl.
+
+        Antes esto devolvía dos resultados fijos con URLs inventadas y la
+        etiqueta de un rastreador que nunca se llamó; la reflexión nocturna los
+        tomaba por corrientes del mundo. Ahora la búsqueda es real cuando hay
+        clave y, cuando no la hay, devuelve pistas marcadas `simulated: True`
+        sin URL. La honestidad del resultado la comprueba quien lo use con
+        `describe_origin`.
         """
-        logger.info(f"Buscando corrientes del mundo con Firecrawl: '{query}'")
-        
-        return [
-            {
-                "title": f"Tendencia en música y arte digital: {query}",
-                "snippet": "Discusión sobre la interacción de instrumentos tradicionales acústicos y síntesis generativa.",
-                "url": "https://trends.art/traditional-meets-digital",
-                "source": "Firecrawl Web Crawler"
-            },
-            {
-                "title": "Corrientes estéticas de la temporada",
-                "snippet": "El regreso a texturas orgánicas y el valor de la pausa en la era de la inmediatez.",
-                "url": "https://aesthetics.today/the-art-of-pause",
-                "source": "Firecrawl Web Crawler"
-            }
-        ]
+        import asyncio
+
+        logger.info(f"Buscando corrientes del mundo: '{query}' (buscador "
+                    f"{'activo' if self.web_search.is_available() else 'no configurado'})")
+        return await asyncio.to_thread(self.web_search.search, query, limit)

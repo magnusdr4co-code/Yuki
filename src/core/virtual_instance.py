@@ -231,8 +231,9 @@ class VirtualInstance:
         self._cap(
             "mente.web", "Mente",
             REAL if _clave_util("FIRECRAWL_API_KEY") else SIMULADO,
-            "Firecrawl con clave" if _clave_util("FIRECRAWL_API_KEY")
-            else "Tendencias devueltas desde una lista fija, sin cliente HTTP",
+            "Firecrawl con clave: búsqueda real, resultados con URL verificable"
+            if _clave_util("FIRECRAWL_API_KEY")
+            else "Sin clave: pistas de introspección declaradas como simuladas, sin URL inventada",
         )
         biblioteca = self.root / "output" / "Biblioteca"
         self._cap("mente.biblioteca", "Mente", REAL,
@@ -291,14 +292,20 @@ class VirtualInstance:
             proposals=["Implementar `_call_remote` cuando exista el endpoint, o retirar la pasarela del "
                        "diagrama para que la arquitectura documentada sea la que corre."],
         )
+        buscador_real = _clave_util("FIRECRAWL_API_KEY")
         self._lim(
-            id="L6", title="Telegram y búsqueda web simulados",
+            id="L6", title="Telegram sin conectar; búsqueda web sujeta a clave",
             severity=MODERADO, status=ABIERTO,
-            evidence="El adaptador de Telegram registra en log; Firecrawl devuelve una lista fija.",
-            impact="Dos de los canales de presencia declarados no llegan a ningún seguidor real, y las "
-                   "'tendencias' de la reflexión nocturna no vienen del mundo.",
+            evidence=("El adaptador de Telegram registra en log. La búsqueda ya es un cliente real de "
+                      + ("Firecrawl, activo con la clave declarada."
+                         if buscador_real else
+                         "Firecrawl, pero sin FIRECRAWL_API_KEY devuelve pistas marcadas como "
+                         "simuladas, sin URL: la reflexión nocturna sabe que no vienen del mundo.")),
+            impact=("Telegram, uno de los canales de presencia declarados, no llega a ningún seguidor real."
+                    + ("" if buscador_real else
+                       " Sin clave, Yuki piensa desde su memoria en vez de desde el mundo, y lo dice.")),
             proposals=["Conectar `python-telegram-bot` con el webhook ya declarado en config.yaml.",
-                       "Implementar el cliente HTTP de Firecrawl y marcar el resultado con su origen."],
+                       "Declarar FIRECRAWL_API_KEY para que las corrientes nocturnas vengan del mundo."],
         )
         self._lim(
             id="L7", title="Instancia única sin réplica ni copia del disco",

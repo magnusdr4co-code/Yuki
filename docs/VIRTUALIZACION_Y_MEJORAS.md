@@ -72,7 +72,7 @@ abierto y cada uno lleva su vía de salida en la sección 4.
 | L7 | Instancia única, sin réplica ni copia del disco | grave | abierto |
 | L8 | Vídeo facturado por segundo sin techo de gasto | grave | **mitigado** |
 | L5 | Nous Portal sigue sin endpoint | moderado | abierto |
-| L6 | Telegram y búsqueda web simulados | moderado | abierto |
+| L6 | Telegram sin conectar; búsqueda web sujeta a clave | moderado | parcial |
 | L9 | Honcho dialéctico sin servicio remoto | moderado | abierto |
 
 ### L8 — Vídeo sin techo de gasto (mitigado)
@@ -157,14 +157,18 @@ su temperatura y su techo, en vez de que un resumen de feed cueste lo mismo que
 una síntesis dialéctica. Falta llevarlo al arnés del Productor y a
 `music_composition`, y publicar el coste por ruta cuando exista M2.
 
-### M6 · Cerrar los canales simulados
-*Cierra L5, L6 y L9.* Tres piezas del diagrama no sirven tráfico real: Telegram
-registra en log, Firecrawl devuelve una lista fija —de modo que las «tendencias»
-de la reflexión nocturna no vienen del mundo— y Honcho vive en un JSON local.
-Cada una admite dos salidas honestas: implementarla o retirarla del diagrama.
-Lo que no se sostiene es dejarlas dibujadas como si funcionaran. Orden sugerido:
-Firecrawl (afecta al contenido que Yuki publica), Telegram (afecta al alcance),
-Honcho (afecta a la continuidad del vínculo, hoy cubierta por SQLite).
+### M6 · Cerrar los canales simulados — *búsqueda hecha, quedan Telegram y Honcho*
+*Cierra L5, L6 y L9.* Tres piezas del diagrama no servían tráfico real. La
+búsqueda ya está: `src/tools/web_search.py` llama a Firecrawl de verdad cuando
+hay `FIRECRAWL_API_KEY`, y sin ella devuelve pistas de introspección marcadas
+`simulated: True` y **sin URL**, en vez de los dos titulares fijos con enlaces
+inventados que la reflexión de las 03:00 citaba como corrientes del mundo. El
+origen viaja en el propio prompt (`describe_origin`), así que Yuki no puede
+atribuir al mundo algo que no salió de él.
+
+Quedan Telegram —registra en log, no llega a ningún seguidor— y Honcho —perfil
+en JSON local—. Cada uno admite dos salidas honestas: implementarlo o retirarlo
+del diagrama; lo que no se sostiene es dejarlo dibujado como si funcionara.
 
 ### M7 · El Salón como panel de estado
 *Reduce la dependencia del DM.* Hoy el único sitio donde se ve un encargo es la
@@ -176,7 +180,7 @@ vivir en caliente.
 ## 5. Comprobación
 
 ```bash
-python3 -m pytest tests -q                     # 277 pruebas
+python3 -m pytest tests -q                     # 287 pruebas
 python3 cli.py spend                           # gasto de hoy contra el presupuesto
 python3 cli.py virtualize                      # limitadores del entorno actual
 docker compose -f deploy/virtual/docker-compose.virtual.yml config   # réplica válida

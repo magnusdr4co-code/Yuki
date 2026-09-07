@@ -9,6 +9,7 @@ Ejecuta rutinas creativas sin supervisión humana continua:
 import logging
 from datetime import datetime
 from typing import Optional
+from src.tools.web_search import describe_origin
 
 logger = logging.getLogger("Yuki.AutonomousTasks")
 
@@ -27,10 +28,13 @@ class AutonomousTasks:
 
         logger.info("🌌 [CRON 03:00] Iniciando reflexión nocturna de tendencias...")
         trends = await self.agent.nous_portal.search_trends_firecrawl("tendencias arte digital musica tradicional")
-        
+
+        # El origen va en el propio prompt: sin buscador conectado, lo que sigue
+        # no son corrientes del mundo y Yuki no debe presentarlas como tales.
+        origen = describe_origin(trends)
         prompt = (
             "Es la madrugada (03:00). Estás despierta en el silencio de tu salón. "
-            "Has observado estas corrientes en el mundo: " + str(trends) + ". "
+            f"{origen} Material observado: " + str(trends) + ". "
             "Destila una breve reflexión poética de 2 frases sobre el contraste entre la velocidad del mundo "
             "y la permanencia de las artes tradicionales."
         )
