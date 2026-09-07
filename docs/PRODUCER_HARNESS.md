@@ -25,9 +25,20 @@ se omiten. JSON de producción permanece en origen; no se etiqueta como obra.
 de output. El estado inicial es en-desarrollo: ni la publicación ni un éxito de API
 certifican que una obra esté terminada. Guardar otro texto crea una versión por hash.
 
-El flujo específico del Salón archiva presentación y letra y avisa al DM al terminar;
-los medios se inventarían al cierre. Un reinicio corta trabajos en memoria:
-no existe aún una cola durable que pueda reanudarlos automáticamente.
+El flujo específico del Salón archiva presentación y letra y avisa al DM al terminar.
+Las órdenes del Productor emparejado que solicitan crear y entregar música, audio o vídeo
+se interceptan **antes** del `ProducerHarness`: no dependen de que el LLM decida invocar
+herramientas. El adaptador confirma el inicio, recupera los recursos de Biblioteca,
+genera la pista y los clips, los concatena cuando procede y adjunta únicamente ficheros
+verificados al DM. El arnés textual continúa reservado para Biblioteca, terminal y
+configuración.
+
+El reconocimiento tolera órdenes naturales breves como “procede con la canción y el
+vídeo”; no exige que el Productor repita “pásamelos”. El log del daemon registra la ruta
+elegida (`canal_produccion` y `media_entrega`) sin registrar contenido ni secretos. Un
+fallo de un proveedor multimedia se comunica como fallo real de ese trabajo, no como una
+afirmación de que Yuki carece de herramientas. Un reinicio corta trabajos multimedia en
+memoria: no existe aún una cola durable que pueda reanudarlos automáticamente.
 
 ## Terminal y configuración
 
