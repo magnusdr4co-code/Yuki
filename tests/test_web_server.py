@@ -95,3 +95,75 @@ class TestHealthEndpoint(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+# --- Puerta de entrada del Salón ---
+
+class _PeticionFalsa:
+    """Handler mínimo para ejercitar la autorización sin abrir un socket."""
+
+    def __init__(self, path, headers=None, cliente="10.0.0.1"):
+        self.path = path
+        self.headers = headers or {}
+        self.client_address = (cliente, 5000)
+
+    def get(self, clave, defecto=None):
+        return self.headers.get(clave, defecto)
+
+
+def _handler(path, headers=None, cliente="10.0.0.1"):
+    from src.web.server import SalonHTTPHandler
+
+    handler = SalonHTTPHandler.__new__(SalonHTTPHandler)
+    handler.path = path
+    handler.headers = headers or {}
+    handler.client_address = (cliente, 5000)
+    return handler
+
+
+def test_sin_token_declarado_todo_sigue_abierto(monkeypatch):
+    monkeypatch.delenv("SALON_API_TOKEN", raising=False)
+
+    assert _handler("/api/chat")._autorizado("/api/chat")
+
+
+def test_con_token_las_rutas_de_datos_exigen_credencial(monkeypatch):
+    monkeypatch.setenv("SALON_API_TOKEN", "secreto-del-salon")
+
+    assert not _handler("/api/chat")._autorizado("/api/chat")
+    assert not _handler("/api/memories")._autorizado("/api/memories")
+    assert not _handler("/api/honcho")._autorizado("/api/honcho")
+
+
+def test_la_sonda_y_la_pagina_nunca_piden_credencial(monkeypatch):
+    """Si /health pidiera token, la plataforma daría la instancia por muerta."""
+    monkeypatch.setenv("SALON_API_TOKEN", "secreto-del-salon")
+
+    assert _handler("/health")._autorizado("/health")
+    assert _handler("/")._autorizado("/")
+
+
+def test_se_admite_bearer_y_parametro(monkeypatch):
+    monkeypatch.setenv("SALON_API_TOKEN", "secreto-del-salon")
+
+    con_cabecera = _handler("/api/chat", {"Authorization": "Bearer secreto-del-salon"})
+    con_parametro = _handler("/api/chat?token=secreto-del-salon")
+    equivocado = _handler("/api/chat", {"Authorization": "Bearer otro"})
+
+    assert con_cabecera._autorizado("/api/chat")
+    assert con_parametro._autorizado("/api/chat")
+    assert not equivocado._autorizado("/api/chat")
+
+
+def test_el_techo_de_peticiones_protege_memoria_y_credito(monkeypatch):
+    from src.web.server import LIMITE_PETICIONES, SalonHTTPHandler
+
+    SalonHTTPHandler._historial_peticiones.clear()
+    handler = _handler("/api/chat", cliente="203.0.113.7")
+
+    permitidas = sum(1 for _ in range(LIMITE_PETICIONES + 5) if handler._dentro_del_limite())
+
+    assert permitidas == LIMITE_PETICIONES
+    # Otro cliente no hereda el castigo del primero.
+    assert _handler("/api/chat", cliente="203.0.113.8")._dentro_del_limite()
+    SalonHTTPHandler._historial_peticiones.clear()

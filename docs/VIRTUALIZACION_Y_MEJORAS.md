@@ -68,12 +68,32 @@ abierto y cada uno lleva su vía de salida en la sección 4.
 | L2 | Sin proyecto Vertex declarado, medios y crédito inactivos | bloqueante | abierto (depende del entorno) |
 | L1 | Producción multimedia interrumpible por reinicio | grave | **mitigado** |
 | L3 | Clave de AI Studio en el entorno (factura fuera del crédito) | grave | abierto (depende del entorno) |
+| L10 | API del Salón sin credencial | grave | abierto (depende del entorno) |
 | L4 | El canto depende de una preview; hay respaldo instrumental propio | grave | **mitigado** en la imagen |
 | L7 | Instancia única; copia diaria hecha, salida sujeta a bucket | grave | parcial |
 | L8 | Vídeo facturado por segundo sin techo de gasto | grave | **mitigado** |
 | L5 | Nous Portal sigue sin endpoint | moderado | abierto |
 | L6 | Telegram sin conectar; búsqueda web sujeta a clave | moderado | parcial |
 | L9 | Honcho dialéctico sin servicio remoto | moderado | abierto |
+
+### L10 — La API del Salón respondía a cualquiera (nuevo, hallado en revisión)
+
+`/api/chat`, `/api/memories` y `/api/honcho` no pedían nada. Quien alcanzara el
+puerto 8080 podía gastar crédito, leer el perfil dialéctico del Productor y —lo
+serio— **escribir en la memoria de Yuki**, que es lo único irremplazable del
+proyecto: cada turno del chat queda registrado como interacción y altera su
+estado vital.
+
+Ahora hay dos frenos. Con `SALON_API_TOKEN` declarado, las rutas `/api` exigen
+`Authorization: Bearer` (o `?token=`, que la propia página guarda), comparado en
+tiempo constante; `/health` y la página quedan abiertas, porque una sonda que
+pidiera credencial daría la instancia por muerta. Y un techo de 20 peticiones
+cada 5 minutos por cliente que **actúa siempre**, haya token o no.
+
+El comportamiento por defecto no cambia —sin token declarado las rutas siguen
+abiertas, para no tumbar un despliegue en marcha—, pero el arranque lo avisa y
+el gemelo virtual lo reporta como limitador abierto. Cerrarlo es declarar la
+variable en la instancia y, mejor aún, restringir el puerto en el cortafuegos.
 
 ### L4 — El canto dependía de una sola preview (mitigado)
 
@@ -213,7 +233,7 @@ vivir en caliente.
 ## 5. Comprobación
 
 ```bash
-python3 -m pytest tests -q                     # 317 pruebas
+python3 -m pytest tests -q                     # 325 pruebas
 python3 cli.py backup                          # copia verificada de memoria y canon
 python3 cli.py spend                           # gasto de hoy contra el presupuesto
 python3 cli.py virtualize                      # limitadores del entorno actual

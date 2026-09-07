@@ -218,8 +218,13 @@ class VirtualInstance:
         )
         self._cap("presencia.telegram", "Presencia", SIMULADO,
                   "El adaptador registra en log; no usa `python-telegram-bot`")
-        self._cap("presencia.salon", "Presencia", REAL,
-                  f"Servidor web multihilo con /health en el puerto {_env('PORT') or '8080'}")
+        salon_protegido = bool(_env("SALON_API_TOKEN"))
+        self._cap(
+            "presencia.salon", "Presencia", REAL,
+            f"Servidor web multihilo con /health en el puerto {_env('PORT') or '8080'}; "
+            + ("rutas /api con credencial" if salon_protegido else
+               "rutas /api ABIERTAS (sin SALON_API_TOKEN), con techo de 20 peticiones/5 min"),
+        )
         trabajos = (self.config.get("scheduler", {}) or {}).get("cron_jobs", []) or []
         activos = [j for j in trabajos if j.get("enabled")]
         self._cap("presencia.cron", "Presencia", REAL,
@@ -374,6 +379,20 @@ class VirtualInstance:
                        "Registrar el precio de Lyria cuando esté publicado para cotizar la música.",
                        "Exponer el consumo del día en el Salón junto al estado de los trabajos."],
         )
+        if not _env("SALON_API_TOKEN"):
+            self._lim(
+                id="L10", title="API del Salón sin credencial",
+                severity=GRAVE, status=ABIERTO,
+                evidence="SALON_API_TOKEN no declarado: /api/chat, /api/memories y /api/honcho "
+                         "responden a cualquiera que alcance el puerto. Sólo las frena el techo "
+                         "de 20 peticiones cada 5 minutos por cliente.",
+                impact="Quien llegue al puerto puede gastar crédito y escribir en la memoria de "
+                       "Yuki, que es lo único irremplazable; el perfil dialéctico del Productor "
+                       "queda además a la vista.",
+                proposals=["Declarar SALON_API_TOKEN en el entorno de la instancia.",
+                           "Restringir el puerto 8080 en el cortafuegos a IAP o a la red autorizada."],
+            )
+
         self._lim(
             id="L9", title="Honcho dialéctico sin servicio remoto",
             severity=MODERADO, status=ABIERTO,

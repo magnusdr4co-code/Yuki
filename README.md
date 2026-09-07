@@ -177,7 +177,7 @@ contratar servicios de pago o de prometer una demo.
 | Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco |
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
-| Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT` |
+| Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT`. Rutas `/api` con credencial si se declara `SALON_API_TOKEN`, y techo de peticiones por cliente siempre activo |
 | Generación de texto vía OpenRouter | ✅ Real | Peticiones HTTP reales al agregador, con modelo de respaldo si el primario falla |
 | Generación de texto vía Vertex AI | ✅ Real | Endpoint compatible con OpenAI, autenticado con credenciales del proyecto (ADC). Opcional: inactiva hasta declarar `VERTEX_PROJECT_ID` |
 | Cadena de pasarelas | ✅ Real | Nous Portal → Vertex → OpenRouter → voz local, en `src/core/llm_router.py` |

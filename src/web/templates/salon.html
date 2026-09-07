@@ -198,7 +198,13 @@
             try {
                 const res = await fetch('/api/chat', {
                     method: 'POST',
-                    headers: {'Content-Type': 'application/json'},
+                    headers: Object.assign(
+                        {'Content-Type': 'application/json'},
+                        // Con SALON_API_TOKEN declarado, la API pide credencial. Se
+                        // toma de ?token= (que además queda guardado) para que el
+                        // Salón siga usándose desde el navegador sin más ceremonia.
+                        salonToken() ? {'Authorization': 'Bearer ' + salonToken()} : {}
+                    ),
                     body: JSON.stringify({message: text, user_id: 'producer_manager', user_name: 'Productor'})
                 });
                 const data = await res.json();
@@ -209,6 +215,16 @@
                 appendMessage('Yuki', 'El silencio también puede ser una respuesta mientras reajusto el salón.', 'yuki');
             }
         });
+
+        function salonToken() {
+            try {
+                const enLaUrl = new URLSearchParams(window.location.search).get('token');
+                if (enLaUrl) { localStorage.setItem('salon_token', enLaUrl); return enLaUrl; }
+                return localStorage.getItem('salon_token') || '';
+            } catch (e) {
+                return '';
+            }
+        }
 
         function appendMessage(sender, text, type, latency) {
             const div = document.createElement('div');

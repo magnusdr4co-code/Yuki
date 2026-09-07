@@ -199,3 +199,20 @@ def test_el_respaldo_musical_depende_de_los_binarios_de_la_imagen(monkeypatch):
     assert _cap(con_respaldo, "medios.musica_local").state == REAL
     assert _lim(con_respaldo, "L4").status == MITIGADO
     assert "no cantado" in _lim(con_respaldo, "L4").evidence
+
+
+def test_el_salon_sin_credencial_se_denuncia_como_limitador(monkeypatch):
+    monkeypatch.delenv("SALON_API_TOKEN", raising=False)
+    instancia = VirtualInstance(CONFIG)
+
+    limitador = _lim(instancia, "L10")
+    assert limitador is not None and limitador.severity == "grave"
+    assert "ABIERTAS" in _cap(instancia, "presencia.salon").detail
+
+
+def test_con_credencial_el_salon_deja_de_ser_limitador(monkeypatch):
+    monkeypatch.setenv("SALON_API_TOKEN", "secreto-del-salon")
+    instancia = VirtualInstance(CONFIG)
+
+    assert _lim(instancia, "L10") is None
+    assert "con credencial" in _cap(instancia, "presencia.salon").detail

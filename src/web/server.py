@@ -8,6 +8,7 @@ puerto indicado por la variable de entorno PORT, expone /health para las sondas
 de arranque y atiende peticiones concurrentes.
 """
 
+import hmac
 import os
 import sys
 import json
@@ -28,6 +29,20 @@ logger = logging.getLogger("Yuki.WebServer")
 
 DEFAULT_PORT = 8080
 
+# Rutas que responden sin credencial: la sonda de la plataforma y la página.
+# Todo lo demás toca memoria, perfil dialéctico o gasto de modelo.
+RUTAS_ABIERTAS = ("/health", "/healthz", "/_ah/health", "/", "/index.html", "/salon")
+
+# Techo de conversación por cliente. Existe aunque no haya credencial: quien
+# alcance el puerto puede gastar crédito y, peor, escribir en la memoria de
+# Yuki, que es lo único irremplazable. Es un freno, no una autorización.
+LIMITE_PETICIONES = 20
+VENTANA_LIMITE_SEGUNDOS = 300
+
+
+def token_configurado() -> str:
+    return (os.getenv("SALON_API_TOKEN") or "").strip()
+
 
 class SalonHTTPHandler(BaseHTTPRequestHandler):
     agent_instance = None
@@ -37,6 +52,10 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
     _agent_build_lock = threading.Lock()
     _agent_use_lock = threading.Lock()
 
+    # Peticiones recientes por cliente, para el techo de conversación.
+    _historial_peticiones: dict = {}
+    _historial_lock = threading.Lock()
+
     @classmethod
     def get_agent(cls):
         if cls.agent_instance is None:
@@ -44,6 +63,44 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
                 if cls.agent_instance is None:
                     cls.agent_instance = YukiAgent()
         return cls.agent_instance
+
+    # --- Puerta de entrada -------------------------------------------------
+
+    def _autorizado(self, path: str) -> bool:
+        """
+        Credencial requerida sólo si el operador declara `SALON_API_TOKEN`.
+
+        Sin token declarado se conserva el comportamiento anterior —abierto— para
+        no romper un despliegue en marcha, pero se avisa al arrancar. Con token,
+        se admite en la cabecera `Authorization: Bearer` o en `?token=`, que es
+        lo que puede usar la propia página del Salón.
+        """
+        esperado = token_configurado()
+        if not esperado or path in RUTAS_ABIERTAS:
+            return True
+
+        cabecera = (self.headers.get("Authorization") or "").strip()
+        if cabecera.lower().startswith("bearer "):
+            recibido = cabecera[7:].strip()
+        else:
+            recibido = parse_qs(urlparse(self.path).query).get("token", [""])[0]
+
+        # Comparación en tiempo constante: un token no se adivina midiendo.
+        return hmac.compare_digest(recibido, esperado)
+
+    def _dentro_del_limite(self) -> bool:
+        """Techo por cliente en la ventana declarada; el resto recibe 429."""
+        cliente = self.client_address[0] if self.client_address else "desconocido"
+        ahora = time.monotonic()
+        with SalonHTTPHandler._historial_lock:
+            recientes = [t for t in SalonHTTPHandler._historial_peticiones.get(cliente, [])
+                         if ahora - t < VENTANA_LIMITE_SEGUNDOS]
+            if len(recientes) >= LIMITE_PETICIONES:
+                SalonHTTPHandler._historial_peticiones[cliente] = recientes
+                return False
+            recientes.append(ahora)
+            SalonHTTPHandler._historial_peticiones[cliente] = recientes
+        return True
 
     def _send_json(self, data: dict, status_code: int = 200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
@@ -65,6 +122,10 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
+
+        if not self._autorizado(path):
+            self._send_json({"error": "Credencial requerida para esta ruta."}, status_code=401)
+            return
 
         # 0. Sonda de vida: barata y sin construir el agente, para que la
         #    plataforma pueda comprobar el arranque antes de cargar la memoria.
@@ -133,7 +194,18 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         parsed = urlparse(self.path)
         path = parsed.path
 
+        if not self._autorizado(path):
+            self._send_json({"error": "Credencial requerida para esta ruta."}, status_code=401)
+            return
+
         if path == "/api/chat":
+            if not self._dentro_del_limite():
+                self._send_json(
+                    {"error": f"Demasiadas peticiones: máximo {LIMITE_PETICIONES} cada "
+                              f"{VENTANA_LIMITE_SEGUNDOS // 60} minutos desde un mismo cliente."},
+                    status_code=429,
+                )
+                return
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
             except (TypeError, ValueError):
@@ -203,6 +275,18 @@ def run_web_server(port: int = None, host: str = "0.0.0.0"):
     port = resolve_port(port)
     httpd = ThreadingHTTPServer((host, port), SalonHTTPHandler)
     httpd.daemon_threads = True
+
+    if token_configurado():
+        print("   🔒 API protegida por SALON_API_TOKEN (Authorization: Bearer o ?token=).")
+    else:
+        # Decirlo alto: quien alcance el puerto puede escribir en la memoria de
+        # Yuki y gastar crédito. No se cierra por defecto para no romper un
+        # despliegue en marcha, pero nadie debería enterarse por sorpresa.
+        logger.warning(
+            "SALON_API_TOKEN no está definido: las rutas /api quedan abiertas a "
+            "cualquiera que alcance el puerto %s. Declara el token o restringe el acceso "
+            "en el cortafuegos.", port,
+        )
 
     print(f"\n🌸 Salón de Yuki Web Dashboard activo en: http://{host}:{port}")
     print(f"   Sonda de vida: http://{host}:{port}/health")
