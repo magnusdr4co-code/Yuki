@@ -27,6 +27,8 @@ async def recover_discord(library):
                 async for message in channel.history(limit=300, oldest_first=True):
                     if message.author.id != client.user.id or not message.content:
                         continue
+                    if message.attachments or message.content.startswith(("⚠", "✅", "⏭", "❌", "🔒", "⛩")):
+                        continue  # Adjuntos ya inventariados; avisos no son obras.
                     # Testimonio exacto, no una reconstrucción inventada del poema.
                     library.save_text(
                         f"Salón: mensaje de Yuki {message.id}", message.content,
