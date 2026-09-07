@@ -22,7 +22,7 @@ Se encontraron **tres defectos**, dos de ellos silenciosos. Ninguno se manifiest
 | 2 | La degradación de Vertex no dejaba rastro | Imposible notar que el crédito no se estaba usando | Corregido |
 | 3 | `tests/test_agent.py` dependía de la hora del reloj | Bloqueaba el despliegue a Cloud Run entre las 00:00 y las 02:00 | Corregido |
 
-Y una conclusión que **no** es un defecto del código: los €2,01 de la línea *Gemini API* **no los ha generado Yuki**. Ver §2.
+Y una conclusión que **no** es un defecto del código: los €2,01 de la línea *Gemini API* **no los ha generado Yuki**, sino claves de AI Studio en otro proyecto. Confirmado contra el panel en §2, donde además se ve que **el crédito sí se aplica a Vertex AI** (−€0,18) y **no a Gemini API** (€0,00).
 
 ---
 
@@ -57,24 +57,64 @@ Los tests sólo cubrían `europe-southwest1`, así que el caso por defecto **nun
 
 ---
 
-## 2. Los €2,01 del producto «Gemini API»
+## 2. Los €2,01 del producto «Gemini API» — confirmado en el panel
 
-**La columna que resuelve la duda es `Product`, no las de ahorros.**
+**El crédito funciona. Simplemente no cubre ese producto.** La tabla de costes del productor (7 sep 2026) lo demuestra sin margen de duda:
 
-| Product en el panel | API real | ¿Consume el crédito? |
+| Product | Usage cost | Negotiated savings | Savings programs | **Other savings** | Subtotal |
+|---|---|---|---|---|---|
+| **Gemini API** | €2,01 | €0,00 | — | **€0,00** | **€2,01** |
+| **Vertex AI** | €0,18 | €0,00 | — | **−€0,18** | **€0,00** |
+| Networking | €1,03 | €0,00 | — | −€1,03 | €0,00 |
+| Cloud Text-to-Speech | €0,00 | €0,00 | — | €0,00 | €0,00 |
+
+**«Other savings» es la columna donde aterriza el crédito de prueba.** A Vertex AI se le descuenta íntegro y queda a cero. A Gemini API no se le descuenta nada y se paga entero. Es exactamente la distinción que este repositorio asumía y que hasta ahora no se había podido comprobar contra un panel real.
+
+### De dónde salen esos €2,01
+
+**No de Yuki.** Verificado en el código:
+
+- No existe ninguna ruta hacia `generativelanguage.googleapis.com`. Las únicas llamadas a Google salen a `aiplatform.googleapis.com` y `texttospeech.googleapis.com`.
+- `GEMINI_API_KEY` no se lee en ningún sitio salvo para **avisar** de que está puesta.
+- `hermes_config.yaml:18` declara `google: "${GEMINI_API_KEY}"`, pero **ese fichero no lo carga ningún código**: es una plantilla para `~/.hermes/config.yaml`, del harness, no de este repositorio. La línea es inerte.
+
+**De AI Studio.** Las huellas están en la propia cuenta de facturación:
+
+| Indicio | Qué significa |
+|---|---|
+| Proyecto `gen-lang-client-0734039446` («Dr4co») | `gen-lang-client-*` es el nombre que **AI Studio genera automáticamente** al crear una clave |
+| Cuentas de servicio `ais-gemini-key-*@47269626422.iam.gserviceaccount.com` | El prefijo `ais` es **AI Studio**. Hay tres |
+| Clave «Gemini API Key», restricción *Gemini API*, creada el 18 ago 2026 | Es la que factura |
+| 115 peticiones a *Gemini API* | Tráfico real por esa vía |
+
+Es decir: el gasto sale de claves de AI Studio creadas a mano, en un proyecto distinto del de Yuki, y no del despliegue.
+
+### El proyecto correcto para Yuki
+
+La cuenta de facturación `01E208-BEDDAC-B94E7E` tiene tres proyectos:
+
+| Proyecto | ID | Papel |
 |---|---|---|
-| **Vertex AI** | `aiplatform.googleapis.com` | Sí |
-| **Gemini API** | `generativelanguage.googleapis.com` (AI Studio) | No |
+| Yuki Digital Diva | **`yuki-prod`** | **El de Yuki.** Es el que va en `VERTEX_PROJECT_ID` |
+| Dr4co | `gen-lang-client-0734039446` | Generado por AI Studio. De aquí salen los €2,01 |
+| My First Project | `project-3b69d116-9099-4e2f-a68` | Por defecto, sin uso conocido |
 
-**Yuki no llama nunca a `generativelanguage.googleapis.com`.** No hay una sola ruta en el código que use `GEMINI_API_KEY`: la pasarela de texto se autentica con ADC y la de medios con el SDK apuntado a Vertex. Ese gasto viene de otro proceso.
+### El nombre de la API despista
 
-Se descartó además una sospecha razonable: que el SDK `google-genai` se fuera a AI Studio al encontrar la clave en el entorno. **No ocurre.** Con `GEMINI_API_KEY` puesta y `enterprise=True` + proyecto + región, el cliente sigue apuntando a `aiplatform.googleapis.com` e ignora la clave. Con el proyecto vacío no cae a AI Studio: falla con `DefaultCredentialsError`.
+En la lista de APIs habilitadas **no aparece «Vertex AI»**: aparece como **«Agent Platform API»**, por el rebautizado a *Gemini Enterprise Agent Platform* que este repositorio ya documenta (y que en el SDK `google-genai` se refleja en el parámetro `enterprise=`, alias de `vertexai=`). Ya estaba habilitada, y de ahí los €0,18 de Vertex AI ya facturados y descontados.
 
-**Matiz importante sobre el «€0,00» de las columnas de ahorro.** No prueba nada por sí solo: los créditos de prueba **no se restan ahí**. Aparecen en la fila de promociones y créditos del informe de costes. Lo que sí prueba algo es el producto.
+Las cuatro APIs de nombre parecido no son lo mismo:
 
-**Dónde buscar el origen:** en el `.env` local, en el servicio de Cloud Run, en los Cloud Run Jobs, en `hermes_config.yaml:18` (declara `google: "${GEMINI_API_KEY}"` como ruta de emergencia del agregador) y en cualquier herramienta externa apuntada al mismo proyecto (Gemini CLI, AI Studio, un cuaderno).
+| Nombre en el panel | Servicio | Papel |
+|---|---|---|
+| **Agent Platform API** | `aiplatform.googleapis.com` | **Vertex AI. La que consume el crédito.** No la toques |
+| Gemini API | `generativelanguage.googleapis.com` | AI Studio. La que factura fuera del crédito |
+| Gemini for Google Cloud API | Asistencia de Gemini en la consola | Nada que ver con Yuki |
+| Gemini Cloud Assist API | Ídem | Nada que ver con Yuki |
 
----
+### El crédito caduca
+
+`Free Trial`: **€252,29 restantes de €263,35 (96%), caduca el 23 de septiembre de 2026.** Quedan pocos días. El *Google Developer Program premium benefit* (€8,78) ya está agotado.
 
 ## 3. Defecto 2 — la degradación era muda
 
@@ -135,9 +175,11 @@ Lo que se ha podido verificar **sin un proyecto de Google Cloud** y lo que sigue
 
 ## 6. Lo que queda pendiente y depende del productor
 
-1. **`VERTEX_PROJECT_ID` está vacío** en `config.yaml`, `.env.example` y `cloudbuild.yaml` (`_VERTEX_PROJECT_ID: ""`). Es así por diseño —vacío significa «Vertex inactiva»— pero implica que, incluso con el endpoint corregido, **el crédito no se toca hasta declarar el proyecto**.
-2. **Rastrear los €2,01** del producto *Gemini API* (§2).
+1. **`VERTEX_PROJECT_ID` está vacío** en `config.yaml`, `.env.example` y `cloudbuild.yaml` (`_VERTEX_PROJECT_ID: ""`). Es así por diseño —vacío significa «Vertex inactiva», y es el interruptor para cuando se agote el crédito— pero implica que, incluso con el endpoint corregido, **el crédito no se toca hasta declarar el proyecto**. El valor es **`yuki-prod`**.
+2. **Las tres claves de AI Studio** (`ais-gemini-key-*`) siguen vivas en el proyecto `gen-lang-client-0734039446`. Mientras existan, pueden seguir facturando fuera del crédito (§2).
 3. **Verificar los cinco modelos** con `python3 cli.py vertex-check` una vez haya proyecto (§5).
-4. **Presupuesto y alertas**, runbook §8. Sin poner.
+4. **Presupuesto y alertas**, runbook §8. **Hecho** (7 sep 2026).
+5. **Compute Engine: €2,91** en la tabla de costes. Es la partida más alta y no la explica nada de este repositorio: Yuki se despliega en Cloud Run, no en máquinas virtuales. Conviene revisar si hay alguna instancia encendida.
+6. **El crédito caduca el 23 de septiembre de 2026** con €252,29 sin usar.
 
 Los pasos concretos del panel están en `docs/RUNBOOK_GCLOUD.md` §§2, 3 y 8.

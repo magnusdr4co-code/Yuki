@@ -49,20 +49,36 @@ Por eso el código **no** se autentica con una clave. Si en algún momento te ti
 
 ### 1.bis Cómo se lee el panel de facturación
 
-La columna del panel que resuelve la duda es **Product**, no las de ahorros:
+Dos columnas de la tabla de costes: **Product** dice por qué API salió el gasto, y **Other savings** dice si el crédito lo cubrió.
 
 | Lo que ves en *Product* | Qué API es | ¿Toca el crédito? |
 |---|---|---|
-| **Vertex AI** | `aiplatform.googleapis.com` | Sí |
-| **Gemini API** | `generativelanguage.googleapis.com` (AI Studio) | No |
+| **Vertex AI** (aparece como *Agent Platform API* en la lista de APIs) | `aiplatform.googleapis.com` | **Sí** |
+| **Gemini API** | `generativelanguage.googleapis.com` (AI Studio) | **No** |
 
-Una línea con el producto **Gemini API** significa que el gasto salió por AI Studio, y **Yuki no llama nunca a esa API**: viene de otro proceso, de otra herramienta o de una clave suelta. Que las columnas de ahorro estén a cero no prueba nada por sí solo: los créditos de prueba no se restan ahí, sino en la fila de promociones y créditos del informe de costes. Lo que hay que mirar es el producto.
+Verificado contra el panel del productor el 7 de septiembre de 2026: Vertex AI llevaba €0,18 de uso y −€0,18 en *Other savings* (subtotal €0), mientras que Gemini API llevaba €2,01 y €0,00 de descuento. **El crédito funciona; lo que no cubre es AI Studio.**
+
+Una línea con el producto **Gemini API** significa que el gasto salió por AI Studio, y **Yuki no llama nunca a esa API**: viene de otro proceso, de otra herramienta o de una clave suelta.
 
 Si aparece gasto bajo *Gemini API*:
 
 1. `python3 cli.py vertex-check` — avisa si hay `GEMINI_API_KEY`/`GOOGLE_API_KEY` en el entorno.
 2. Quita esa variable del `.env`, del despliegue de Cloud Run y de los Jobs.
-3. Revisa qué otra cosa comparte proyecto: `hermes_config.yaml` declara `google: "${GEMINI_API_KEY}"` para la ruta de emergencia del agregador, y cualquier herramienta externa (Gemini CLI, AI Studio) apuntada al mismo proyecto factura ahí.
+3. En `Billing → Cost table`, **agrupa por proyecto**. Las claves de AI Studio viven en un proyecto propio, con el nombre autogenerado `gen-lang-client-*`, y sus cuentas de servicio llevan el prefijo `ais-gemini-key-*`. Ese gasto no es de Yuki.
+4. `hermes_config.yaml` declara `google: "${GEMINI_API_KEY}"`, pero **ese fichero no lo carga ningún código de este repositorio**: es la plantilla de `~/.hermes/config.yaml`, del harness. Descartado como origen.
+
+### 1.quater Cuidado con los cuatro nombres parecidos
+
+En la lista de APIs habilitadas **no busques «Vertex AI»**: hoy aparece como **«Agent Platform API»**, por el rebautizado a *Gemini Enterprise Agent Platform*.
+
+| Nombre en el panel | Servicio | Papel |
+|---|---|---|
+| **Agent Platform API** | `aiplatform.googleapis.com` | **Vertex AI. La que consume el crédito.** No la desactives |
+| Gemini API | `generativelanguage.googleapis.com` | AI Studio. La que factura fuera del crédito |
+| Gemini for Google Cloud API | Asistencia de Gemini en la consola | Nada que ver con Yuki |
+| Gemini Cloud Assist API | Ídem | Nada que ver con Yuki |
+
+Antes de desactivar ninguna, confirma el nombre del servicio pinchando en ella: los rótulos cambian, los `*.googleapis.com` no.
 
 ### 1.ter El endpoint: dónde se rompía la alineación
 
@@ -82,6 +98,8 @@ Ya está corregido, con test de regresión (`test_vertex_global_endpoint_has_no_
 ## 2. Cuenta y proyecto
 
 El productor tiene **dos cuentas de Google**. La que debe quedar activa es **`magnus.dr4co@gmail.com`**. Confírmalo antes de gastar un céntimo: un error aquí carga el gasto al proyecto de la otra cuenta.
+
+La cuenta de facturación es **`01E208-BEDDAC-B94E7E`** y tiene tres proyectos. El de Yuki es **`yuki-prod`** («Yuki Digital Diva»); ése es el valor de `VERTEX_PROJECT_ID`. Los otros dos (`gen-lang-client-0734039446`, generado por AI Studio, y `project-3b69d116-9099-4e2f-a68`) **no** son el sitio donde debe correr Yuki.
 
 ```bash
 gcloud auth login magnus.dr4co@gmail.com
