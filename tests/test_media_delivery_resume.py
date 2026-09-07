@@ -98,6 +98,7 @@ def _adaptador(tmp_path, portal, monkeypatch):
     adaptador.agent = agente
     adaptador.paired_producer_ids = {"42"}
     adaptador._workflow_tasks = set()
+    adaptador._active_job_ids = set()
     adaptador.media_jobs = MediaJobStore(str(tmp_path / "jobs"))
     # El montaje real invoca ffmpeg; aquí sólo interesa el estado del trabajo.
     adaptador._concat_videos = staticmethod(
@@ -209,3 +210,36 @@ def test_tope_de_presupuesto_aplaza_el_trabajo_sin_gastar_intentos(tmp_path, mon
     assert portal2.canciones == 0
     assert portal2.clips == 2, "sólo los dos segmentos que faltaban"
     assert adaptador2.media_jobs.get(recuperado.id).status == "terminado"
+
+
+def test_una_reconexion_no_relanza_un_trabajo_en_curso(tmp_path, monkeypatch):
+    """
+    `on_ready` se emite de nuevo en cada reconexión del gateway.
+
+    Sin registro de trabajos vivos, una caída de red a mitad de un encargo
+    lanzaría una segunda tarea sobre el mismo trabajo y pagaría dos veces los
+    clips que faltaran.
+    """
+    portal = PortalDoble(tmp_path, presupuesto_desde_clip=2)
+    adaptador = _adaptador(tmp_path, portal, monkeypatch)
+
+    # Un encargo que queda aplazado y, por tanto, reanudable.
+    asyncio.run(adaptador._run_dm_media_delivery("42", "Productor", "canción y vídeo", CanalDoble()))
+    pendiente = adaptador.media_jobs.resumable()[0]
+
+    # Se simula que hay una tarea viva para ese trabajo (lo que ocurre cuando la
+    # reconexión llega con la producción todavía en marcha).
+    adaptador._active_job_ids.add(pendiente.id)
+    lanzado = adaptador._spawn_media_job(pendiente, "42", "Productor", pendiente.order, CanalDoble())
+
+    assert lanzado is False
+    assert adaptador._workflow_tasks == set(), "no se creó una segunda tarea"
+
+    # Y la propia reanudación lo salta en vez de duplicarlo.
+    async def _reanudar():
+        adaptador.client = types.SimpleNamespace(
+            get_user=lambda _id: types.SimpleNamespace(dm_channel=CanalDoble()),
+        )
+        return await adaptador.resume_pending_media_jobs()
+
+    assert asyncio.run(_reanudar()) == 0

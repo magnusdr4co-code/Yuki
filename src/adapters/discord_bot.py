@@ -81,6 +81,11 @@ class DiscordAdapter:
         # Los encargos multimedia se persisten antes de gastar crédito, así que
         # un reinicio los reanuda en vez de perderlos.
         self.media_jobs = MediaJobStore()
+        # Trabajos con una tarea viva ahora mismo. `on_ready` no se dispara sólo
+        # al arrancar: Discord lo vuelve a emitir en cada reconexión del gateway,
+        # y sin este registro una caída de red relanzaría un encargo en curso y
+        # pagaría dos veces el mismo clip.
+        self._active_job_ids: Set[str] = set()
 
         intents = discord.Intents.none()
         intents.guilds = True
@@ -450,12 +455,24 @@ class DiscordAdapter:
             "Si el proceso se reinicia, el trabajo se reanuda desde el último paso verificado."
         )
 
-    def _spawn_media_job(self, job, author_id: str, author_name: str, content: str, channel) -> None:
+    def _spawn_media_job(self, job, author_id: str, author_name: str, content: str, channel) -> bool:
+        """Lanza el trabajo si no hay ya una tarea viva para él. Devuelve si lo lanzó."""
+        if job.id in self._active_job_ids:
+            logger.info("Trabajo multimedia %s ya está en curso; no se relanza.", job.id)
+            return False
+
+        self._active_job_ids.add(job.id)
         task = asyncio.create_task(
             self._run_dm_media_delivery(author_id, author_name, content, channel, job=job)
         )
         self._workflow_tasks.add(task)
-        task.add_done_callback(self._workflow_tasks.discard)
+
+        def _al_terminar(finalizada) -> None:
+            self._workflow_tasks.discard(finalizada)
+            self._active_job_ids.discard(job.id)
+
+        task.add_done_callback(_al_terminar)
+        return True
 
     async def resume_pending_media_jobs(self) -> int:
         """
@@ -468,6 +485,9 @@ class DiscordAdapter:
         """
         reanudados = 0
         for job in self.media_jobs.resumable():
+            if job.id in self._active_job_ids:
+                # Reconexión del gateway con el trabajo todavía corriendo.
+                continue
             if job.requester_id not in self.paired_producer_ids:
                 self.media_jobs.abandon(job, "el solicitante ya no es un Productor emparejado")
                 continue
@@ -481,8 +501,8 @@ class DiscordAdapter:
                 "Reanudando trabajo multimedia %s (%s), reanudación nº %d",
                 job.id, describe_media_job(job), job.resumed,
             )
-            self._spawn_media_job(job, job.requester_id, "productor", job.order, channel)
-            reanudados += 1
+            if self._spawn_media_job(job, job.requester_id, "productor", job.order, channel):
+                reanudados += 1
         return reanudados
 
     async def _recover_dm_channel(self, job):
@@ -591,7 +611,13 @@ class DiscordAdapter:
                 )
                 song_path = song.get("local_path") if song.get("status") == "success" else None
                 if song_path and Path(song_path).is_file():
-                    song_step.mark_done(song_path)
+                    # Lyria canta; el respaldo local no. La nota viaja con el paso
+                    # para que la entrega —incluso tras un reinicio— no llame
+                    # canción a una maqueta instrumental.
+                    song_step.mark_done(song_path, note=(
+                        "🎵 Canción con letra — archivo generado" if song.get("sung")
+                        else "🎼 " + (song.get("note") or "Maqueta local: no es una canción cantada.")
+                    ))
                     self.media_jobs.save(job)
                     await asyncio.to_thread(self.agent.creation_library.inventory)
                 elif song.get("budget_exceeded"):
@@ -606,7 +632,8 @@ class DiscordAdapter:
                     self.media_jobs.save(job)
                     await report(f"⚠️ No se generó canción: {detalle}")
             if song_step.is_done() and not song_step.delivered:
-                if await self._send_file(channel, song_step.path, "🎵 Canción con letra — archivo generado"):
+                if await self._send_file(channel, song_step.path,
+                                         song_step.note or "🎵 Pista de audio generada"):
                     song_step.delivered = True
                     self.media_jobs.save(job)
                 else:

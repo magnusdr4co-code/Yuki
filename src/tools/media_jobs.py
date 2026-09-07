@@ -64,6 +64,10 @@ class MediaStep:
     error: Optional[str] = None
     attempts: int = 0
     delivered: bool = False
+    # Qué es exactamente el fichero producido. Importa cuando un paso puede
+    # resolverse por dos caminos distintos —Lyria canta; el respaldo local no—,
+    # porque la entrega no debe llamar canción a una maqueta instrumental.
+    note: Optional[str] = None
     updated_at: int = field(default_factory=_ahora)
 
     def is_done(self) -> bool:
@@ -77,9 +81,10 @@ class MediaStep:
     def exhausted(self) -> bool:
         return self.attempts >= MAX_INTENTOS_POR_PASO and not self.is_done()
 
-    def mark_done(self, path: Optional[str] = None) -> None:
+    def mark_done(self, path: Optional[str] = None, note: Optional[str] = None) -> None:
         self.status = HECHO
         self.path = path or self.path
+        self.note = note or self.note
         self.error = None
         self.updated_at = _ahora()
 
@@ -127,7 +132,9 @@ class MediaJob:
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> "MediaJob":
-        steps = [MediaStep(**s) for s in data.get("steps", []) if isinstance(s, dict)]
+        campos_paso = set(MediaStep.__dataclass_fields__)
+        steps = [MediaStep(**{k: v for k, v in s.items() if k in campos_paso})
+                 for s in data.get("steps", []) if isinstance(s, dict)]
         campos = {k: v for k, v in data.items() if k in cls.__dataclass_fields__ and k != "steps"}
         campos.setdefault("id", uuid.uuid4().hex[:12])
         campos.setdefault("requester_id", "")

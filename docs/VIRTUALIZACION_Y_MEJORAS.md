@@ -68,12 +68,37 @@ abierto y cada uno lleva su vía de salida en la sección 4.
 | L2 | Sin proyecto Vertex declarado, medios y crédito inactivos | bloqueante | abierto (depende del entorno) |
 | L1 | Producción multimedia interrumpible por reinicio | grave | **mitigado** |
 | L3 | Clave de AI Studio en el entorno (factura fuera del crédito) | grave | abierto (depende del entorno) |
-| L4 | Sin motor de música propio: la canción depende de una preview | grave | abierto |
+| L4 | El canto depende de una preview; hay respaldo instrumental propio | grave | **mitigado** en la imagen |
 | L7 | Instancia única; copia diaria hecha, salida sujeta a bucket | grave | parcial |
 | L8 | Vídeo facturado por segundo sin techo de gasto | grave | **mitigado** |
 | L5 | Nous Portal sigue sin endpoint | moderado | abierto |
 | L6 | Telegram sin conectar; búsqueda web sujeta a clave | moderado | parcial |
 | L9 | Honcho dialéctico sin servicio remoto | moderado | abierto |
+
+### L4 — El canto dependía de una sola preview (mitigado)
+
+`generate_music_flow` sólo producía audio real por `lyria-3-pro-preview`. Una
+preview puede cambiar de nombre, de precio o retirarse sin aviso, y ese día Yuki
+se quedaba sin música y sin plan B: `local.midi` produce partituras, no audio, y
+un `.mid` no se escucha en Discord.
+
+`src/tools/music_fallback.py` cierra el hueco con lo que ya hay en casa: la
+partitura del generador MIDI, FluidSynth con un banco General MIDI y el ffmpeg
+que la imagen ya traía (los dos primeros se añaden al `Dockerfile`). Si se le
+pasa una voz, la mezcla por encima con la base cediendo 9 dB.
+
+Dos límites que **se declaran en el propio resultado** y no se disimulan: no
+canta —`sung: False`, y con voz es una letra *recitada*, no un canto—, y sin los
+binarios devuelve `status: error` diciendo cuál falta, nunca un marcador. La
+entrega por DM lleva la nota del paso, así que ni siquiera tras un reinicio
+puede llamar «canción» a una maqueta instrumental.
+
+Un tope de presupuesto **no** se esquiva por este camino: si el límite dice que
+hoy no toca, renderizar igual sería desobedecerlo. Sólo un fallo del motor abre
+el respaldo.
+
+Lo que sigue abierto: el canto con letra sigue siendo territorio de Lyria. Para
+no depender de una sola preview haría falta un segundo motor que cante.
 
 ### L8 — Vídeo sin techo de gasto (mitigado)
 
@@ -151,13 +176,12 @@ Falta lo que no depende del código: declarar el bucket en producción y **proba
 una restauración completa al menos una vez**. Una copia sin restaurar no está
 comprobada. Manual: `python3 cli.py backup`.
 
-### M4 · Motor musical de respaldo
-*Cierra L4.* La canción cantada depende por completo de `lyria-3-pro-preview`;
-una preview puede cambiar o retirarse sin aviso, y ese día Yuki se queda sin
-música real y sin plan B. Propuesta: declarar un segundo motor o construir el
-respaldo con lo que ya hay en casa —partitura de `midi_generator`, voz de Gemini
-TTS, mezcla con el ffmpeg que la imagen ya trae—, y archivar en Biblioteca el
-prompt y los parámetros de cada pista para poder rehacerla igual.
+### M4 · Motor musical de respaldo — **hecho**
+*Mitiga L4.* Construido con lo que ya había en casa, como se proponía: partitura
+propia, FluidSynth y ffmpeg. Ver la ficha de L4. Queda pendiente lo que ningún
+código resuelve: contratar un segundo motor que **cante**, para que el canto no
+dependa de una sola preview, y archivar en Biblioteca el prompt y los parámetros
+de cada pista para poder rehacerla igual.
 
 ### M5 · Extender el enrutado por tarea al resto del sistema
 *Amplía lo hecho.* `provider_routing.routes` ya se aplica: las rutas del cron
@@ -189,7 +213,7 @@ vivir en caliente.
 ## 5. Comprobación
 
 ```bash
-python3 -m pytest tests -q                     # 297 pruebas
+python3 -m pytest tests -q                     # 317 pruebas
 python3 cli.py backup                          # copia verificada de memoria y canon
 python3 cli.py spend                           # gasto de hoy contra el presupuesto
 python3 cli.py virtualize                      # limitadores del entorno actual

@@ -21,6 +21,7 @@ módulo no depende de que un cliente HTTP esté instalado para poder importarse.
 
 from __future__ import annotations
 
+import asyncio
 import json
 import logging
 import os
@@ -186,8 +187,6 @@ class WebSearchTool:
 
     async def search_news_and_trends(self, topic: str) -> List[Dict[str, Any]]:
         """Corrientes reales si hay buscador; pistas marcadas si no lo hay."""
-        import asyncio
-
         return await asyncio.to_thread(self.engine.search, topic)
 
     def describe_origin(self, resultados: List[Dict[str, Any]]) -> str:

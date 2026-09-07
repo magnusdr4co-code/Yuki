@@ -145,3 +145,73 @@ def test_sin_seccion_budget_hay_limites_por_defecto():
 
     assert libro.enabled
     assert libro.limits[VIDEO_SEGUNDOS] > 0
+
+
+# --- Reserva atómica ---
+
+def test_reservar_comprueba_y_anota_en_el_mismo_tramo(libro):
+    """Comprobar y anotar por separado deja en medio toda la llamada al proveedor."""
+    primera = libro.reserve(VIDEO_SEGUNDOS, 24)
+    segunda = libro.reserve(VIDEO_SEGUNDOS, 8)
+
+    assert primera.allowed and not segunda.allowed
+    assert libro.today()[VIDEO_SEGUNDOS] == 24, "sólo se anota lo autorizado"
+
+
+def test_una_reserva_denegada_no_anota_nada(libro):
+    libro.reserve(VIDEO_SEGUNDOS, 24)
+    antes = libro.today()[VIDEO_SEGUNDOS]
+
+    libro.reserve(VIDEO_SEGUNDOS, 8)
+
+    assert libro.today()[VIDEO_SEGUNDOS] == antes
+
+
+def test_la_devolucion_restituye_lo_no_gastado(libro):
+    libro.reserve(VIDEO_SEGUNDOS, 16)
+    libro.refund(VIDEO_SEGUNDOS, 16)
+
+    assert libro.today()[VIDEO_SEGUNDOS] == 0
+    assert libro.check(VIDEO_SEGUNDOS, 24).allowed
+
+
+def test_una_devolucion_no_deja_el_consumo_en_negativo(libro):
+    libro.reserve(VIDEO_SEGUNDOS, 8)
+    libro.refund(VIDEO_SEGUNDOS, 24)
+
+    assert libro.today()[VIDEO_SEGUNDOS] == 0
+
+
+def test_dos_procesos_no_se_cuelan_por_el_hueco_de_la_llamada(tmp_path):
+    """El daemon y el Salón reservan contra el mismo fichero, con flock."""
+    ruta = str(tmp_path / "l.json")
+    daemon = SpendLedger(path=ruta, limits={VIDEO_SEGUNDOS: 8})
+    salon = SpendLedger(path=ruta, limits={VIDEO_SEGUNDOS: 8})
+
+    assert daemon.reserve(VIDEO_SEGUNDOS, 8).allowed
+    assert not salon.reserve(VIDEO_SEGUNDOS, 8).allowed
+    assert SpendLedger(path=ruta).today()[VIDEO_SEGUNDOS] == 8
+
+
+def test_reservas_concurrentes_no_superan_el_limite(tmp_path):
+    """Ocho hilos pidiendo a la vez: el límite manda, no el orden de llegada."""
+    import threading
+
+    ruta = str(tmp_path / "l.json")
+    autorizadas = []
+    barrera = threading.Barrier(8)
+
+    def pedir():
+        libro = SpendLedger(path=ruta, limits={VIDEO_SEGUNDOS: 24})
+        barrera.wait()
+        if libro.reserve(VIDEO_SEGUNDOS, 8).allowed:
+            autorizadas.append(1)
+
+    hilos = [threading.Thread(target=pedir) for _ in range(8)]
+    for hilo in hilos:
+        hilo.start()
+    for hilo in hilos:
+        hilo.join()
+
+    assert len(autorizadas) == 3, "24 segundos dan para exactamente tres clips de 8"
+    assert SpendLedger(path=ruta).today()[VIDEO_SEGUNDOS] == 24

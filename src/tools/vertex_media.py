@@ -234,7 +234,7 @@ class VertexMediaClient:
 
         model = model or self.image_model
 
-        permiso = self.budget.check(IMAGENES, 1)
+        permiso = self.budget.reserve(IMAGENES, 1)
         if not permiso.allowed:
             logger.warning("Imagen rechazada por presupuesto: %s", permiso.reason)
             return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
@@ -288,13 +288,13 @@ class VertexMediaClient:
             # daemon mientras se pinta.
             datos = await asyncio.to_thread(_llamar)
         except Exception as e:
+            self.budget.refund(IMAGENES, 1)
             return _resultado_error(f"Fallo generando imagen con Vertex ({model}): {e}")
 
         with open(destino, "wb") as f:
             f.write(datos)
 
         logger.info(f"🎨 Imagen real generada con {model}: {destino}")
-        self.budget.record(IMAGENES, 1)
         return {
             "status": "success",
             "simulated": False,
@@ -327,7 +327,7 @@ class VertexMediaClient:
                 f"Duración musical fuera de rango: {duration_seconds}s; máximo {max_duration}s."
             )
 
-        permiso = self.budget.check(MUSICA_PISTAS, 1)
+        permiso = self.budget.reserve(MUSICA_PISTAS, 1)
         if not permiso.allowed:
             logger.warning("Música rechazada por presupuesto: %s", permiso.reason)
             return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
@@ -352,15 +352,15 @@ class VertexMediaClient:
         try:
             datos = await asyncio.to_thread(_llamar)
         except Exception as e:
+            self.budget.refund(MUSICA_PISTAS, 1)
             return _resultado_error(f"Fallo generando música con Vertex ({model}): {e}")
 
         with open(destino, "wb") as f:
             f.write(datos)
 
         logger.info("🎵 Canción real generada con %s: %s", model, destino)
-        # Dos unidades: las pistas acotan el número de encargos y los segundos
-        # dejan constancia del volumen, aunque no haya precio que aplicarles.
-        self.budget.record(MUSICA_PISTAS, 1)
+        # La pista ya está reservada; los segundos se anotan al confirmarse, y
+        # dejan constancia del volumen aunque no haya precio que aplicarles.
         self.budget.record(MUSICA_SEGUNDOS, duration_seconds)
         return {
             "status": "success",
@@ -409,9 +409,11 @@ class VertexMediaClient:
         if image_path and not os.path.exists(image_path):
             return _resultado_error(f"No existe la imagen de partida: {image_path}")
 
-        # El presupuesto se consulta aquí, antes del proveedor: pasado este
-        # punto el segundo de vídeo ya está facturado.
-        permiso = self.budget.check(VIDEO_SEGUNDOS, duration_seconds)
+        # El presupuesto se reserva aquí, antes del proveedor: pasado este punto
+        # el segundo de vídeo ya está facturado. Reservar —en vez de comprobar y
+        # anotar después— cierra el hueco en el que dos encargos simultáneos
+        # superarían ambos el mismo límite. Si Veo falla, se devuelve.
+        permiso = self.budget.reserve(VIDEO_SEGUNDOS, duration_seconds)
         if not permiso.allowed:
             logger.warning("Vídeo rechazado por presupuesto: %s", permiso.reason)
             return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
@@ -494,13 +496,16 @@ class VertexMediaClient:
         try:
             datos = await asyncio.to_thread(_llamar)
         except Exception as e:
+            # La reserva no se gastó: devolverla evita que un 503 consuma el
+            # presupuesto del día sin haber producido un solo fotograma.
+            self.budget.refund(VIDEO_SEGUNDOS, duration_seconds)
             return _resultado_error(f"Fallo generando vídeo con Vertex ({model}): {e}")
 
         with open(destino, "wb") as f:
             f.write(datos)
 
+        # Ya está anotado por la reserva; aquí sólo se informa.
         coste = duration_seconds * PRECIO_VIDEO_POR_SEGUNDO
-        self.budget.record(VIDEO_SEGUNDOS, duration_seconds)
         logger.info(f"🎬 Vídeo real generado con {model}: {destino} (≈${coste:.2f}); "
                     f"presupuesto de hoy → {self.budget.describe()}")
         return {
@@ -550,7 +555,7 @@ class VertexMediaClient:
             "cada palabra antes de decirla. Ritmo sereno, nunca apresurado."
         )
 
-        permiso = self.budget.check(VOZ_CARACTERES, len(text))
+        permiso = self.budget.reserve(VOZ_CARACTERES, len(text))
         if not permiso.allowed:
             logger.warning("Voz rechazada por presupuesto: %s", permiso.reason)
             return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
@@ -579,12 +584,12 @@ class VertexMediaClient:
         try:
             audio = await asyncio.to_thread(_llamar)
         except Exception as e:
+            self.budget.refund(VOZ_CARACTERES, len(text))
             return _resultado_error(f"Fallo sintetizando voz con Vertex ({model}): {e}")
 
         with open(destino, "wb") as f:
             f.write(audio)
 
-        self.budget.record(VOZ_CARACTERES, len(text))
         logger.info(f"🎙️ Nota de voz real generada con {model}: {destino}")
         return {
             "status": "success",

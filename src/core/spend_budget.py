@@ -22,6 +22,7 @@ que las excluye. Un límite por unidades protege igual sin fingir precisión.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -115,7 +116,15 @@ class SpendLedger:
 
     Un proceso escribe y otro lee (el daemon y el Salón comparten disco), así que
     cada actualización relee el fichero antes de sumar: dos apuntes simultáneos
-    se suman en vez de pisarse.
+    se suman en vez de pisarse. La sección crítica se cierra con un `flock` sobre
+    un fichero aparte, porque un `threading.Lock` no dice nada al otro contenedor.
+
+    La operación que de verdad importa es `reserve`: comprobar y anotar en el
+    mismo tramo cerrado. Comprobar primero y anotar después del proveedor deja en
+    medio toda la llamada —decenas de segundos en el caso de Veo—, y en ese hueco
+    dos encargos simultáneos superan ambos un límite que ya estaba al borde. Si
+    el proveedor luego falla, `refund` devuelve lo reservado: es preferible
+    devolver que arriesgarse a gastar de más.
     """
 
     def __init__(self, path: Optional[str] = None, limits: Optional[Dict[str, float]] = None,
@@ -157,6 +166,29 @@ class SpendLedger:
         return cls(**parametros)
 
     # -- Estado ----------------------------------------------------------
+
+    @contextlib.contextmanager
+    def _exclusivo(self):
+        """
+        Sección crítica intra e inter proceso.
+
+        `flock` es de POSIX; donde no exista, el candado de hilo sigue siendo
+        correcto dentro del proceso y la operación no se bloquea por ello.
+        """
+        with self._lock:
+            try:
+                import fcntl
+            except ImportError:
+                yield
+                return
+
+            candado = self.path.with_name(self.path.name + ".lock")
+            with open(candado, "w", encoding="utf-8") as descriptor:
+                fcntl.flock(descriptor, fcntl.LOCK_EX)
+                try:
+                    yield
+                finally:
+                    fcntl.flock(descriptor, fcntl.LOCK_UN)
 
     def _leer(self) -> Dict[str, Any]:
         if not self.path.is_file():
@@ -227,17 +259,50 @@ class SpendLedger:
 
         return BudgetDecision(True, "dentro del presupuesto", unit, usado, limite)
 
+    def _anotar(self, unit: str, amount: float) -> Dict[str, float]:
+        """Suma dentro de una sección ya cerrada. No la abre por su cuenta."""
+        datos = self._leer()
+        dia = _hoy(self.timezone_name)
+        consumo = datos["dias"].setdefault(dia, {})
+        consumo[unit] = max(0.0, round(float(consumo.get(unit, 0.0)) + float(amount), 4))
+        self._podar(datos)
+        self._escribir(datos)
+        return dict(consumo)
+
     def record(self, unit: str, amount: float) -> Dict[str, float]:
         """Anota lo gastado. Se llama sólo tras un resultado real y verificado."""
-        with self._lock:
-            datos = self._leer()
-            dia = _hoy(self.timezone_name)
-            consumo = datos["dias"].setdefault(dia, {})
-            consumo[unit] = round(float(consumo.get(unit, 0.0)) + float(amount), 4)
-            self._podar(datos)
-            self._escribir(datos)
-            logger.info("Gasto anotado: %s +%g (hoy %g)", unit, amount, consumo[unit])
-            return dict(consumo)
+        with self._exclusivo():
+            consumo = self._anotar(unit, amount)
+        logger.info("Gasto anotado: %s +%g (hoy %g)", unit, amount, consumo.get(unit, 0.0))
+        return consumo
+
+    def reserve(self, unit: str, amount: float) -> BudgetDecision:
+        """
+        Comprueba y anota en la misma sección cerrada, antes de gastar.
+
+        Es la forma correcta de usar el presupuesto: lo que se comprueba queda
+        reservado, así que otro encargo simultáneo ve el consumo ya sumado y no
+        puede colarse por el hueco de la llamada al proveedor.
+        """
+        with self._exclusivo():
+            decision = self.check(unit, amount)
+            if decision.allowed:
+                self._anotar(unit, amount)
+        if not decision.allowed:
+            logger.warning("Reserva denegada: %s", decision.reason)
+        return decision
+
+    def refund(self, unit: str, amount: float) -> Dict[str, float]:
+        """
+        Devuelve una reserva que no llegó a gastarse.
+
+        Un fallo del proveedor no se cobra: si Veo devuelve 503 no hay segundo
+        de vídeo facturado que anotar.
+        """
+        with self._exclusivo():
+            consumo = self._anotar(unit, -abs(amount))
+        logger.info("Reserva devuelta: %s -%g", unit, amount)
+        return consumo
 
     def record_llm(self, input_tokens: int, output_tokens: int) -> None:
         """Atajo para el consumo de texto, que llega en dos unidades a la vez."""

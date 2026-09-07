@@ -182,3 +182,20 @@ def test_sin_bucket_la_copia_no_protege_de_perder_el_disco(monkeypatch):
     limitador = _lim(instancia, "L7")
     assert limitador.status == "abierto"
     assert "mismo disco" in limitador.evidence
+
+
+def test_el_respaldo_musical_depende_de_los_binarios_de_la_imagen(monkeypatch):
+    monkeypatch.setattr("shutil.which", lambda nombre: None)
+    sin_respaldo = VirtualInstance(CONFIG)
+
+    assert _cap(sin_respaldo, "medios.musica_local").state == INACTIVO
+    assert _lim(sin_respaldo, "L4").status == "abierto"
+
+    monkeypatch.setattr("shutil.which", lambda nombre: f"/usr/bin/{nombre}")
+    monkeypatch.setattr("src.tools.music_fallback.LocalMusicEngine._soundfont_disponible",
+                        staticmethod(lambda: "/usr/share/sounds/sf2/FluidR3_GM.sf2"))
+    con_respaldo = VirtualInstance(CONFIG)
+
+    assert _cap(con_respaldo, "medios.musica_local").state == REAL
+    assert _lim(con_respaldo, "L4").status == MITIGADO
+    assert "no cantado" in _lim(con_respaldo, "L4").evidence

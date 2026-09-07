@@ -23,9 +23,15 @@ FROM python:3.11-slim AS runner
 
 WORKDIR /app
 
+# fluidsynth + banco General MIDI: el respaldo musical local
+# (src/tools/music_fallback.py) sintetiza aquí la partitura propia cuando Lyria
+# no está disponible. Sin ellos ese camino se declara indisponible y lo dice;
+# no produce marcadores.
 RUN apt-get update && apt-get install -y --no-install-recommends \
     sqlite3 \
     ffmpeg \
+    fluidsynth \
+    fluid-soundfont-gm \
     ca-certificates \
     curl \
     tzdata \

@@ -184,7 +184,8 @@ contratar servicios de pago o de prometer una demo.
 | Pasarela Nous Portal | ⚠️ Interfaz lista, mock | El endpoint no existe aún; `NOUS_PORTAL_MODE=mock` para trabajar sin red |
 | Enrutado por tiers (`provider_routing.routes`) | ✅ Real | `LLMRouter.generate(..., route=...)` aplica modelo preferente, temperatura y `max_tokens` por tarea; el modelo de la ruta sólo se impone al agregador declarado, no a Vertex. Cableado en las rutinas del cron |
 | Imagen, vídeo y voz vía Vertex AI | ✅ Real | `src/tools/vertex_media.py`: Imagen (portadas), Gemini Omni Flash (vídeo) y Gemini TTS (voz en OGG Opus nativo). Opcional: inactivo hasta declarar `VERTEX_PROJECT_ID` |
-| Nous Portal: imagen, música, voz | ⚠️ Marcador | Sin Vertex configurado, `src/tools/nous_portal.py` escribe ficheros de marcador **declarados como simulados**. La música no tiene motor contratado en ninguna ruta: usa `local.midi` |
+| Respaldo musical local | ✅ Real | `src/tools/music_fallback.py`: partitura propia + FluidSynth + ffmpeg dentro de la imagen. Entra cuando Lyria falla. **No canta**: el resultado lleva `sung: False` y lo dice |
+| Nous Portal: imagen, música, voz | ⚠️ Marcador | Sin Vertex configurado, `src/tools/nous_portal.py` escribe ficheros de marcador **declarados como simulados**. El canto sigue dependiendo de Lyria; sin ella hay respaldo instrumental local declarado |
 | Firecrawl / búsqueda web | ✅ Real | `src/tools/web_search.py`: cliente HTTP real. Opcional: sin `FIRECRAWL_API_KEY` devuelve pistas declaradas `simulated` y sin URL, nunca titulares inventados |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
 | Copia verificada de memoria y canon | ✅ Real | `src/tools/backup.py`: instantánea coherente de SQLite + `integrity_check`, tras la síntesis diaria. Sale de la instancia sólo con `BACKUP_GCS_BUCKET`, y si no lo declara **lo dice** |

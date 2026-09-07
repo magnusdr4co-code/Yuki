@@ -20,6 +20,9 @@ from dataclasses import dataclass, field, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..tools.backup import BackupManager
+from ..tools.media_jobs import MediaJobStore
+from ..tools.music_fallback import LocalMusicEngine
 from .llm_router import is_usable_key, build_routes
 from .spend_budget import SpendLedger
 
@@ -118,8 +121,6 @@ class VirtualInstance:
         directorio = self.data_dir / "media_jobs"
         if not directorio.is_dir():
             return 0
-        from ..tools.media_jobs import MediaJobStore
-
         return len(MediaJobStore(str(directorio)).resumable())
 
     # -- Construcción ----------------------------------------------------
@@ -192,6 +193,14 @@ class VirtualInstance:
             (f"Límites diarios {libro.limits}, comprobados antes de generar; hoy: {libro.describe()}"
              if libro.enabled else "Sección `budget` deshabilitada: nada acota el gasto de medios"),
         )
+        respaldo_musical = LocalMusicEngine()
+        faltan = respaldo_musical.missing_requirements()
+        self._cap(
+            "medios.musica_local", "Medios", REAL if not faltan else INACTIVO,
+            ("Respaldo propio: partitura, FluidSynth y ffmpeg dentro de la imagen; "
+             "maqueta instrumental o letra recitada, nunca canto"
+             if not faltan else f"Respaldo musical local indisponible: falta {', '.join(faltan)}"),
+        )
         self._cap("medios.midi", "Medios", REAL,
                   "Partituras locales por `src/tools/midi_generator.py`, sin proveedor")
         pendientes = self.pending_media_jobs()
@@ -235,8 +244,6 @@ class VirtualInstance:
             if _clave_util("FIRECRAWL_API_KEY")
             else "Sin clave: pistas de introspección declaradas como simuladas, sin URL inventada",
         )
-        from ..tools.backup import BackupManager
-
         respaldo = BackupManager.from_config(self.config)
         copias = respaldo.list_backups()
         self._cap(
@@ -283,15 +290,22 @@ class VirtualInstance:
                 impact="El Gemini API de AI Studio se factura fuera del crédito de prueba.",
                 proposals=["Retirarla del entorno; la ruta de producción se autentica con ADC."],
             )
+        respaldo_ok = not LocalMusicEngine().missing_requirements()
         self._lim(
-            id="L4", title="Sin motor de música contratado propio",
-            severity=GRAVE, status=ABIERTO,
-            evidence="`nous_portal.generate_music_flow` sólo produce audio real vía Lyria en Vertex; "
-                     "sin ella cae a marcador y las partituras salen de local.midi.",
-            impact="La canción cantada depende por completo de una preview de Vertex; si cambia el "
-                   "catálogo, Yuki se queda sin música real y sin alternativa.",
+            id="L4", title="El canto depende de una preview; hay respaldo instrumental",
+            severity=GRAVE, status=MITIGADO if respaldo_ok else ABIERTO,
+            evidence=("`generate_music_flow` intenta Lyria y, si falla, "
+                      + ("cae al respaldo local (partitura propia + FluidSynth + ffmpeg), que sí "
+                         "produce audio real y se declara no cantado."
+                         if respaldo_ok else
+                         "no puede caer al respaldo local: faltan binarios en esta imagen "
+                         f"({', '.join(LocalMusicEngine().missing_requirements())}).")),
+            impact=("Si la preview se retira, Yuki sigue teniendo música propia que entregar, "
+                    "declarada como maqueta. El canto con letra sigue dependiendo de Lyria."
+                    if respaldo_ok else
+                    "Si la preview se retira, Yuki se queda sin música real y sin alternativa."),
             proposals=[
-                "Fijar un segundo motor (o render acústico propio sobre MIDI + TTS) como respaldo declarado.",
+                "Contratar un segundo motor que cante, para no depender de una sola preview.",
                 "Archivar en Biblioteca el prompt y los parámetros de cada pista para poder rehacerla.",
             ],
         )
@@ -318,9 +332,7 @@ class VirtualInstance:
             proposals=["Conectar `python-telegram-bot` con el webhook ya declarado en config.yaml.",
                        "Declarar FIRECRAWL_API_KEY para que las corrientes nocturnas vengan del mundo."],
         )
-        from ..tools.backup import BackupManager as _Gestor
-
-        gestor = _Gestor.from_config(self.config)
+        gestor = BackupManager.from_config(self.config)
         fuera = bool(gestor.bucket)
         self._lim(
             id="L7", title="Instancia única sin réplica; copia fuera sujeta a bucket",

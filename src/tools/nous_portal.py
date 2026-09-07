@@ -28,6 +28,7 @@ from typing import Dict, Any, List, Optional
 
 from src.tools.vertex_media import VertexMediaClient
 from src.tools.web_search import FirecrawlSearch
+from src.tools.music_fallback import LocalMusicEngine
 
 logger = logging.getLogger("Yuki.NousPortal")
 
@@ -67,6 +68,10 @@ class NousPortalClient:
         # Buscador real. Sin clave devuelve pistas declaradas como simuladas,
         # nunca titulares inventados con URL verosímil.
         self.web_search = FirecrawlSearch.from_config(config)
+
+        # Respaldo musical propio: partitura, sintetizador y ffmpeg dentro de la
+        # imagen. No canta —eso sólo lo hace Lyria—, pero suena de verdad.
+        self.local_music = LocalMusicEngine(music_dir=self.music_dir)
 
         # Motor real de medios. Inerte mientras no haya proyecto de Google
         # Cloud: entonces esta clase cae a sus marcadores, marcados como tales.
@@ -182,7 +187,8 @@ class NousPortalClient:
         duration_seconds: int = 90,
         bpm: int = 84,
         scale: str = "Insen",
-        mood_params: Optional[Dict[str, Any]] = None
+        mood_params: Optional[Dict[str, Any]] = None,
+        voice_path: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Sintetiza música completa y stems mediante motores de difusión de audio de frontera:
@@ -209,9 +215,49 @@ class NousPortalClient:
             )
             if resultado.get("status") == "success":
                 resultado["audio_url"] = local_uri(resultado["local_path"])
-            else:
-                resultado["audio_url"] = None
+                # Lyria sí canta: es lo que la distingue del respaldo local.
+                resultado.setdefault("sung", True)
+                return resultado
+
+            resultado["audio_url"] = None
+            if resultado.get("budget_exceeded"):
+                # El presupuesto no es un fallo del motor: decide que hoy no toca,
+                # y renderizar una maqueta en su lugar sería desobedecerlo.
+                return resultado
+
+            # Aquí está la razón de ser del respaldo (limitador L4): Lyria es una
+            # preview y puede fallar o retirarse. Antes de eso, Yuki se quedaba
+            # sin música; ahora suena su propia partitura y se dice qué es.
+            logger.warning("Lyria no sirvió la pista (%s); se intenta el respaldo local.",
+                           resultado.get("error"))
+            if self.local_music.is_available():
+                maqueta = self.local_music.compose(
+                    title=title, duration_seconds=duration_seconds, bpm=bpm,
+                    scale=(scale or "insen").lower(), voice_path=voice_path,
+                )
+                if maqueta.get("status") == "success":
+                    maqueta["audio_url"] = local_uri(maqueta["local_path"])
+                    maqueta["fallback_from"] = resultado.get("error")
+                    return maqueta
+                logger.warning("El respaldo local tampoco pudo: %s", maqueta.get("error"))
             return resultado
+
+        # Antes del marcador va el respaldo local: si la imagen trae sintetizador,
+        # hay audio real que entregar aunque Lyria no esté. Se declara lo que es
+        # —maqueta instrumental, o letra recitada sobre música— y nunca canto.
+        if engine != "midi_only" and self.local_music.is_available():
+            maqueta = self.local_music.compose(
+                title=title,
+                duration_seconds=duration_seconds,
+                bpm=bpm,
+                scale=(scale or "insen").lower(),
+                voice_path=voice_path,
+            )
+            if maqueta.get("status") == "success":
+                logger.info("Música servida por el respaldo local: %s", maqueta["local_path"])
+                maqueta["audio_url"] = local_uri(maqueta["local_path"])
+                return maqueta
+            logger.warning("El respaldo musical local no pudo componer: %s", maqueta.get("error"))
 
         audio_filename = f"{title.lower().replace(' ', '_')}_{engine}_{int(time.time())}.mp3"
         audio_path = os.path.join(self.music_dir, audio_filename)
@@ -366,8 +412,6 @@ class NousPortalClient:
         sin URL. La honestidad del resultado la comprueba quien lo use con
         `describe_origin`.
         """
-        import asyncio
-
         logger.info(f"Buscando corrientes del mundo: '{query}' (buscador "
                     f"{'activo' if self.web_search.is_available() else 'no configurado'})")
         return await asyncio.to_thread(self.web_search.search, query, limit)
