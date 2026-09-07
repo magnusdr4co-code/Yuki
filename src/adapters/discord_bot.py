@@ -510,12 +510,19 @@ class DiscordAdapter:
             )
             await self._send_long(channel, f"### Poema / letra — Herrumbre y Escarcha\n{poem}")
 
+            music_engine = "midi_only"
+            media_creator = getattr(self.agent, "media_creator", None)
+            portal = getattr(media_creator, "portal", None)
+            vertex = getattr(portal, "vertex", None)
+            if getattr(vertex, "is_available", lambda: False)():
+                music_engine = getattr(vertex, "music_model", "lyria-3-pro-preview")
+
             music = await self.agent.media_creator.compose_beat_structure(
                 title="Herrumbre y Escarcha",
                 bpm=82,
                 scale="insen",
                 mood="agua, hierro, invierno y esperanza contenida",
-                engine="midi_only",
+                engine=music_engine,
             )
             await self._send_long(
                 channel,
@@ -557,8 +564,8 @@ class DiscordAdapter:
             else:
                 await self._send_long(
                     channel,
-                    "⚠️ No adjunto una canción falsa: el proyecto aún no tiene un motor de audio musical. "
-                    "La partitura MIDI sí es real.",
+                    "⚠️ La canción no se pudo generar; la partitura MIDI sí es real. "
+                    f"Detalle: {music.get('audio_note') or 'sin detalle'}",
                 )
 
             if can_attach:

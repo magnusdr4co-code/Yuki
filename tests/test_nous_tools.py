@@ -30,12 +30,18 @@ def test_vertex_media_can_use_a_regional_image_endpoint():
             "location": "global",
             "media": {
                 "location": "us-central1",
+                "video_location": "us-central1",
+                "music_location": "global",
                 "image_model": "imagen-3.0-generate-002",
+                "music_model": "lyria-3-pro-preview",
             },
         }
     })
     assert motor.location == "us-central1"
     assert motor.image_model == "imagen-3.0-generate-002"
+    assert motor.video_location == "us-central1"
+    assert motor.music_location == "global"
+    assert motor.music_model == "lyria-3-pro-preview"
 
 
 def portal_sin_vertex() -> NousPortalClient:
@@ -154,7 +160,17 @@ def sdk_de_google_simulado():
     def _constructor(**kwargs):
         return kwargs
 
-    genai_types = _modulo("google.genai.types", GenerateImagesConfig=_constructor)
+    class Image:
+        @classmethod
+        def from_file(cls, location):
+            return {"location": location}
+
+    genai_types = _modulo(
+        "google.genai.types",
+        GenerateImagesConfig=_constructor,
+        GenerateVideosConfig=_constructor,
+        Image=Image,
+    )
     genai_interactions = _modulo(
         "google.genai.interactions",
         GenerationConfig=_constructor,
@@ -213,6 +229,7 @@ class ClienteGenaiFalso:
         self.recibido = {}
         self.models = self
         self.interactions = self
+        self.operations = self
 
     def generate_images(self, model, prompt, config):
         if self._error:
@@ -239,6 +256,25 @@ class ClienteGenaiFalso:
         })()
         return type("Interaccion", (), {"steps": [paso]})()
 
+    def generate_videos(self, model, prompt=None, image=None, config=None, **kwargs):
+        self.recibido.update({"model": model, "prompt": prompt, "image": image, "config": config})
+        video = type("Video", (), {"video_bytes": b"datos-de-video-mp4"})()
+        generated = type("Generated", (), {"video": video})()
+        response = type("Response", (), {"generated_videos": [generated]})()
+        return type("Operation", (), {"done": True, "response": response})()
+
+    def get(self, operation):
+        return operation
+
+
+class ClienteMusicaFalso:
+    def __init__(self):
+        self.interactions = self
+
+    def create(self, model, input, **kwargs):
+        audio = type("Audio", (), {"data": b"ID3-datos-de-lyria"})()
+        return type("Interaccion", (), {"output_audio": audio})()
+
 
 class TestVertexMedia(unittest.TestCase):
 
@@ -254,6 +290,25 @@ class TestVertexMedia(unittest.TestCase):
 
     def test_active_with_a_project(self):
         self.assertTrue(VertexMediaClient(project_id="yuki-diva").is_available())
+
+    def test_lyria_writes_a_real_mp3_result(self):
+        async def _run():
+            motor = VertexMediaClient(
+                project_id="yuki-diva",
+                client=ClienteMusicaFalso(),
+                music_model="lyria-3-pro-preview",
+                music_dir=self.tmp,
+                music_location="global",
+            )
+            result = await motor.generate_music("shamisen y escarcha", duration_seconds=90)
+            self.assertEqual(result["status"], "success")
+            self.assertFalse(result["simulated"])
+            self.assertTrue(result["local_path"].endswith(".mp3"))
+            with open(result["local_path"], "rb") as f:
+                self.assertEqual(f.read(), b"ID3-datos-de-lyria")
+
+        with sdk_de_google_simulado():
+            asyncio.run(_run())
 
     def test_can_be_switched_off_while_project_remains(self):
         self.assertFalse(VertexMediaClient(project_id="yuki-diva", enabled=False).is_available())
@@ -347,7 +402,7 @@ class TestVertexMedia(unittest.TestCase):
             os.remove(result["local_path"])
 
             # La duración pedida llega al modelo con el formato que espera.
-            self.assertEqual(cliente.recibido["response_format"]["duration"], "8s")
+            self.assertEqual(cliente.recibido["config"]["duration_seconds"], "8")
 
         with sdk_de_google_simulado():
             asyncio.run(_run())
@@ -363,13 +418,11 @@ class TestVertexMedia(unittest.TestCase):
             motor = VertexMediaClient(
                 project_id="yuki-diva", client=cliente, video_dir=self.tmp
             )
-            result = await motor.generate_video("anímala", duration_seconds=5, image_path=portada)
+            result = await motor.generate_video("anímala", duration_seconds=6, image_path=portada)
 
             self.assertEqual(result["status"], "success")
             self.assertEqual(result["task"], "image_to_video")
-            self.assertEqual(
-                cliente.recibido["generation_config"]["video_config"]["task"], "image_to_video"
-            )
+            self.assertIsNotNone(cliente.recibido["image"])
             os.remove(result["local_path"])
             os.remove(portada)
 

@@ -1,7 +1,7 @@
 """
 Herramientas creativas de alto nivel para la Diva Digital.
 Permite a Yuki pintar portadas con Gemini Image / Seedream / Flux Pro,
-componer música con Flow Audio / Suno v4 / MIDI real,
+componer música con Lyria 3 / MIDI real,
 y orquestar lanzamientos multimedia en el workspace nativo ./output/.
 """
 
@@ -154,11 +154,11 @@ class MediaCreatorTool:
         bpm: int = 84,
         scale: str = "insen",
         mood: str = "lluvia sobre metal",
-        engine: str = "flow_audio", # "flow_audio", "suno_v4", "midi_only"
+        engine: str = "flow_audio", # "lyria-3-pro-preview", "lyria-3-clip-preview", "midi_only"
         mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
         """
-        Compone una pieza musical con motores de audio de frontera (Flow / Suno v4)
+        Compone una pieza musical con Lyria 3 y genera también la partitura MIDI
         generando también la partitura MIDI multipista procedural en ./output/music/.
         """
         music_dir = "output/music"

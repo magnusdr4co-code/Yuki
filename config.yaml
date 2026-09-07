@@ -67,11 +67,15 @@ vertex_ai:
     # Las publisher models Imagen devuelven 404 en este proyecto. Gemini Image
     # sí está habilitado y usa generate_content; la región sólo afecta al cliente multimedia.
     location: "us-central1"
+    video_location: "us-central1"
+    music_location: "global"
     image_model: "gemini-2.5-flash-image"
-    # Gemini Omni Flash: genera y edita VÍDEO con audio nativo, facturado por
-    # segundo (~0,10 USD/s). No es un modelo de texto: el cerebro de Yuki lo
-    # sirve `primary_model`, no éste.
-    video_model: "gemini-omni-flash-preview"
+    # Veo 3.1 Fast: vídeo de 4/6/8 s con sonido nativo, en us-central1.
+    # La llamada asíncrona devuelve bytes MP4; no se adjunta una URI remota sin
+    # haber descargado el fichero.
+    video_model: "veo-3.1-fast-generate-001"
+    # Lyria 3 Pro Preview: canción completa en MP3, hasta 184 s, global.
+    music_model: "lyria-3-pro-preview"
     # Gemini TTS emite OGG Opus nativo, así que en esta ruta no hace falta el
     # transcodificado con ffmpeg que exige el catálogo para portal.tts.
     tts_model: "gemini-2.5-flash-tts"
@@ -115,14 +119,15 @@ nous_portal:
     vision:
       default_provider: "gemini_image" # "gemini_image", "seedream", "flux_pro"
       models:
-        gemini_image: "google/imagen-3-generate-002"
+        gemini_image: "gemini-2.5-flash-image"
         seedream: "bytedance/seedream-v2.5-hd"
         flux_pro: "fal-ai/flux-pro/v1.1-ultra"
     music:
-      default_engine: "flow_audio" # "flow_audio", "suno_v4", "midi_only"
+      default_engine: "lyria-3-pro-preview" # "lyria-3-pro-preview", "lyria-3-clip-preview", "midi_only"
       models:
-        flow_audio: "deepmind/flow-audio-craft-v2"
-        suno_v4: "suno/v4-studio"
+        lyria_pro: "lyria-3-pro-preview"
+        lyria_clip: "lyria-3-clip-preview"
+        midi_only: "local.midi"
     voice:
       default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"
       voice_id: "yuki_serene_alto"

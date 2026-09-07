@@ -69,6 +69,7 @@ class NousPortalClient:
             config,
             art_dir=self.art_dir,
             voice_dir=self.voice_dir,
+            music_dir=self.music_dir,
             video_dir=self.video_dir,
         )
 
@@ -172,8 +173,8 @@ class NousPortalClient:
         self,
         title: str,
         prompt: str,
-        engine: str = "flow_audio", # "flow_audio", "suno_v4", "audiocraft"
-        duration_seconds: int = 45,
+        engine: str = "flow_audio", # "lyria-3-pro-preview", "lyria-3-clip-preview", "midi_only"
+        duration_seconds: int = 90,
         bpm: int = 84,
         scale: str = "Insen",
         mood_params: Optional[Dict[str, Any]] = None
@@ -189,6 +190,24 @@ class NousPortalClient:
             atmosphere = mood_params.get('atmosphere', '')
             if atmosphere:
                 prompt = f"{prompt}, atmosphere: {atmosphere}"
+
+        # Lyria se consume como publisher model por Interactions API: no hay
+        # endpoint que desplegar ni GPU que mantener en la VM.
+        if self.vertex.is_available() and (
+            engine.startswith("lyria-") or engine in {"lyria", "vertex_lyria"}
+        ):
+            modelo = engine if engine.startswith("lyria-") else None
+            resultado = await self.vertex.generate_music(
+                prompt,
+                duration_seconds=duration_seconds,
+                model=modelo,
+            )
+            if resultado.get("status") == "success":
+                resultado["audio_url"] = local_uri(resultado["local_path"])
+            else:
+                resultado["audio_url"] = None
+            return resultado
+
         audio_filename = f"{title.lower().replace(' ', '_')}_{engine}_{int(time.time())}.mp3"
         audio_path = os.path.join(self.music_dir, audio_filename)
 
