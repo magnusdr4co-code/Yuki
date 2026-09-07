@@ -26,6 +26,7 @@ def test_production_request_is_detected_only_for_explicit_channel_request():
 def test_media_delivery_request_requires_creation_media_and_delivery():
     assert looks_like_media_delivery_request("Crea la canción y el vídeo, y pásamelos por aquí.")
     assert looks_like_media_delivery_request("Genera un mp3 y adjúntalo aquí")
+    assert looks_like_media_delivery_request("Procede con la canción y el vídeo")
     assert not looks_like_media_delivery_request("El vídeo anterior duró tres segundos.")
 
 

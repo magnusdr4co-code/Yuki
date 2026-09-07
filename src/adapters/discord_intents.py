@@ -35,10 +35,16 @@ def looks_like_discord_production_request(content: str) -> bool:
 def looks_like_media_delivery_request(content: str) -> bool:
     """Encargo explícito de generar y adjuntar medios en el DM del Productor."""
     text = fold(content)
-    asks_to_make = any(token in text for token in ("crea", "crear", "genera", "generar", "haz", "realiza"))
-    asks_for_media = any(token in text for token in ("cancion", "musica", "audio", "video", "mp3", "mp4"))
+    asks_to_make = any(token in text for token in (
+        "crea", "crear", "genera", "generar", "haz", "realiza", "procede", "continua",
+    ))
+    media_terms = ("cancion", "musica", "audio", "video", "mp3", "mp4")
+    asks_for_media = any(token in text for token in media_terms)
     asks_for_delivery = any(token in text for token in ("aqui", "pasame", "adjunta", "envia"))
-    return asks_to_make and asks_for_media and asks_for_delivery
+    asks_for_both_media = sum(token in text for token in ("cancion", "video")) == 2
+    # El Productor puede decir "procede" tras haber descrito los adjuntos;
+    # exigir literalmente "pásamelo" convertía una orden inequívoca en prosa.
+    return asks_to_make and asks_for_media and (asks_for_delivery or asks_for_both_media)
 
 
 def extract_production_target(content: str) -> Tuple[str, str]:

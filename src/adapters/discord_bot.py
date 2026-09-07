@@ -280,14 +280,17 @@ class DiscordAdapter:
         """
         if author_id not in self.paired_producer_ids or not self._is_paired(author_id):
             return "🔒 Se requiere DM del productor emparejado."
-        if _looks_like_discord_production_request(content):
+        channel_production = _looks_like_discord_production_request(content)
+        media_delivery = _looks_like_media_delivery_request(content)
+        logger.info("Ruta DM productor: canal_produccion=%s media_entrega=%s", channel_production, media_delivery)
+        if channel_production:
             return self._launch_discord_production(
                 author_id=author_id,
                 author_name=author_name,
                 content=content,
                 origin_channel=origin_channel,
             )
-        if _looks_like_media_delivery_request(content):
+        if media_delivery:
             return self._launch_dm_media_delivery(
                 author_id=author_id,
                 author_name=author_name,
