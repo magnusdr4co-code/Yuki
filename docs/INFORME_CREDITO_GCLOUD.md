@@ -21,6 +21,7 @@ Se encontraron **tres defectos**, dos de ellos silenciosos. Ninguno se manifiest
 | 1 | El host de Vertex se componía mal para la región `global` | Toda petición de texto daba 404 y la cadena caía a OpenRouter **en silencio** | Corregido |
 | 2 | La degradación de Vertex no dejaba rastro | Imposible notar que el crédito no se estaba usando | Corregido |
 | 3 | `tests/test_agent.py` dependía de la hora del reloj | Bloqueaba el despliegue a Cloud Run entre las 00:00 y las 02:00 | Corregido |
+| 4 | El anexo de Compute Engine creaba la VM **sin `--scopes`** | El token de la máquina no sirve para Vertex: 403 por ámbitos, otra vez **en silencio** | Corregido |
 
 Y una conclusión que **no** es un defecto del código: los €2,01 de la línea *Gemini API* **no los ha generado Yuki**, sino claves de AI Studio en otro proyecto. Confirmado contra el panel en §2, donde además se ve que **el crédito sí se aplica a Vertex AI** (−€0,18) y **no a Gemini API** (€0,00).
 
@@ -155,6 +156,32 @@ No se ha tocado la política de presencia en sí —que Yuki descanse de madruga
 
 ---
 
+## 4.bis Defecto 4 — la VM no puede llamar a Vertex aunque todo lo demás esté bien
+
+Yuki no corre en Cloud Run: corre en una VM de Compute Engine (`yuki-agent`, proyecto `yuki-prod`) con el contenedor dentro. Eso explica los €2,91 de Compute Engine de la tabla de costes, y cambia por completo cómo se autentica.
+
+**Dentro de una VM, los ámbitos de la máquina mandan sobre los que pide el código.** Las credenciales por defecto salen del servidor de metadatos, y el token lleva los ámbitos fijados al crear la instancia. Que `llm_router.py` pida `cloud-platform` no sirve de nada si la máquina no lo tiene.
+
+El anexo de `docs/GCP_DEPLOYMENT.md` creaba la VM **sin `--scopes`**, así que recibía los de por defecto:
+
+```
+devstorage.read_only   logging.write                monitoring.write
+servicecontrol         service.management.readonly  trace.append
+```
+
+**`cloud-platform` no está.** Con eso, Vertex responde 403 por ámbitos insuficientes **aunque la cuenta de servicio tenga `roles/aiplatform.user`** —son dos cosas distintas y hacen falta las dos—, `VertexProvider` degrada a OpenRouter y el crédito no se toca. El síntoma es idéntico al de no haber configurado nada: Yuki responde con normalidad.
+
+Es el tercer camino distinto que llevaba al mismo sitio, y el único que no se ve leyendo el código.
+
+**Corrección:**
+
+- El anexo crea la VM con `--scopes=cloud-platform` y explica cómo arreglar una ya creada (hay que **parar** la máquina: los ámbitos no se cambian en caliente).
+- `gce_service_account_scopes()` en `src/core/llm_router.py` lee los ámbitos del servidor de metadatos.
+- `cli.py vertex-check` detecta solo que está dentro de una VM, los lista y dice si bastan.
+- El aviso de degradación añade la pista cuando la causa es ésta.
+
+---
+
 ## 5. Tabla de supuestos del runbook §4
 
 Lo que se ha podido verificar **sin un proyecto de Google Cloud** y lo que sigue pendiente.
@@ -179,7 +206,7 @@ Lo que se ha podido verificar **sin un proyecto de Google Cloud** y lo que sigue
 2. **Las tres claves de AI Studio** (`ais-gemini-key-*`) siguen vivas en el proyecto `gen-lang-client-0734039446`. Mientras existan, pueden seguir facturando fuera del crédito (§2).
 3. **Verificar los cinco modelos** con `python3 cli.py vertex-check` una vez haya proyecto (§5).
 4. **Presupuesto y alertas**, runbook §8. **Hecho** (7 sep 2026).
-5. **Compute Engine: €2,91** en la tabla de costes. Es la partida más alta y no la explica nada de este repositorio: Yuki se despliega en Cloud Run, no en máquinas virtuales. Conviene revisar si hay alguna instancia encendida.
+5. **Compute Engine: €2,91** — **explicado**: es la VM `yuki-agent`, donde corre Yuki. Consume crédito, que es lo que se quiere. Pero ojo a §4.bis: hay que revisarle los ámbitos.
 6. **El crédito caduca el 23 de septiembre de 2026** con €252,29 sin usar.
 
 Los pasos concretos del panel están en `docs/RUNBOOK_GCLOUD.md` §§2, 3 y 8.

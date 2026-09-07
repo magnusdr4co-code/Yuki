@@ -396,8 +396,66 @@ gcloud compute instances create yuki-vps \
   --zone="${REGION}-a" \
   --boot-disk-size=20GB \
   --image-family=debian-12 \
-  --image-project=debian-cloud
+  --image-project=debian-cloud \
+  --scopes=https://www.googleapis.com/auth/cloud-platform
 ```
 
 Dentro de la máquina se usa el `docker-compose.yml` del repositorio, que ya
 levanta el Salón y el daemon autónomo como dos servicios.
+
+### El `--scopes` no es opcional si quieres usar el crédito
+
+Es el detalle que más caro sale de todo este anexo, porque **no se ve desde el
+código**. Dentro de una VM, las credenciales por defecto (ADC) salen del
+servidor de metadatos, y el token que devuelve lleva **los ámbitos que se le
+fijaron a la máquina al crearla**, no los que pide el programa. Que
+`llm_router.py` llame a `google.auth.default(scopes=[cloud-platform])` no
+cambia nada: si la VM no tiene ese ámbito, no lo tendrá el token.
+
+Una VM creada **sin** `--scopes` recibe los de por defecto, que **no incluyen
+`cloud-platform`**:
+
+```
+devstorage.read_only   logging.write            monitoring.write
+servicecontrol         service.management.readonly   trace.append
+```
+
+Con esos ámbitos, Vertex responde **403 por ámbitos insuficientes** aunque la
+cuenta de servicio tenga `roles/aiplatform.user`. Y como `VertexProvider`
+degrada a la siguiente pasarela, Yuki sigue respondiendo por OpenRouter y el
+crédito no se toca. El síntoma es idéntico al de no tener nada configurado.
+
+**Comprobarlo desde dentro de la máquina:**
+
+```bash
+curl -s -H "Metadata-Flavor: Google" \
+  http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default/scopes
+```
+
+O, más cómodo, `python3 cli.py vertex-check`, que detecta solo que está dentro
+de una VM, lista los ámbitos y dice si bastan.
+
+**Arreglarlo en una VM ya creada.** Los ámbitos sólo se cambian con la máquina
+**parada** — no hay forma de hacerlo en caliente:
+
+```bash
+ZONA="${REGION}-a"
+gcloud compute instances stop yuki-agent --zone="$ZONA"
+gcloud compute instances set-service-account yuki-agent --zone="$ZONA" \
+  --scopes=https://www.googleapis.com/auth/cloud-platform
+gcloud compute instances start yuki-agent --zone="$ZONA"
+```
+
+Y el rol, que es cosa aparte de los ámbitos (hacen falta los dos):
+
+```bash
+gcloud projects add-iam-policy-binding "$PROJECT_ID" \
+  --member="serviceAccount:$(gcloud projects describe "$PROJECT_ID" \
+      --format='value(projectNumber)')-compute@developer.gserviceaccount.com" \
+  --role=roles/aiplatform.user
+```
+
+> **Ámbitos y roles no son lo mismo.** El rol dice qué puede hacer la identidad;
+> el ámbito dice qué parte de ese poder viaja dentro del token de esta máquina.
+> El más restrictivo de los dos gana, y con los ámbitos por defecto gana
+> siempre el ámbito.

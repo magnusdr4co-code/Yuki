@@ -338,7 +338,10 @@ LLAMADAS_CRON_POR_DIA = 84
 def cmd_vertex_check():
     """Comprueba de extremo a extremo la ruta de Vertex y estima el gasto."""
     import yaml
-    from src.core.llm_router import LLMRouter, VertexProvider, ai_studio_key_in_use
+    from src.core.llm_router import (
+        LLMRouter, VertexProvider, ai_studio_key_in_use,
+        gce_service_account_scopes, gce_scopes_permiten_vertex,
+    )
 
     print_banner()
     print(f"{YELLOW}{BOLD}☁️  Comprobación de Vertex AI (Gemini Enterprise Agent Platform){RESET}\n")
@@ -375,6 +378,25 @@ def cmd_vertex_check():
         print(f"{DIM}  Declara el proyecto en VERTEX_PROJECT_ID o en config.yaml (vertex_ai.project_id).{RESET}")
         print(f"{DIM}  El tráfico sale mientras tanto por la siguiente pasarela de la cadena.{RESET}\n")
         return
+
+    # Dentro de una VM de Compute Engine los ámbitos de la máquina mandan sobre
+    # los que pide el código: sin `cloud-platform`, Vertex devuelve 403 aunque
+    # el rol de IAM sea correcto. Es un fallo que no se ve desde el programa.
+    scopes = gce_service_account_scopes()
+    if scopes is not None:
+        print(f"{DIM}Ejecutando dentro de una VM de Google Cloud. Ámbitos de la máquina:{RESET}")
+        for scope in scopes:
+            print(f"{DIM}  · {scope}{RESET}")
+        if gce_scopes_permiten_vertex(scopes):
+            print(f"{GREEN}✓ La VM tiene el ámbito 'cloud-platform'.{RESET}\n")
+        else:
+            print(f"{RED}✗ A la VM le falta el ámbito 'cloud-platform'.{RESET}")
+            print(f"{DIM}  Su token no servirá para Vertex por muchos roles de IAM que le des.{RESET}")
+            print(f"{DIM}  Los ámbitos sólo se cambian con la máquina parada:{RESET}")
+            print(f"{DIM}    gcloud compute instances stop <vm> --zone=<zona>{RESET}")
+            print(f"{DIM}    gcloud compute instances set-service-account <vm> --zone=<zona> \\{RESET}")
+            print(f"{DIM}      --scopes=https://www.googleapis.com/auth/cloud-platform{RESET}")
+            print(f"{DIM}    gcloud compute instances start <vm> --zone=<zona>{RESET}\n")
 
     print(f"{DIM}Obteniendo credenciales del proyecto (ADC)...{RESET}")
     if not vertex._access_token():

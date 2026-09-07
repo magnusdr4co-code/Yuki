@@ -70,6 +70,58 @@ def vertex_host(location: str) -> str:
     return f"{normalized}-aiplatform.googleapis.com"
 
 
+# Servidor de metadatos de Google Cloud. Sólo responde dentro de una VM de
+# Compute Engine (o de Cloud Run); fuera, la conexión falla y basta con
+# ignorarlo.
+GCE_METADATA_URL = (
+    "http://metadata.google.internal/computeMetadata/v1/instance/service-accounts/default"
+)
+GCE_METADATA_TIMEOUT = 1.0
+CLOUD_PLATFORM_SCOPE = "https://www.googleapis.com/auth/cloud-platform"
+
+
+def gce_service_account_scopes() -> Optional[List[str]]:
+    """
+    Ámbitos de acceso de la VM, leídos del servidor de metadatos.
+
+    Existe por un fallo que no se ve desde el código y cuesta horas: dentro de
+    una VM de Compute Engine, `google.auth.default(scopes=...)` **no manda**.
+    Las credenciales salen del servidor de metadatos y el token lleva los
+    ámbitos que se le fijaron a la máquina al crearla, no los que pide el
+    programa. Una VM creada sin `--scopes` recibe los de por defecto, que **no
+    incluyen `cloud-platform`**, y entonces Vertex responde 403 por ámbitos
+    insuficientes aunque el rol de IAM sea el correcto.
+
+    Devuelve `None` si no estamos en una VM (o el metadato no responde).
+    """
+    try:
+        import urllib.request
+
+        peticion = urllib.request.Request(
+            f"{GCE_METADATA_URL}/scopes", headers={"Metadata-Flavor": "Google"}
+        )
+        with urllib.request.urlopen(peticion, timeout=GCE_METADATA_TIMEOUT) as respuesta:
+            cuerpo = respuesta.read().decode("utf-8")
+        return [linea.strip() for linea in cuerpo.splitlines() if linea.strip()]
+    except (KeyboardInterrupt, SystemExit):
+        raise
+    except Exception:
+        # No estamos en una VM, o el metadato no contesta. No es un error:
+        # este diagnóstico es opcional.
+        return None
+
+
+def gce_scopes_permiten_vertex(scopes: Optional[List[str]]) -> Optional[bool]:
+    """
+    Si los ámbitos de la VM bastan para llamar a Vertex.
+
+    `None` cuando no hay VM que examinar y no se puede afirmar nada.
+    """
+    if scopes is None:
+        return None
+    return CLOUD_PLATFORM_SCOPE in scopes
+
+
 def is_usable_key(value: Optional[str]) -> bool:
     """Descarta claves vacías y los marcadores de posición de `.env.example`."""
     if not value or not value.strip():
@@ -353,6 +405,18 @@ class VertexProvider(LLMProvider):
             "sale por la siguiente pasarela, así que EL CRÉDITO DE GOOGLE CLOUD NO "
             "SE ESTÁ CONSUMIENDO. Diagnostícalo con: python cli.py vertex-check"
         )
+
+        # Dentro de una VM, la causa más probable —y la más difícil de ver— es
+        # que la máquina no tenga el ámbito `cloud-platform`. Se comprueba sólo
+        # aquí, una vez, porque implica hablar con el servidor de metadatos.
+        if gce_scopes_permiten_vertex(gce_service_account_scopes()) is False:
+            logger.warning(
+                "Esta VM de Compute Engine NO tiene el ámbito 'cloud-platform', así "
+                "que su token nunca servirá para Vertex por muchos roles de IAM que "
+                "se le den. Hay que parar la máquina y volver a fijarle los ámbitos: "
+                "gcloud compute instances stop <vm> && gcloud compute instances "
+                "set-service-account <vm> --scopes=cloud-platform"
+            )
 
     def generate(self, system_prompt: str, user_message: str) -> Optional[LLMResponse]:
         if not self.is_available():

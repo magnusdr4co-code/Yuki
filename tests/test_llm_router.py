@@ -26,6 +26,9 @@ from src.core.llm_router import (
     local_voice_response,
     vertex_host,
     ai_studio_key_in_use,
+    gce_service_account_scopes,
+    gce_scopes_permiten_vertex,
+    CLOUD_PLATFORM_SCOPE,
 )
 
 
@@ -450,6 +453,74 @@ def test_vertex_default_provider_uses_global_endpoint():
     vertex = [p for p in LLMRouter(config={"vertex_ai": {"project_id": "yuki-diva"}}).providers
               if p.name == "vertex_ai"][0]
     assert vertex.base_url.startswith("https://aiplatform.googleapis.com/")
+
+
+# --- Ámbitos de la VM de Compute Engine ---
+
+def test_scopes_por_defecto_de_una_vm_no_bastan_para_vertex():
+    """
+    Los ámbitos que Google da a una VM creada sin `--scopes`. `cloud-platform`
+    no está entre ellos, y dentro de una VM son los ámbitos de la máquina —no
+    los que pide el código— los que acaban en el token. Por eso una VM así
+    recibe un 403 de Vertex aunque el rol de IAM sea el correcto.
+    """
+    por_defecto = [
+        "https://www.googleapis.com/auth/devstorage.read_only",
+        "https://www.googleapis.com/auth/logging.write",
+        "https://www.googleapis.com/auth/monitoring.write",
+        "https://www.googleapis.com/auth/service.management.readonly",
+        "https://www.googleapis.com/auth/servicecontrol",
+        "https://www.googleapis.com/auth/trace.append",
+    ]
+    assert gce_scopes_permiten_vertex(por_defecto) is False
+
+
+def test_cloud_platform_basta_para_vertex():
+    assert gce_scopes_permiten_vertex([CLOUD_PLATFORM_SCOPE]) is True
+
+
+def test_sin_vm_no_se_afirma_nada():
+    """Fuera de una VM no hay ámbitos que juzgar: ni sí ni no."""
+    assert gce_scopes_permiten_vertex(None) is None
+
+
+def test_los_scopes_se_leen_del_servidor_de_metadatos(monkeypatch):
+    import urllib.request
+
+    class RespuestaFalsa:
+        def read(self):
+            return (CLOUD_PLATFORM_SCOPE + "\nhttps://www.googleapis.com/auth/userinfo.email\n").encode()
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, *args):
+            return False
+
+    recibido = {}
+
+    def urlopen_falso(peticion, timeout=None):
+        recibido["url"] = peticion.full_url
+        recibido["headers"] = peticion.headers
+        return RespuestaFalsa()
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen_falso)
+
+    scopes = gce_service_account_scopes()
+    assert scopes == [CLOUD_PLATFORM_SCOPE, "https://www.googleapis.com/auth/userinfo.email"]
+    assert recibido["url"].endswith("/instance/service-accounts/default/scopes")
+    assert recibido["headers"]["Metadata-flavor"] == "Google"
+
+
+def test_fuera_de_una_vm_el_metadato_no_revienta(monkeypatch):
+    """Es un diagnóstico opcional: si no hay servidor de metadatos, se calla."""
+    import urllib.request
+
+    def urlopen_que_falla(peticion, timeout=None):
+        raise OSError("no such host: metadata.google.internal")
+
+    monkeypatch.setattr(urllib.request, "urlopen", urlopen_que_falla)
+    assert gce_service_account_scopes() is None
 
 
 # --- Aviso de facturación fuera del crédito ---
