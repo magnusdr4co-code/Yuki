@@ -13,7 +13,7 @@ class GrowthJournal:
         """Recibe directamente la instancia de FTS5MemoryEngine."""
         self.engine = memory_engine
 
-    def generate_review_prompt(self, days_back: int = 7) -> str:
+    def generate_review_prompt(self, days_back: int = 7, max_history_chars: int = 24000) -> str:
         """Construye un prompt para que el LLM analice la evolución reciente."""
         time_limit = datetime.now() - timedelta(days=days_back)
         timestamp_limit = time_limit.timestamp()
@@ -28,10 +28,13 @@ class GrowthJournal:
             ''', (timestamp_limit,))
             rows = cursor.fetchall()
             
-        history = ""
+        history_parts = []
         for row in rows:
             dt = datetime.fromtimestamp(row["created_at"]).strftime("%Y-%m-%d %H:%M")
-            history += f"[{dt}] ({row['category']}) {row['content']}\n"
+            history_parts.append(f"[{dt}] ({row['category']}) {row['content']}\n")
+        # El diario es evidencia, no un contexto infinito: se conserva el tramo
+        # más reciente para que la revisión diaria no agote el modelo.
+        history = "".join(history_parts)[-max_history_chars:]
             
         prompt = f"""
 Analiza las interacciones, pensamientos internos y síntesis de la última semana de Yuki:

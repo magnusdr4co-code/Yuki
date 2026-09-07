@@ -82,6 +82,16 @@ vertex_ai:
     voice: "Aoede"
     language_code: "es-es"
 
+# Overlay persistente en data/runtime_overrides.json. El Productor emparejado
+# puede modificar sólo la lista explícita del arnés; la evolución sólo ajusta
+# temperatura a partir de eventos de crecimiento ya registrados.
+runtime_harness:
+  self_evolution:
+    enabled: true
+    min_interactions: 5
+    min_confidence: 0.80
+    max_temperature_delta: 0.15
+
 # Arnés de seguridad agnóstico al proveedor. La plantilla se creó en la región
 # regional de Model Armor y cubre prompts y respuestas de Discord, web,
 # Telegram y cron desde el mismo punto del ciclo de respuesta.

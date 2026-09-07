@@ -28,8 +28,11 @@ from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
 from .llm_router import LLMRouter
+from .runtime_config import RuntimeConfigStore
+from .evolution_harness import EvolutionHarness
 from ..security.model_armor import ModelArmorClient
 from ..tools.creation_library import CreationLibrary
+from ..tools.producer_terminal import ProducerTerminal
 from .producer_harness import ProducerHarness
 
 # Identificador del productor cuando `honcho.user_id` no lo declara. Es el mismo
@@ -40,7 +43,11 @@ logger = logging.getLogger("Yuki.Agent")
 
 class YukiAgent:
     def __init__(self, config_path: str = "config.yaml"):
-        self.config = self._load_config(config_path)
+        self.config_path = config_path
+        base_config = self._load_config(config_path)
+        override_path = os.getenv("YUKI_RUNTIME_CONFIG_PATH", "data/runtime_overrides.json")
+        self.runtime_config = RuntimeConfigStore(base_config, override_path)
+        self.config = self.runtime_config.effective_config()
         
         # 1. Memoria rápida FTS5
         db_path = self.config.get("memory", {}).get("database_path", "data/yuki_memory.db")
@@ -66,6 +73,7 @@ class YukiAgent:
         )
         self.media_creator = MediaCreatorTool(self.nous_portal)
         self.creation_library = CreationLibrary()
+        self.producer_terminal = ProducerTerminal()
 
         # 4. Constructor de Prompts
         soul_md = self.config.get("memory", {}).get("soul_md_path", "SOUL.md")
@@ -107,6 +115,7 @@ class YukiAgent:
         # texto sin conocer el proveedor; así quedan cubiertas Discord, web,
         # Telegram y las tareas autónomas con una sola puerta.
         self.model_armor = ModelArmorClient.from_config(self.config)
+        self.evolution = EvolutionHarness(self)
 
         self.cron = CronEngine(timezone=tz)
         self.tasks = AutonomousTasks(self)
@@ -120,6 +129,28 @@ class YukiAgent:
             with open(path, "r", encoding="utf-8") as f:
                 return yaml.safe_load(f) or {}
         return {}
+
+    def runtime_config_get(self) -> Dict[str, Any]:
+        """Ajustes públicos que el productor puede inspeccionar por DM."""
+        return self.runtime_config.get_public()
+
+    def _reload_runtime_clients(self) -> None:
+        """Recarga sólo los clientes afectados por el overlay persistente."""
+        self.config = self.runtime_config.effective_config()
+        self.llm_router = LLMRouter(config=self.config)
+        self.model_armor = ModelArmorClient.from_config(self.config)
+
+    def reconfigure_runtime(self, path: str, value: Any, *, actor: str, reason: str = "") -> Dict[str, Any]:
+        """Aplica un ajuste permitido y reversible, sin tocar código, secretos o IAM."""
+        result = self.runtime_config.set(path, value, actor=actor, reason=reason)
+        self._reload_runtime_clients()
+        return result
+
+    def rollback_runtime(self, path: str, *, actor: str, reason: str = "") -> Dict[str, Any]:
+        """Elimina un override y vuelve al valor declarado en config.yaml."""
+        result = self.runtime_config.rollback(path, actor=actor, reason=reason)
+        self._reload_runtime_clients()
+        return result
 
     def _register_cron_jobs(self):
         jobs = self.config.get("scheduler", {}).get("cron_jobs", [])

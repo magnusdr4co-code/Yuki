@@ -139,8 +139,10 @@ class AutonomousTasks:
             date_str=date_str,
             summary_text=daily_text
         )
+        evolution = await self.agent.evolution.review_and_adjust()
+        logger.info("Revisión de evolución diaria: %s", evolution.get("reason", "ajuste aplicado"))
         logger.info(f"Memoria del día guardada ({date_str}): {daily_text}")
-        return daily_text
+        return {"summary": daily_text, "evolution": evolution}
 
     async def echo_ritual(self):
         """06:30 AM - Yuki se invoca a sí misma para comenzar el día."""

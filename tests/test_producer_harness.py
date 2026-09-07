@@ -5,7 +5,9 @@ from types import SimpleNamespace
 import pytest
 
 from src.tools.creation_library import CreationLibrary
+from src.tools.producer_terminal import ProducerTerminal
 from src.core.producer_harness import ProducerHarness
+from src.core.runtime_config import RuntimeConfigStore
 
 
 def test_library_import_preserves_original_and_is_idempotent(tmp_path):
@@ -63,7 +65,16 @@ def agent_for(tmp_path, turns, allowed=True):
                 assert messages[-1]["tool_call_id"] == "call-1"
             return turns.pop(0)
     armor = SimpleNamespace(sanitize_user_prompt=lambda text: SimpleNamespace(allowed=allowed, text=text))
-    return SimpleNamespace(creation_library=CreationLibrary(tmp_path), llm_router=Router(), model_armor=armor)
+    base = {"agent": {"model": {"temperature": 0.72, "max_tokens": 2048}},
+            "vertex_ai": {"temperature": 0.72, "max_tokens": 2048,
+                          "primary_model": "google/gemini-3.8-flash",
+                          "fallback_model": "google/gemini-3.7-flash"}}
+    store = RuntimeConfigStore(base, tmp_path / "runtime_overrides.json")
+    agent = SimpleNamespace(creation_library=CreationLibrary(tmp_path), llm_router=Router(), model_armor=armor,
+                            producer_terminal=ProducerTerminal(), runtime_config_get=store.get_public)
+    agent.reconfigure_runtime = lambda path, value, actor, reason="": store.set(path, value, actor=actor, reason=reason)
+    agent.rollback_runtime = lambda path, actor, reason="": store.rollback(path, actor=actor, reason=reason)
+    return agent
 
 
 def test_harness_executes_then_returns_receipt(tmp_path):
@@ -90,6 +101,42 @@ def test_harness_reports_limit_and_no_background_work(tmp_path):
     answer = asyncio.run(ProducerHarness(agent_for(tmp_path, turns)).run("Yuki", "lista"))
     assert "límite de pasos" in answer
     assert "ninguna tarea ejecutándose" in answer
+
+
+def test_harness_runs_safe_terminal_and_reconfigures_overlay(tmp_path):
+    turns = [
+        {"role": "assistant", "content": "", "tool_calls": [call("terminal_run", {"argv": ["pwd"]})]},
+        {"role": "assistant", "content": "", "tool_calls": [call("runtime_config_set", {
+            "path": "vertex_ai.temperature", "value": 0.8, "reason": "prueba"})]},
+        {"role": "assistant", "content": "Listo."},
+    ]
+    agent = agent_for(tmp_path, turns)
+    answer = asyncio.run(ProducerHarness(agent).run("Yuki", "diagnostica y ajusta"))
+    assert "✓ terminal_run: exit=0" in answer
+    assert "✓ runtime_config_set" in answer
+    assert agent.runtime_config_get()["values"]["vertex_ai.temperature"] == 0.8
+
+
+def test_terminal_rejects_shell_and_sensitive_paths():
+    terminal = ProducerTerminal()
+    with pytest.raises(ValueError):
+        terminal.run(["git", "status", "&&", "id"])
+    with pytest.raises(ValueError):
+        terminal.run(["ls", "data"])
+
+
+def test_runtime_config_evolution_cannot_change_model(tmp_path):
+    base = {"agent": {"model": {"temperature": 0.72, "max_tokens": 2048}},
+            "vertex_ai": {"temperature": 0.72, "max_tokens": 2048,
+                          "primary_model": "google/gemini-3.8-flash",
+                          "fallback_model": "google/gemini-3.7-flash"}}
+    store = RuntimeConfigStore(base, tmp_path / "runtime.json")
+    with pytest.raises(ValueError):
+        store.set("vertex_ai.primary_model", "google/gemini-3.7-flash", actor="evolution")
+    store.set("vertex_ai.temperature", 0.8, actor="evolution")
+    assert store.get_public()["values"]["vertex_ai.temperature"] == 0.8
+    store.rollback("vertex_ai.temperature", actor="evolution")
+    assert store.get_public()["values"]["vertex_ai.temperature"] == 0.72
 
 
 def test_dm_requires_pairing_even_on_direct_method_call(tmp_path):
