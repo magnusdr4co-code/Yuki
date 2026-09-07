@@ -32,7 +32,10 @@ logger = logging.getLogger("Yuki.VertexMedia")
 
 # Identificadores por defecto. Confírmalos contra el proyecto antes de fijarlos:
 #   gcloud ai models list --region=<region>
-DEFAULT_IMAGE_MODEL = "imagen-4.0-generate-001"
+# Imagen 4 no está disponible para este proyecto en `global` (404 en runtime).
+# Imagen 3 sigue siendo la ruta regional estable y se puede cambiar por
+# configuración cuando el proyecto obtenga acceso a un modelo más reciente.
+DEFAULT_IMAGE_MODEL = "imagen-3.0-generate-002"
 DEFAULT_VIDEO_MODEL = "gemini-omni-flash-preview"
 DEFAULT_TTS_MODEL = "gemini-2.5-flash-tts"
 
@@ -119,7 +122,9 @@ class VertexMediaClient:
 
         parametros: Dict[str, Any] = {
             "project_id": vertex_cfg.get("project_id"),
-            "location": vertex_cfg.get("location"),
+            # Los medios pueden necesitar una región distinta del endpoint de
+            # texto. Si no se declara, conserva la región global del texto.
+            "location": media_cfg.get("location", vertex_cfg.get("location")),
             "enabled": vertex_cfg.get("enabled", True),
             "image_model": media_cfg.get("image_model", DEFAULT_IMAGE_MODEL),
             "video_model": media_cfg.get("video_model", DEFAULT_VIDEO_MODEL),

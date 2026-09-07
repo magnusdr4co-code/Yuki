@@ -21,7 +21,7 @@ class PresenceController:
         sociability = getattr(self.vital_state, 'sociability', 0.5)
 
         if phase == 'deep_rest':
-            if channel_type == 'direct_message' and is_producer and energy > 0.3:
+            if channel_type in ('direct_message', 'discord_channel') and is_producer and energy > 0.3:
                 return True
             return False
 

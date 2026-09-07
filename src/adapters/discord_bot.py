@@ -7,11 +7,18 @@ exclusivas para el Productor emparejado (Dextrure) con capacidades Hermes comple
 import os
 import json
 import time
+import asyncio
 import logging
 from pathlib import Path
 from typing import Optional, Set
 
 import discord
+from .discord_intents import (
+    channel_slug as _channel_slug,
+    extract_production_target as _extract_production_target,
+    fold as _fold,
+    looks_like_discord_production_request as _looks_like_discord_production_request,
+)
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -22,6 +29,7 @@ def _parse_id_set(raw_env: str) -> Set[str]:
     if not raw_env:
         return set()
     return {item.strip() for item in raw_env.split(",") if item.strip()}
+
 
 def _resolve_pairing_path() -> Path:
     # Usa DISCORD_PAIRING_PATH si está definido, si no deriva del DATABASE_PATH
@@ -45,6 +53,7 @@ class DiscordAdapter:
         paired_env = os.getenv("DISCORD_PAIRED_PRODUCER_ID", "").strip()
         self.paired_producer_ids = _parse_id_set(paired_env) if paired_env else {DEFAULT_PAIRED_PRODUCER_ID}
         self.pairing_path = _resolve_pairing_path()
+        self._workflow_tasks: Set[object] = set()
 
         intents = discord.Intents.none()
         intents.guilds = True
@@ -135,7 +144,8 @@ class DiscordAdapter:
                 reply = await self.handle_producer_dm(
                     author_id=author_id,
                     author_name=message.author.display_name,
-                    content=content
+                    content=content,
+                    origin_channel=message.channel,
                 )
                 if reply and reply != "NADA_QUE_DECIR":
                     await message.channel.send(
@@ -176,6 +186,23 @@ class DiscordAdapter:
 
             if content.startswith(("/", "!", "$")):
                 logger.info("Discord mensaje ignorado en canal público: prefijo de comando.")
+                return
+
+            if (
+                author_id in self.paired_producer_ids
+                and self._is_paired(author_id)
+                and _looks_like_discord_production_request(content)
+            ):
+                reply = self._launch_discord_production(
+                    author_id=author_id,
+                    author_name=message.author.display_name,
+                    content=content,
+                    origin_channel=message.channel,
+                )
+                await message.channel.send(
+                    reply,
+                    allowed_mentions=discord.AllowedMentions.none(),
+                )
                 return
 
             reply = await self.handle_public_message(
@@ -242,13 +269,27 @@ class DiscordAdapter:
     async def close(self):
         await self.client.close()
 
-    async def handle_producer_dm(self, author_id: str, author_name: str, content: str) -> str:
+    async def handle_producer_dm(
+        self,
+        author_id: str,
+        author_name: str,
+        content: str,
+        origin_channel=None,
+    ) -> str:
         """
         Atiende al Productor emparejado (Dextrure) por DM con plenas capacidades Hermes:
         - Soporta comandos (`!status`, `!pair`, `!skill`, `!cron`)
         - Rol activo: `producer`
         - Invocación Hermes completa sin filtros de canal público
         """
+        if _looks_like_discord_production_request(content):
+            return self._launch_discord_production(
+                author_id=author_id,
+                author_name=author_name,
+                content=content,
+                origin_channel=origin_channel,
+            )
+
         # Comandos Hermes
         if content.startswith("!status") or content.startswith("!state") or content.startswith("!pair") or content.startswith("!pairing"):
             phase = self.agent.circadian.current_phase() if hasattr(self.agent, "circadian") else "desconocida"
@@ -288,3 +329,254 @@ class DiscordAdapter:
             message=content,
             channel_type="discord_channel"
         )
+
+    # --- Acciones Discord del productor --------------------------------------
+
+    def _launch_discord_production(
+        self,
+        author_id: str,
+        author_name: str,
+        content: str,
+        origin_channel,
+    ) -> str:
+        """Lanza la producción en segundo plano y devuelve un acuse inmediato."""
+        task = asyncio.create_task(
+            self._run_discord_production(
+                author_id=author_id,
+                author_name=author_name,
+                content=content,
+                origin_channel=origin_channel,
+            )
+        )
+        self._workflow_tasks.add(task)
+        task.add_done_callback(self._workflow_tasks.discard)
+        return (
+            "⚡ He iniciado la producción en el canal de Discord. "
+            "Iré publicando allí cada resultado y dejaré explícitos los medios "
+            "que el proyecto todavía no pueda generar."
+        )
+
+    def _find_guild(self, requested_name: str):
+        wanted = _fold(requested_name)
+        exact = next((g for g in self.client.guilds if _fold(g.name) == wanted), None)
+        if exact:
+            return exact
+        return next((g for g in self.client.guilds if wanted in _fold(g.name)), None)
+
+    @staticmethod
+    def _permission_names(guild) -> Set[str]:
+        member = getattr(guild, "me", None)
+        if member is None:
+            return set()
+        permissions = getattr(member, "guild_permissions", None)
+        if permissions is None:
+            return set()
+        return {
+            name for name in ("manage_channels", "send_messages", "attach_files")
+            if bool(getattr(permissions, name, False))
+        }
+
+    async def _send_long(self, channel, content: str) -> None:
+        text = content or ""
+        while text:
+            chunk, text = text[:1900], text[1900:]
+            await channel.send(chunk, allowed_mentions=discord.AllowedMentions.none())
+
+    async def _send_file(self, channel, path: Optional[str], caption: str) -> bool:
+        if not path or not Path(path).is_file():
+            return False
+        await channel.send(
+            caption,
+            file=discord.File(path, filename=Path(path).name),
+            allowed_mentions=discord.AllowedMentions.none(),
+        )
+        return True
+
+    async def _run_discord_production(
+        self,
+        author_id: str,
+        author_name: str,
+        content: str,
+        origin_channel,
+    ) -> None:
+        """Ejecuta el encargo multimodal sólo para el productor emparejado."""
+        guild_name, requested_channel_name = _extract_production_target(content)
+        guild = self._find_guild(guild_name)
+
+        async def report_origin(text: str) -> None:
+            if origin_channel is not None:
+                await self._send_long(origin_channel, text)
+
+        if guild is None:
+            await report_origin(f"❌ No encuentro el servidor autorizado `{guild_name}`.")
+            return
+
+        permissions = self._permission_names(guild)
+        missing = {"manage_channels", "send_messages"} - permissions
+        if missing:
+            faltan = ", ".join(sorted(missing))
+            await report_origin(
+                f"🔒 No puedo abrir el Salón en `{guild.name}`: al bot le faltan "
+                f"los permisos `{faltan}`. Concede `Manage Channels` y `Send Messages` "
+                "al rol de Yuki y vuelve a intentarlo."
+            )
+            return
+
+        # Una pausa temporal evita que el cron interrumpa la sesión sin detener
+        # el daemon ni perder las tareas registradas.
+        paused_until = self.agent.cron.pause_for(3 * 60 * 60)
+        try:
+            wanted_slug = _channel_slug(requested_channel_name)
+            channel = next(
+                (
+                    candidate for candidate in guild.text_channels
+                    if _channel_slug(candidate.name) == wanted_slug
+                ),
+                None,
+            )
+            created = False
+            if channel is None:
+                try:
+                    channel = await guild.create_text_channel(
+                        wanted_slug,
+                        topic="Salón de producción de Yuki — poema, música, arte y vídeo.",
+                        reason=f"Producción solicitada por {author_name} ({author_id})",
+                    )
+                    created = True
+                except discord.Forbidden:
+                    await report_origin(
+                        f"🔒 Discord rechazó la creación de `{requested_channel_name}` en `{guild.name}`. "
+                        "El permiso efectivo `Manage Channels` no está concedido al bot."
+                    )
+                    return
+                except discord.HTTPException as exc:
+                    await report_origin(f"❌ Discord no pudo crear el canal: {exc}")
+                    return
+
+            await self._send_long(
+                channel,
+                "⛩️ **Salón de Yuki**\n"
+                "Este es el espacio de producción: cada pieza se publica aquí en orden, "
+                "sin confundir un marcador con una obra real.\n"
+                f"Cron temporalmente pausado hasta `{paused_until.isoformat()}`.",
+            )
+            if created:
+                await report_origin(f"✅ Canal `{channel.name}` creado en `{guild.name}`. La producción continúa allí.")
+            else:
+                await report_origin(f"✅ Ya existía `{channel.name}` en `{guild.name}`. Continúo allí.")
+
+            member = getattr(guild, "me", None)
+            effective = channel.permissions_for(member) if member is not None else None
+            if effective is not None:
+                if not getattr(effective, "send_messages", False):
+                    await report_origin(
+                        f"🔒 El canal `{channel.name}` se creó, pero un override de permisos impide enviar mensajes."
+                    )
+                    return
+                if not getattr(effective, "attach_files", False):
+                    permissions.discard("attach_files")
+
+            can_attach = "attach_files" in permissions
+            if not can_attach:
+                await self._send_long(
+                    channel,
+                    "⚠️ El bot puede escribir, pero no tiene `Attach Files`; no consumiré generación "
+                    "multimedia que luego no podría publicar.",
+                )
+
+            presentation = await self.agent.generate_response(
+                user_id=author_id,
+                user_name=author_name,
+                message=(
+                    "Escribe una presentación breve y concreta del Salón de Yuki, "
+                    "un espacio de té y acero para producir poema, partitura, imagen y vídeo. "
+                    "No afirmes haber creado archivos ni ejecutado acciones."
+                ),
+                channel_type="discord_channel",
+                active_role="producer",
+            )
+            await self._send_long(channel, f"### Presentación\n{presentation}")
+
+            poem = await self.agent.generate_response(
+                user_id=author_id,
+                user_name=author_name,
+                message=(
+                    "Escribe la letra original de una canción de 1-2 minutos titulada "
+                    "Herrumbre y Escarcha: 3 estrofas, estribillo repetido y puente. "
+                    "Imágenes de agua, hierro, muelle, invierno y una esperanza contenida."
+                ),
+                channel_type="discord_channel",
+                active_role="producer",
+            )
+            await self._send_long(channel, f"### Poema / letra — Herrumbre y Escarcha\n{poem}")
+
+            music = await self.agent.media_creator.compose_beat_structure(
+                title="Herrumbre y Escarcha",
+                bpm=82,
+                scale="insen",
+                mood="agua, hierro, invierno y esperanza contenida",
+                engine="midi_only",
+            )
+            await self._send_long(
+                channel,
+                "### Partitura\n"
+                f"Estructura: {music['track_data']['structure']}\n"
+                "Adjunto la partitura MIDI multipista real.",
+            )
+            if can_attach:
+                await self._send_file(channel, music.get("midi_path"), "🎼 Partitura MIDI")
+            else:
+                await self._send_long(channel, "⚠️ Falta `Attach Files`; no puedo adjuntar el MIDI.")
+
+            visual_paths = []
+            visual_prompts = [
+                "el exterior del Salón bajo lluvia y metal oxidado",
+                "el interior del Salón con té, acero y escarcha",
+                "la letra Herrumbre y Escarcha convertida en paisaje abstracto",
+            ]
+            if can_attach:
+                for index, visual_prompt in enumerate(visual_prompts, 1):
+                    art = await self.agent.media_creator.create_single_cover(
+                        track_title=f"Herrumbre y Escarcha {index}",
+                        visual_concept=visual_prompt,
+                        lighting="industrial_rain" if index == 1 else "urushi",
+                    )
+                    if art.get("status") == "success" and art.get("local_path"):
+                        visual_paths.append(art["local_path"])
+                        await self._send_file(channel, art["local_path"], f"🎨 Representación {index}")
+                    else:
+                        await self._send_long(
+                            channel,
+                            f"⚠️ Representación {index} no generada: {art.get('error') or art.get('note') or 'sin detalle'}",
+                        )
+            else:
+                await self._send_long(channel, "⏭️ Representaciones visuales omitidas hasta conceder `Attach Files`.")
+
+            if music.get("audio_status") == "success" and music.get("audio_path"):
+                await self._send_file(channel, music["audio_path"], "🎵 Canción")
+            else:
+                await self._send_long(
+                    channel,
+                    "⚠️ No adjunto una canción falsa: el proyecto aún no tiene un motor de audio musical. "
+                    "La partitura MIDI sí es real.",
+                )
+
+            if can_attach:
+                video = await self.agent.nous_portal.generate_video_frontier(
+                    prompt="La cámara recorre el Salón de té y acero mientras la lluvia se convierte en escarcha.",
+                    duration_seconds=6,
+                    image_path=visual_paths[0] if visual_paths else None,
+                )
+                if video.get("status") == "success" and video.get("local_path"):
+                    await self._send_file(channel, video["local_path"], "🎬 Vídeo final")
+                else:
+                    await self._send_long(
+                        channel,
+                        f"⚠️ Vídeo no generado: {video.get('error') or video.get('note') or 'sin detalle'}",
+                    )
+            else:
+                await self._send_long(channel, "⏭️ Vídeo omitido hasta conceder `Attach Files`.")
+            await self._send_long(channel, "✅ Secuencia de producción terminada.")
+        except Exception as exc:
+            logger.exception("Fallo en producción Discord de Yuki")
+            await report_origin(f"❌ La producción se detuvo con un error: {exc}")

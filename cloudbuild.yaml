@@ -39,7 +39,7 @@ steps:
     args:
       - -c
       - |
-        pip install --no-cache-dir -q pytest pytest-asyncio pyyaml python-dotenv
+        pip install --no-cache-dir -q pytest pytest-asyncio pyyaml python-dotenv discord.py
         python -m pytest tests/ -q
 
   # 2. Construcción de la imagen

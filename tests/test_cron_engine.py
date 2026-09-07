@@ -128,6 +128,21 @@ def test_register_job_rejects_invalid_expression():
     assert "rota" not in engine.jobs
 
 
+def test_pause_for_blocks_ticks_without_stopping_engine():
+    engine = CronEngine(timezone="UTC")
+    engine.register_job("pausable", "* * * * *", lambda: None)
+    now = engine.now()
+
+    paused_until = engine.pause_for(3600)
+    assert paused_until > now
+    assert engine.is_paused(now)
+    assert not engine._should_fire("pausable", engine.jobs["pausable"], now)
+    assert engine._running is False
+
+    engine.resume()
+    assert not engine.is_paused(now)
+
+
 def test_engine_falls_back_to_utc_on_bad_timezone():
     engine = CronEngine(timezone="Marte/Olympus_Mons")
     assert engine.tz == timezone.utc

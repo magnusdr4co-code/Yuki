@@ -23,6 +23,21 @@ from src.tools.media_creator import MediaCreatorTool
 from src.tools.vertex_media import VertexMediaClient
 
 
+def test_vertex_media_can_use_a_regional_image_endpoint():
+    motor = VertexMediaClient.from_config({
+        "vertex_ai": {
+            "project_id": "yuki-diva",
+            "location": "global",
+            "media": {
+                "location": "us-central1",
+                "image_model": "imagen-3.0-generate-002",
+            },
+        }
+    })
+    assert motor.location == "us-central1"
+    assert motor.image_model == "imagen-3.0-generate-002"
+
+
 def portal_sin_vertex() -> NousPortalClient:
     """Pasarela con el motor real desactivado: la ruta del marcador."""
     return NousPortalClient(vertex=VertexMediaClient(project_id="", enabled=False))

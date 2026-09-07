@@ -13,7 +13,7 @@ import asyncio
 import logging
 import random
 from typing import Dict, Any, Callable, List, Optional, Set
-from datetime import datetime, timezone as dt_timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 
 try:
     import zoneinfo
@@ -167,6 +167,7 @@ class CronEngine:
         self.jobs: Dict[str, Dict[str, Any]] = {}
         self._running = False
         self._task: asyncio.Task = None
+        self._paused_until: Optional[datetime] = None
 
     def now(self) -> datetime:
         """Instante actual en la zona horaria del planificador."""
@@ -216,8 +217,48 @@ class CronEngine:
         self._running = False
         logger.info("Motor Cron de Yuki detenido.")
 
+    def pause_for(self, duration_seconds: float) -> datetime:
+        """Pausa temporalmente todos los disparos sin detener el daemon.
+
+        El bucle sigue vivo y conserva sus tareas; sólo bloquea nuevos disparos
+        hasta el instante indicado. Si ya existe una pausa más larga, no se
+        acorta. Esto permite que una sesión de producción proteja el siguiente
+        intervalo sin tener que matar el proceso ni perder el estado del cron.
+        """
+        if duration_seconds <= 0:
+            raise ValueError("La duración de la pausa debe ser positiva.")
+        now = self.now()
+        requested_until = now + timedelta(seconds=duration_seconds)
+        if self._paused_until is None or requested_until > self._paused_until:
+            self._paused_until = requested_until
+        logger.info("Motor Cron pausado hasta %s.", self._paused_until.isoformat())
+        return self._paused_until
+
+    def resume(self) -> None:
+        """Reanuda los disparos normales del motor Cron."""
+        self._paused_until = None
+        logger.info("Motor Cron reanudado.")
+
+    def is_paused(self, now: Optional[datetime] = None) -> bool:
+        """Indica si el motor está dentro de una pausa temporal activa."""
+        if self._paused_until is None:
+            return False
+        moment = now or self.now()
+        if moment >= self._paused_until:
+            self._paused_until = None
+            logger.info("Pausa temporal de Cron expirada; motor reanudado.")
+            return False
+        return True
+
+    @property
+    def paused_until(self) -> Optional[datetime]:
+        """Instante de fin de pausa, para estado y diagnósticos."""
+        return self._paused_until
+
     def _should_fire(self, name: str, job: Dict[str, Any], now: datetime) -> bool:
         """Decide si una tarea concreta debe dispararse en este instante."""
+        if self.is_paused(now):
+            return False
         if not job["enabled"]:
             return False
 

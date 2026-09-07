@@ -10,6 +10,7 @@ a horas concretas y no a otras.
 """
 
 import asyncio
+import os
 import unittest
 from src.core.agent import YukiAgent
 
@@ -95,6 +96,18 @@ class TestYukiAgent(unittest.TestCase):
             self.assertEqual(reply, "NADA_QUE_DECIR")
 
         asyncio.run(_run())
+
+    def test_discord_paired_id_is_recognized_as_producer(self):
+        previous = os.environ.get("DISCORD_PAIRED_PRODUCER_ID")
+        os.environ["DISCORD_PAIRED_PRODUCER_ID"] = "235796491988369408"
+        try:
+            agent = _agente_en_fase("deep_rest")
+            self.assertTrue(agent.is_producer("235796491988369408"))
+        finally:
+            if previous is None:
+                os.environ.pop("DISCORD_PAIRED_PRODUCER_ID", None)
+            else:
+                os.environ["DISCORD_PAIRED_PRODUCER_ID"] = previous
 
     def test_el_productor_se_identifica_desde_la_configuracion(self):
         agent = YukiAgent()

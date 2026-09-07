@@ -215,6 +215,10 @@ class MediaCreatorTool:
             "midi_path": midi_result["file_path"],
             "audio_rendered_path": audio_result["local_path"],
             "audio_url": audio_result["audio_url"],
+            "audio_status": audio_result.get("status"),
+            "audio_simulated": audio_result.get("simulated", False),
+            "audio_note": audio_result.get("note"),
+            "audio_path": audio_result.get("local_path") if audio_result.get("status") == "success" else None,
             "midi_bytes": midi_result["size_bytes"],
             "track_data": track_data
         }

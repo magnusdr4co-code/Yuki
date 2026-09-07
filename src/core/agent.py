@@ -141,7 +141,16 @@ class YukiAgent:
 
     def is_producer(self, user_id: str) -> bool:
         """Si quien habla es el productor. Decide qué puertas se le abren."""
-        return user_id == self.producer_user_id
+        if user_id == self.producer_user_id:
+            return True
+        # Los adaptadores sociales conservan su identidad externa para no
+        # perder la puerta del productor al entrar con un ID de Discord/Telegram.
+        external_ids = {
+            item.strip()
+            for item in os.getenv("DISCORD_PAIRED_PRODUCER_ID", "").split(",")
+            if item.strip()
+        }
+        return user_id in external_ids
 
     async def generate_response(
         self,
