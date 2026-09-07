@@ -19,6 +19,7 @@ from .discord_intents import (
     fold as _fold,
     looks_like_discord_production_request as _looks_like_discord_production_request,
 )
+from .discord_text import split_discord_text
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -41,6 +42,7 @@ def _resolve_pairing_path() -> Path:
         return Path(db_path).parent / "discord_pairing.json"
     except Exception:
         return Path("data/discord_pairing.json")
+
 
 class DiscordAdapter:
     def __init__(self, agent_instance, token: Optional[str] = None):
@@ -148,10 +150,7 @@ class DiscordAdapter:
                     origin_channel=message.channel,
                 )
                 if reply and reply != "NADA_QUE_DECIR":
-                    await message.channel.send(
-                        reply[:2000],
-                        allowed_mentions=discord.AllowedMentions.none()
-                    )
+                    await self._send_long(message.channel, reply)
                 return
 
             # -----------------------------------------------------------------
@@ -213,10 +212,7 @@ class DiscordAdapter:
             )
             if reply and reply != "NADA_QUE_DECIR":
                 logger.info("Discord respondiendo: %d chars a canal %s", len(reply), getattr(message.channel, "id", "?"))
-                await message.channel.send(
-                    reply[:2000],
-                    allowed_mentions=discord.AllowedMentions.none(),
-                )
+                await self._send_long(message.channel, reply)
             else:
                 logger.info("Discord sin respuesta en canal público (reply=%r).", reply[:80] if reply else reply)
 
@@ -377,9 +373,7 @@ class DiscordAdapter:
         }
 
     async def _send_long(self, channel, content: str) -> None:
-        text = content or ""
-        while text:
-            chunk, text = text[:1900], text[1900:]
+        for chunk in split_discord_text(content):
             await channel.send(chunk, allowed_mentions=discord.AllowedMentions.none())
 
     async def _send_file(self, channel, path: Optional[str], caption: str) -> bool:

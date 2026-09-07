@@ -16,7 +16,7 @@ agent:
     primary_model: "upstage/solar-pro4"
     fallback_model: "qwen/qwen3-30b-a3b"
     temperature: 0.72
-    max_tokens: 1024
+    max_tokens: 2048
 
 # Enrutamiento Inteligente para optimización de costes, latencia y modelos de frontera
 provider_routing:
@@ -61,7 +61,7 @@ vertex_ai:
   primary_model: "google/gemini-3.7-flash"
   fallback_model: "google/gemini-3.6-flash"
   temperature: 0.72
-  max_tokens: 1024
+  max_tokens: 2048
   # Medios servidos por el mismo proyecto y el mismo crédito.
   media:
     # Las publisher models Imagen devuelven 404 en este proyecto. Gemini Image

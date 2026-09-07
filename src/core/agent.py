@@ -278,6 +278,14 @@ class YukiAgent:
         else:
             logger.info(f"Respuesta generada por '{response.provider}' con el modelo '{response.model}'.")
 
+        if response.finish_reason in {"length", "max_tokens", "MAX_TOKENS"}:
+            logger.warning(
+                "La pasarela terminó por límite de salida (finish_reason=%s, output_tokens=%s); "
+                "la entrega Discord se divide en mensajes, pero el modelo puede requerir continuación.",
+                response.finish_reason,
+                response.output_tokens,
+            )
+
         return response.text
         
     async def execute_autonomous_will(self, impulse) -> Dict[str, Any]:

@@ -10,6 +10,7 @@ from src.adapters.discord_intents import (
     extract_production_target,
     looks_like_discord_production_request,
 )
+from src.adapters.discord_text import split_discord_text
 
 
 def test_production_request_is_detected_only_for_explicit_channel_request():
@@ -49,3 +50,12 @@ def test_permission_gate_reports_manage_channels_and_attachments():
         "manage_channels",
         "send_messages",
     }
+
+
+def test_long_discord_text_is_split_without_loss():
+    original = " ".join(f"token-{index}" for index in range(1000))
+    chunks = split_discord_text(original, limit=1900)
+
+    assert len(chunks) > 1
+    assert all(len(chunk) <= 1900 for chunk in chunks)
+    assert " ".join(chunks) == original

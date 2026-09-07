@@ -195,6 +195,9 @@ class LLMResponse:
     # un crédito acotado; queda a cero cuando la pasarela no lo informa.
     input_tokens: int = 0
     output_tokens: int = 0
+    # `length`/`max_tokens` permite distinguir un corte del modelo de un
+    # problema de transporte. Yuki no usa streaming en esta ruta.
+    finish_reason: str = ""
 
 
 class LLMProvider(ABC):
@@ -458,6 +461,7 @@ class VertexProvider(LLMProvider):
                     model=model,
                     input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
                     output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                    finish_reason=getattr(resp.choices[0], "finish_reason", "") or "",
                 )
             except Exception as e:
                 ultimo_error = f"{model}: {e}"
@@ -525,6 +529,7 @@ class OpenRouterProvider(LLMProvider):
                     model=model,
                     input_tokens=getattr(usage, "prompt_tokens", 0) or 0,
                     output_tokens=getattr(usage, "completion_tokens", 0) or 0,
+                    finish_reason=getattr(resp.choices[0], "finish_reason", "") or "",
                 )
             except Exception as e:
                 logger.error(f"Error invocando OpenRouter con el modelo '{model}': {e}")
