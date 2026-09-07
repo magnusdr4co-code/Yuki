@@ -64,10 +64,10 @@ vertex_ai:
   max_tokens: 1024
   # Medios servidos por el mismo proyecto y el mismo crédito.
   media:
-    # Imagen 4 devolvía 404 en global para este proyecto. Imagen 3 está
-    # disponible en us-central1; esta región sólo afecta al cliente multimedia.
+    # Las publisher models Imagen devuelven 404 en este proyecto. Gemini Image
+    # sí está habilitado y usa generate_content; la región sólo afecta al cliente multimedia.
     location: "us-central1"
-    image_model: "imagen-3.0-generate-002"
+    image_model: "gemini-2.5-flash-image"
     # Gemini Omni Flash: genera y edita VÍDEO con audio nativo, facturado por
     # segundo (~0,10 USD/s). No es un modelo de texto: el cerebro de Yuki lo
     # sirve `primary_model`, no éste.

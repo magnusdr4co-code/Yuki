@@ -32,10 +32,9 @@ logger = logging.getLogger("Yuki.VertexMedia")
 
 # Identificadores por defecto. Confírmalos contra el proyecto antes de fijarlos:
 #   gcloud ai models list --region=<region>
-# Imagen 4 no está disponible para este proyecto en `global` (404 en runtime).
-# Imagen 3 sigue siendo la ruta regional estable y se puede cambiar por
-# configuración cuando el proyecto obtenga acceso a un modelo más reciente.
-DEFAULT_IMAGE_MODEL = "imagen-3.0-generate-002"
+# Las publisher models Imagen no están habilitadas para este proyecto. La ruta
+# Gemini Image sí respondió en Vertex durante la prueba real del despliegue.
+DEFAULT_IMAGE_MODEL = "gemini-2.5-flash-image"
 DEFAULT_VIDEO_MODEL = "gemini-omni-flash-preview"
 DEFAULT_TTS_MODEL = "gemini-2.5-flash-tts"
 
@@ -209,6 +208,23 @@ class VertexMediaClient:
             from google.genai import types
 
             cliente = self._genai_client()
+            if model.startswith("gemini-") or model.startswith("nano-banana"):
+                respuesta = cliente.models.generate_content(
+                    model=model,
+                    contents=prompt,
+                    config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                )
+                for candidato in getattr(respuesta, "candidates", None) or []:
+                    contenido = getattr(candidato, "content", None)
+                    for parte in getattr(contenido, "parts", None) or []:
+                        inline = getattr(parte, "inline_data", None)
+                        datos = getattr(inline, "data", None) if inline else None
+                        if datos:
+                            if isinstance(datos, str):
+                                return base64.b64decode(datos)
+                            return datos
+                raise VertexMediaError("Gemini Image no devolvió datos de imagen.")
+
             respuesta = cliente.models.generate_images(
                 model=model,
                 prompt=prompt,

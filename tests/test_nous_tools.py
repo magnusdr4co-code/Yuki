@@ -263,6 +263,7 @@ class TestVertexMedia(unittest.TestCase):
             cliente = ClienteGenaiFalso()
             motor = VertexMediaClient(
                 project_id="yuki-diva", client=cliente,
+                image_model="imagen-3.0-generate-002",
                 art_dir=self.tmp,
             )
             result = await motor.generate_image("lluvia sobre metal", aspect_ratio="16:9")
@@ -281,6 +282,7 @@ class TestVertexMedia(unittest.TestCase):
         async def _run():
             motor = VertexMediaClient(
                 project_id="yuki-diva",
+                image_model="imagen-3.0-generate-002",
                 client=ClienteGenaiFalso(error=RuntimeError("cuota agotada")),
             )
             result = await motor.generate_image("lo que sea")
@@ -295,7 +297,11 @@ class TestVertexMedia(unittest.TestCase):
     def test_empty_image_response_is_an_error_not_a_blank_file(self):
         """Suele ser el filtro de seguridad. Es un fallo, no una imagen."""
         async def _run():
-            motor = VertexMediaClient(project_id="yuki-diva", client=ClienteGenaiFalso(imagenes=[]))
+            motor = VertexMediaClient(
+                project_id="yuki-diva",
+                image_model="imagen-3.0-generate-002",
+                client=ClienteGenaiFalso(imagenes=[]),
+            )
             result = await motor.generate_image("algo que el filtro rechaza")
 
             self.assertEqual(result["status"], "error")
@@ -443,6 +449,7 @@ class TestPropagacionDeEstado(unittest.TestCase):
         async def _run():
             motor = VertexMediaClient(
                 project_id="yuki-diva",
+                image_model="imagen-3.0-generate-002",
                 client=ClienteGenaiFalso(error=RuntimeError("cuota agotada")),
             )
             creator = MediaCreatorTool(NousPortalClient(vertex=motor))
