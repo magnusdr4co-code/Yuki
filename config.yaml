@@ -97,6 +97,17 @@ budget:
   # estimación no incluye música, que no tiene precio de referencia registrado.
   usd_per_day: null
 
+# Copia de lo irremplazable: memoria, canon de Biblioteca y estado vital. Se
+# ejecuta tras la síntesis diaria, cuando la memoria del día está completa. La
+# base no se copia como fichero, sino con la API de instantánea de SQLite, y la
+# copia se comprueba con integrity_check antes de darla por buena.
+#
+# Sin `bucket` (o BACKUP_GCS_BUCKET) la copia queda en el mismo disco que el
+# original: protege de un borrado, no de perder el disco. El resultado lo dice.
+backup:
+  retention: 7
+  bucket: ""                  # p. ej. yuki-prod-respaldo
+
 # Overlay persistente en data/runtime_overrides.json. El Productor emparejado
 # puede modificar sólo la lista explícita del arnés; la evolución sólo ajusta
 # temperatura a partir de eventos de crecimiento ya registrados.

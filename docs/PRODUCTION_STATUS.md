@@ -58,6 +58,10 @@ La prueba de importación dentro de `yuki-daemon` confirmó esta ruta tras el de
   tope alcanzado aplaza el trabajo con la cifra concreta; no lo da por fallado.
   Consulta del día: `python3 cli.py spend`.
 
+- La copia diaria de memoria y canon se ejecuta tras la síntesis de las 23:30 y se
+  verifica con `integrity_check`. Mientras no se declare `BACKUP_GCS_BUCKET`, queda
+  en el disco de la instancia: protege de un borrado, no de perder la zona.
+
 ## Comprobación posterior a un despliegue
 
 1. Confirmar el digest publicado en Artifact Registry.

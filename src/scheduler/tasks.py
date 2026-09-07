@@ -6,10 +6,12 @@ Ejecuta rutinas creativas sin supervisión humana continua:
 3. 23:30 PM - Síntesis y destilación de la memoria del día.
 """
 
+import asyncio
 import logging
 from datetime import datetime
 from typing import Optional
 from src.tools.web_search import describe_origin
+from src.tools.backup import BackupManager
 
 logger = logging.getLogger("Yuki.AutonomousTasks")
 
@@ -153,7 +155,18 @@ class AutonomousTasks:
         evolution = await self.agent.evolution.review_and_adjust()
         logger.info("Revisión de evolución diaria: %s", evolution.get("reason", "ajuste aplicado"))
         logger.info(f"Memoria del día guardada ({date_str}): {daily_text}")
-        return {"summary": daily_text, "evolution": evolution}
+
+        # La copia va aquí, justo después de escribir la síntesis: es el momento
+        # del día en que la memoria está más completa. Un fallo de la copia no
+        # puede tumbar la rutina, pero tampoco pasar en silencio.
+        backup = await asyncio.to_thread(BackupManager.from_config(self.agent.config).create)
+        if backup.status == "success":
+            logger.info("Copia diaria: %s (%s)", backup.path,
+                        backup.remote_uri or backup.remote_error or "sólo local")
+        else:
+            logger.error("La copia diaria falló: %s", backup.error)
+
+        return {"summary": daily_text, "evolution": evolution, "backup": backup.to_dict()}
 
     async def echo_ritual(self):
         """06:30 AM - Yuki se invoca a sí misma para comenzar el día."""

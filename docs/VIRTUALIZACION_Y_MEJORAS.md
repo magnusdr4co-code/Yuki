@@ -69,7 +69,7 @@ abierto y cada uno lleva su vía de salida en la sección 4.
 | L1 | Producción multimedia interrumpible por reinicio | grave | **mitigado** |
 | L3 | Clave de AI Studio en el entorno (factura fuera del crédito) | grave | abierto (depende del entorno) |
 | L4 | Sin motor de música propio: la canción depende de una preview | grave | abierto |
-| L7 | Instancia única, sin réplica ni copia del disco | grave | abierto |
+| L7 | Instancia única; copia diaria hecha, salida sujeta a bucket | grave | parcial |
 | L8 | Vídeo facturado por segundo sin techo de gasto | grave | **mitigado** |
 | L5 | Nous Portal sigue sin endpoint | moderado | abierto |
 | L6 | Telegram sin conectar; búsqueda web sujeta a clave | moderado | parcial |
@@ -134,13 +134,22 @@ de llamar al proveedor, y el consumo de texto se anota con los `input_tokens` /
 L8. Queda pendiente el complemento que no depende del código: la alerta de
 facturación en el proyecto.
 
-### M3 · Copia de la memoria y del canon fuera de la instancia
-*Cierra L7.* Hoy `yuki_memory.db`, la Biblioteca y los trabajos viven en un solo
-disco, en una sola zona. Una zona caída se lleva la memoria de Yuki, que es lo
-único verdaderamente irremplazable del proyecto: los medios se regeneran, los
-recuerdos no. Propuesta: snapshot programado del disco **y** exportación de
-`output/Biblioteca` y de la base a Cloud Storage al terminar la síntesis diaria,
-con una restauración probada de verdad al menos una vez.
+### M3 · Copia de la memoria y del canon fuera de la instancia — **hecho el mecanismo**
+*Mitiga L7 en cuanto se declare el bucket.* `src/tools/backup.py` empaqueta lo
+irremplazable —base, Biblioteca, estado vital, perfil dialéctico, pairing,
+trabajos y libro de gasto— tras la síntesis diaria, que es el momento en que la
+memoria del día está completa.
+
+Dos detalles deciden si una copia sirve: la base **no** se copia como fichero
+(un `tar` de un SQLite en WAL restaura corrupto justo cuando hace falta) sino con
+la API de instantánea, con el escritor en marcha; y la copia se abre y se pasa
+por `integrity_check` antes de darla por buena. Sin `BACKUP_GCS_BUCKET` el
+archivo queda en el mismo disco que el original y el resultado **lo dice** en vez
+de sugerir que está a salvo.
+
+Falta lo que no depende del código: declarar el bucket en producción y **probar
+una restauración completa al menos una vez**. Una copia sin restaurar no está
+comprobada. Manual: `python3 cli.py backup`.
 
 ### M4 · Motor musical de respaldo
 *Cierra L4.* La canción cantada depende por completo de `lyria-3-pro-preview`;
@@ -180,7 +189,8 @@ vivir en caliente.
 ## 5. Comprobación
 
 ```bash
-python3 -m pytest tests -q                     # 287 pruebas
+python3 -m pytest tests -q                     # 297 pruebas
+python3 cli.py backup                          # copia verificada de memoria y canon
 python3 cli.py spend                           # gasto de hoy contra el presupuesto
 python3 cli.py virtualize                      # limitadores del entorno actual
 docker compose -f deploy/virtual/docker-compose.virtual.yml config   # réplica válida

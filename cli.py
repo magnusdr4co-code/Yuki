@@ -474,6 +474,39 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_backup(as_json=False):
+    """Copia verificada de memoria, canon y estado; sube a Cloud Storage si hay bucket."""
+    import yaml
+    from src.tools.backup import BackupManager
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    gestor = BackupManager.from_config(config)
+    resultado = gestor.create()
+
+    if as_json:
+        print(json.dumps(resultado.to_dict(), ensure_ascii=False, indent=2))
+        return resultado
+
+    print_banner()
+    if resultado.status != "success":
+        print(f"{RED}✗ La copia falló: {resultado.error}{RESET}")
+        return resultado
+
+    print(f"{GREEN}✓ Copia creada:{RESET} {resultado.path} "
+          f"{DIM}({resultado.bytes / 1024:.1f} KiB){RESET}")
+    print(f"{DIM}Integridad de la base: {resultado.integrity}{RESET}")
+    print(f"{DIM}Incluido: {', '.join(resultado.included or []) or 'nada'}{RESET}")
+    if resultado.skipped:
+        print(f"{DIM}Ausente: {', '.join(resultado.skipped)}{RESET}")
+    if resultado.remote_uri:
+        print(f"{GREEN}✓ Fuera de la instancia:{RESET} {resultado.remote_uri}")
+    else:
+        print(f"{YELLOW}⚠ No sale de la instancia: {resultado.remote_error}{RESET}")
+    return resultado
+
+
 def cmd_spend(as_json=False):
     """Gasto de hoy contra el presupuesto diario, sin tocar la red."""
     import yaml
@@ -592,6 +625,11 @@ def main():
     )
     gasto.add_argument("--json", action="store_true", help="Emite JSON")
 
+    copia = subparsers.add_parser(
+        "backup", help="Copia verificada de memoria, canon y estado (y subida si hay bucket)",
+    )
+    copia.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -626,6 +664,8 @@ def main():
         cmd_virtualize(output_path=args.output, as_json=args.json)
     elif args.command == "spend":
         cmd_spend(as_json=args.json)
+    elif args.command == "backup":
+        cmd_backup(as_json=args.json)
     else:
         parser.print_help()
 

@@ -107,6 +107,9 @@ python3 cli.py virtualize
 
 # Consultar el gasto de hoy frente al presupuesto diario
 python3 cli.py spend
+
+# Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
+python3 cli.py backup
 ```
 
 ### 3.1 Réplica local de la instancia de producción
@@ -184,6 +187,7 @@ contratar servicios de pago o de prometer una demo.
 | Nous Portal: imagen, música, voz | ⚠️ Marcador | Sin Vertex configurado, `src/tools/nous_portal.py` escribe ficheros de marcador **declarados como simulados**. La música no tiene motor contratado en ninguna ruta: usa `local.midi` |
 | Firecrawl / búsqueda web | ✅ Real | `src/tools/web_search.py`: cliente HTTP real. Opcional: sin `FIRECRAWL_API_KEY` devuelve pistas declaradas `simulated` y sin URL, nunca titulares inventados |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
+| Copia verificada de memoria y canon | ✅ Real | `src/tools/backup.py`: instantánea coherente de SQLite + `integrity_check`, tras la síntesis diaria. Sale de la instancia sólo con `BACKUP_GCS_BUCKET`, y si no lo declara **lo dice** |
 | Presupuesto diario de gasto | ✅ Real | `src/core/spend_budget.py`: vídeo, imagen, música y voz se comprueban **antes** de llamar al proveedor; el texto se anota pero nunca se bloquea. `python3 cli.py spend` |
 | Cola durable de producción multimedia | ✅ Real | `src/tools/media_jobs.py`: cada paso facturable se persiste antes de gastar y se reanuda tras un reinicio sin regenerar lo verificado |
 | Gemelo virtual de la instancia | ✅ Real | `python3 cli.py virtualize`: capacidades efectivas y limitadores, sin red. Réplica local en `deploy/virtual/` |

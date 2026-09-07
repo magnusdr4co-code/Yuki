@@ -235,6 +235,17 @@ class VirtualInstance:
             if _clave_util("FIRECRAWL_API_KEY")
             else "Sin clave: pistas de introspección declaradas como simuladas, sin URL inventada",
         )
+        from ..tools.backup import BackupManager
+
+        respaldo = BackupManager.from_config(self.config)
+        copias = respaldo.list_backups()
+        self._cap(
+            "mente.respaldo", "Mente", REAL if respaldo.bucket else SIMULADO,
+            (f"Copia diaria verificada a gs://{respaldo.bucket}; {len(copias)} local(es)"
+             if respaldo.bucket else
+             f"{len(copias)} copia(s) local(es), sin bucket: no salen del disco de la instancia"),
+        )
+
         biblioteca = self.root / "output" / "Biblioteca"
         self._cap("mente.biblioteca", "Mente", REAL,
                   f"Canon en {biblioteca} ({'presente' if biblioteca.is_dir() else 'vacía en este entorno'})")
@@ -307,15 +318,29 @@ class VirtualInstance:
             proposals=["Conectar `python-telegram-bot` con el webhook ya declarado en config.yaml.",
                        "Declarar FIRECRAWL_API_KEY para que las corrientes nocturnas vengan del mundo."],
         )
+        from ..tools.backup import BackupManager as _Gestor
+
+        gestor = _Gestor.from_config(self.config)
+        fuera = bool(gestor.bucket)
         self._lim(
-            id="L7", title="Instancia única sin réplica ni copia del disco",
-            severity=GRAVE, status=ABIERTO,
-            evidence=f"Un solo `{PRODUCTION_INSTANCE['instancia']}` ({PRODUCTION_INSTANCE['maquina']}, "
-                     f"{PRODUCTION_INSTANCE['memoria_mb']} MB) en {PRODUCTION_INSTANCE['zona']}; "
-                     "memoria, Biblioteca y trabajos viven en su disco.",
-            impact="Una zona caída o un disco perdido se lleva la memoria y el canon de Yuki.",
-            proposals=["Programar snapshots del disco de datos y probar la restauración.",
-                       "Exportar Biblioteca y `yuki_memory.db` a Cloud Storage tras la síntesis diaria."],
+            id="L7", title="Instancia única sin réplica; copia fuera sujeta a bucket",
+            severity=GRAVE, status=MITIGADO if fuera else ABIERTO,
+            evidence=(f"Un solo `{PRODUCTION_INSTANCE['instancia']}` ({PRODUCTION_INSTANCE['maquina']}, "
+                      f"{PRODUCTION_INSTANCE['memoria_mb']} MB) en {PRODUCTION_INSTANCE['zona']}. "
+                      + (f"La copia diaria, verificada con integrity_check, sube a gs://{gestor.bucket}."
+                         if fuera else
+                         "La copia diaria existe y se verifica, pero sin BACKUP_GCS_BUCKET queda en el "
+                         "mismo disco que el original.")),
+            impact=("Perder el disco ya no se lleva la memoria ni el canon: la copia del día vive fuera."
+                    if fuera else
+                    "Una zona caída o un disco perdido se lleva la memoria y el canon de Yuki, que es "
+                    "lo único irremplazable: los medios se regeneran."),
+            proposals=(["Probar una restauración completa al menos una vez: una copia sin restaurar "
+                        "no está comprobada.",
+                        "Añadir snapshots del disco como segunda línea."]
+                       if fuera else
+                       ["Declarar BACKUP_GCS_BUCKET para que la copia diaria salga de la instancia.",
+                        "Programar snapshots del disco de datos y probar la restauración."]),
         )
         presupuesto = SpendLedger.from_config(self.config)
         self._lim(

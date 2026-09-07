@@ -164,3 +164,21 @@ def test_sin_presupuesto_el_video_vuelve_a_estar_sin_techo():
     limitador = _lim(instancia, "L8")
     assert limitador.status == "abierto"
     assert "nada acota el gasto" in limitador.evidence
+
+
+def test_la_copia_con_bucket_mitiga_la_perdida_del_disco(monkeypatch):
+    monkeypatch.setenv("BACKUP_GCS_BUCKET", "yuki-respaldo")
+    instancia = VirtualInstance({**CONFIG, "backup": {"bucket": "yuki-respaldo"}})
+
+    assert _cap(instancia, "mente.respaldo").state == REAL
+    assert _lim(instancia, "L7").status == MITIGADO
+
+
+def test_sin_bucket_la_copia_no_protege_de_perder_el_disco(monkeypatch):
+    monkeypatch.delenv("BACKUP_GCS_BUCKET", raising=False)
+    instancia = VirtualInstance(CONFIG)
+
+    assert _cap(instancia, "mente.respaldo").state == SIMULADO
+    limitador = _lim(instancia, "L7")
+    assert limitador.status == "abierto"
+    assert "mismo disco" in limitador.evidence
