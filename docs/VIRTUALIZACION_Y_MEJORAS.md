@@ -70,10 +70,34 @@ abierto y cada uno lleva su vía de salida en la sección 4.
 | L3 | Clave de AI Studio en el entorno (factura fuera del crédito) | grave | abierto (depende del entorno) |
 | L4 | Sin motor de música propio: la canción depende de una preview | grave | abierto |
 | L7 | Instancia única, sin réplica ni copia del disco | grave | abierto |
-| L8 | Vídeo facturado por segundo sin techo de gasto | grave | abierto |
+| L8 | Vídeo facturado por segundo sin techo de gasto | grave | **mitigado** |
 | L5 | Nous Portal sigue sin endpoint | moderado | abierto |
 | L6 | Telegram y búsqueda web simulados | moderado | abierto |
 | L9 | Honcho dialéctico sin servicio remoto | moderado | abierto |
+
+### L8 — Vídeo sin techo de gasto (mitigado)
+
+Cada llamada estimaba su coste, lo escribía en un log y nadie lo sumaba: no
+había ningún sitio donde constara lo gastado hoy. Ahora `src/core/spend_budget.py`
+lleva un libro diario en `data/spend_ledger.json` y **la comprobación ocurre antes
+de llamar al proveedor**, que es la única posición útil: después, el segundo de
+vídeo ya está facturado. Una orden que excede el límite se rechaza con la cifra
+concreta —«llevas 96 de 120 y esta operación pide 8»— en vez de gastar y avisar
+luego.
+
+Los límites viven en `config.yaml` bajo `budget` y el día se cierra en la zona
+horaria del planificador, no en UTC, para que el día del gasto sea el de las
+rutinas. El texto se anota pero **no** se bloquea: dejar muda a Yuki por unos
+tokens sería peor que el gasto que evita. La música se cuenta por pistas y
+segundos y no se cotiza: no hay precio de referencia registrado en el repositorio
+y no se inventa uno.
+
+En la cola de trabajos, un tope de presupuesto **aplaza** el encargo en vez de
+fallarlo: no gasta intento y el trabajo sigue reanudable, porque mañana el mismo
+encargo cabe. Consulta: `python3 cli.py spend`.
+
+Lo que sigue abierto: sólo la facturación de Google Cloud ve el gasto real, así
+que la alerta de facturación del proyecto sigue siendo necesaria.
 
 ### L1 — Producción multimedia interrumpible (mitigado)
 
@@ -102,15 +126,13 @@ directorio de trabajos, aporta reintento gestionado, aislamiento del gateway de
 Discord y la posibilidad de correr dos encargos a la vez sin arriesgar los 2 GB
 de la e2-small. Coste: prácticamente nulo en inactividad.
 
-### M2 · Presupuesto de gasto antes de generar
-*Cierra L8, contiene L2.* Veo cuesta ≈0,10 USD/s: cuatro clips de 8 s por orden
-son ~3,2 USD, y unas pocas órdenes seguidas se comen el crédito que sostiene
-todo lo demás. Propuesta: un contador persistente de segundos de vídeo y de
-tokens por día, comprobado **antes** de llamar al proveedor, que rechace la orden
-con el número concreto («llevas 96 s de los 120 s de hoy») en vez de gastar y
-avisar después. Se apoya en `input_tokens`/`output_tokens`, que las pasarelas ya
-devuelven y hoy nadie acumula. Complemento barato: alerta de facturación en el
-proyecto.
+### M2 · Presupuesto de gasto antes de generar — **hecho**
+*Mitiga L8.* Implementado en `src/core/spend_budget.py` y cableado en el cliente
+de medios de Vertex: vídeo, imagen, música y voz consultan el presupuesto antes
+de llamar al proveedor, y el consumo de texto se anota con los `input_tokens` /
+`output_tokens` que las pasarelas ya devolvían y nadie acumulaba. Ver la ficha de
+L8. Queda pendiente el complemento que no depende del código: la alerta de
+facturación en el proyecto.
 
 ### M3 · Copia de la memoria y del canon fuera de la instancia
 *Cierra L7.* Hoy `yuki_memory.db`, la Biblioteca y los trabajos viven en un solo
@@ -154,7 +176,8 @@ vivir en caliente.
 ## 5. Comprobación
 
 ```bash
-python3 -m pytest tests -q                     # 258 pruebas
+python3 -m pytest tests -q                     # 277 pruebas
+python3 cli.py spend                           # gasto de hoy contra el presupuesto
 python3 cli.py virtualize                      # limitadores del entorno actual
 docker compose -f deploy/virtual/docker-compose.virtual.yml config   # réplica válida
 ```

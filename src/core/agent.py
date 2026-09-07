@@ -28,6 +28,7 @@ from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
 from .llm_router import LLMRouter
+from .spend_budget import SpendLedger
 from .runtime_config import RuntimeConfigStore
 from .evolution_harness import EvolutionHarness
 from ..security.model_armor import ModelArmorClient
@@ -110,6 +111,11 @@ class YukiAgent:
 
         # Cadena de pasarelas de lenguaje: Nous Portal → OpenRouter → voz local
         self.llm_router = LLMRouter(config=self.config)
+
+        # Libro de gasto diario. El texto se anota pero no se bloquea: dejar muda
+        # a Yuki por unos tokens sería peor que el gasto que evita. Los límites
+        # duros son para los medios, que es donde el crédito se va de verdad.
+        self.spend_ledger = SpendLedger.from_config(self.config)
 
         # Arnés de seguridad delante y detrás del LLM. Model Armor inspecciona
         # texto sin conocer el proveedor; así quedan cubiertas Discord, web,
@@ -325,6 +331,7 @@ class YukiAgent:
         como último recurso cuando no hay red ni claves configuradas.
         """
         response = self.llm_router.generate(system_prompt, user_message, route=route)
+        self.spend_ledger.record_llm(response.input_tokens, response.output_tokens)
 
         if response.simulated:
             logger.info(f"Respuesta simulada por la pasarela '{response.provider}' (sin generación real).")

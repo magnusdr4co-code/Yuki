@@ -53,7 +53,10 @@ La prueba de importación dentro de `yuki-daemon` confirmó esta ruta tras el de
 - Los errores de proveedor, formato o adjunto se deben comunicar con el fallo concreto.
   No deben convertirse en prosa que niegue capacidades disponibles.
 - La generación de vídeo y música consume crédito del proyecto: se ejecuta únicamente
-  ante una orden explícita del Productor emparejado.
+  ante una orden explícita del Productor emparejado y dentro del presupuesto diario
+  declarado en `config.yaml` (`budget`), comprobado antes de llamar al proveedor. Un
+  tope alcanzado aplaza el trabajo con la cifra concreta; no lo da por fallado.
+  Consulta del día: `python3 cli.py spend`.
 
 ## Comprobación posterior a un despliegue
 

@@ -29,6 +29,11 @@ import asyncio
 import logging
 from typing import Any, Dict, List, Optional
 
+from ..core.spend_budget import (
+    IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, VIDEO_SEGUNDOS, VOZ_CARACTERES,
+    SpendLedger,
+)
+
 logger = logging.getLogger("Yuki.VertexMedia")
 
 # Identificadores por defecto. Confírmalos contra el proyecto antes de fijarlos:
@@ -94,7 +99,8 @@ class VertexMediaClient:
                  voice_dir: str = "output/voice",
                  music_dir: str = "output/music",
                  video_dir: str = "output/video",
-                 client: Any = None, tts_client: Any = None):
+                 client: Any = None, tts_client: Any = None,
+                 budget: Optional[SpendLedger] = None):
         self.project_id = (project_id or os.getenv("VERTEX_PROJECT_ID")
                            or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
         self.location = location or os.getenv("VERTEX_LOCATION") or "global"
@@ -112,6 +118,10 @@ class VertexMediaClient:
         self.voice_dir = voice_dir
         self.music_dir = music_dir
         self.video_dir = video_dir
+
+        # Presupuesto diario. Se comprueba antes de llamar al proveedor: el
+        # vídeo se factura por segundo y avisar después no devuelve el crédito.
+        self.budget = budget if budget is not None else SpendLedger()
 
         # Inyectables en pruebas; en producción se construyen perezosamente.
         self._client = client
@@ -144,6 +154,9 @@ class VertexMediaClient:
             "tts_model": media_cfg.get("tts_model", DEFAULT_TTS_MODEL),
             "voice": media_cfg.get("voice", DEFAULT_VOICE),
             "language_code": media_cfg.get("language_code", DEFAULT_LANGUAGE_CODE),
+            # El presupuesto vive en su propia sección y comparte la zona horaria
+            # del planificador, para que el día del gasto sea el de las rutinas.
+            "budget": SpendLedger.from_config(config),
         }
         parametros.update(overrides)
         return cls(**parametros)
@@ -220,6 +233,12 @@ class VertexMediaClient:
             return _resultado_error("Vertex no está configurado: falta VERTEX_PROJECT_ID.")
 
         model = model or self.image_model
+
+        permiso = self.budget.check(IMAGENES, 1)
+        if not permiso.allowed:
+            logger.warning("Imagen rechazada por presupuesto: %s", permiso.reason)
+            return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
+
         self._ensure_dir(self.art_dir)
         destino = os.path.join(self.art_dir, f"yuki_{model.replace('/', '_')}_{int(time.time())}.png")
 
@@ -275,6 +294,7 @@ class VertexMediaClient:
             f.write(datos)
 
         logger.info(f"🎨 Imagen real generada con {model}: {destino}")
+        self.budget.record(IMAGENES, 1)
         return {
             "status": "success",
             "simulated": False,
@@ -307,6 +327,11 @@ class VertexMediaClient:
                 f"Duración musical fuera de rango: {duration_seconds}s; máximo {max_duration}s."
             )
 
+        permiso = self.budget.check(MUSICA_PISTAS, 1)
+        if not permiso.allowed:
+            logger.warning("Música rechazada por presupuesto: %s", permiso.reason)
+            return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
+
         self._ensure_dir(self.music_dir)
         destino = os.path.join(self.music_dir, f"yuki_lyria_{int(time.time())}.mp3")
 
@@ -333,6 +358,10 @@ class VertexMediaClient:
             f.write(datos)
 
         logger.info("🎵 Canción real generada con %s: %s", model, destino)
+        # Dos unidades: las pistas acotan el número de encargos y los segundos
+        # dejan constancia del volumen, aunque no haya precio que aplicarles.
+        self.budget.record(MUSICA_PISTAS, 1)
+        self.budget.record(MUSICA_SEGUNDOS, duration_seconds)
         return {
             "status": "success",
             "simulated": False,
@@ -379,6 +408,13 @@ class VertexMediaClient:
 
         if image_path and not os.path.exists(image_path):
             return _resultado_error(f"No existe la imagen de partida: {image_path}")
+
+        # El presupuesto se consulta aquí, antes del proveedor: pasado este
+        # punto el segundo de vídeo ya está facturado.
+        permiso = self.budget.check(VIDEO_SEGUNDOS, duration_seconds)
+        if not permiso.allowed:
+            logger.warning("Vídeo rechazado por presupuesto: %s", permiso.reason)
+            return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
 
         self._ensure_dir(self.video_dir)
         destino = os.path.join(self.video_dir, f"yuki_veo_{int(time.time())}.mp4")
@@ -464,7 +500,9 @@ class VertexMediaClient:
             f.write(datos)
 
         coste = duration_seconds * PRECIO_VIDEO_POR_SEGUNDO
-        logger.info(f"🎬 Vídeo real generado con {model}: {destino} (≈${coste:.2f})")
+        self.budget.record(VIDEO_SEGUNDOS, duration_seconds)
+        logger.info(f"🎬 Vídeo real generado con {model}: {destino} (≈${coste:.2f}); "
+                    f"presupuesto de hoy → {self.budget.describe()}")
         return {
             "status": "success",
             "simulated": False,
@@ -512,6 +550,11 @@ class VertexMediaClient:
             "cada palabra antes de decirla. Ritmo sereno, nunca apresurado."
         )
 
+        permiso = self.budget.check(VOZ_CARACTERES, len(text))
+        if not permiso.allowed:
+            logger.warning("Voz rechazada por presupuesto: %s", permiso.reason)
+            return _resultado_error(permiso.reason, budget_exceeded=True, unit=permiso.unit)
+
         self._ensure_dir(self.voice_dir)
         destino = os.path.join(self.voice_dir, f"yuki_voice_{int(time.time())}.ogg")
 
@@ -541,6 +584,7 @@ class VertexMediaClient:
         with open(destino, "wb") as f:
             f.write(audio)
 
+        self.budget.record(VOZ_CARACTERES, len(text))
         logger.info(f"🎙️ Nota de voz real generada con {model}: {destino}")
         return {
             "status": "success",

@@ -43,7 +43,9 @@ antes de gastar y se marca al tener fichero verificado, así que un reinicio rea
 el último paso y no vuelve a pagar lo hecho. Un paso cuyo fichero desapareció deja de
 contar como hecho; uno que falló tres veces cierra el trabajo nombrando el fallo, y un
 trabajo con pasos pendientes no se cierra como terminado. `!status` informa de los
-trabajos reanudables.
+trabajos reanudables. El gasto de medios se comprueba contra el presupuesto diario antes
+de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, sin gastar
+intento ni cerrar el encargo.
 
 ## Terminal y configuración
 

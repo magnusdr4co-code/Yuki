@@ -145,3 +145,22 @@ def test_serializacion_json_estable():
     # Los limitadores salen ordenados por gravedad: lo que bloquea, primero.
     gravedades = [l["severity"] for l in datos["limitadores"]]
     assert gravedades == sorted(gravedades, key=lambda g: {"bloqueante": 0, "grave": 1, "moderado": 2}[g])
+
+
+def test_el_presupuesto_activo_mitiga_el_limitador_del_video():
+    con_presupuesto = {**CONFIG, "budget": {"enabled": True,
+                                            "daily_limits": {"video_segundos": 120}}}
+    instancia = VirtualInstance(con_presupuesto)
+
+    assert _cap(instancia, "medios.presupuesto").state == REAL
+    assert _lim(instancia, "L8").status == MITIGADO
+    assert "120" in _lim(instancia, "L8").evidence
+
+
+def test_sin_presupuesto_el_video_vuelve_a_estar_sin_techo():
+    instancia = VirtualInstance({**CONFIG, "budget": {"enabled": False}})
+
+    assert _cap(instancia, "medios.presupuesto").state == INACTIVO
+    limitador = _lim(instancia, "L8")
+    assert limitador.status == "abierto"
+    assert "nada acota el gasto" in limitador.evidence

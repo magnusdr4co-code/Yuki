@@ -48,9 +48,10 @@ class LibraryDoble:
 class PortalDoble:
     """Proveedor multimedia programable: cuenta cada generación facturable."""
 
-    def __init__(self, tmp_path, fallar_desde_clip=None):
+    def __init__(self, tmp_path, fallar_desde_clip=None, presupuesto_desde_clip=None):
         self.tmp_path = tmp_path
         self.fallar_desde_clip = fallar_desde_clip
+        self.presupuesto_desde_clip = presupuesto_desde_clip
         self.canciones = 0
         self.clips = 0
 
@@ -62,6 +63,9 @@ class PortalDoble:
 
     async def generate_video_frontier(self, **kwargs):
         self.clips += 1
+        if self.presupuesto_desde_clip is not None and self.clips >= self.presupuesto_desde_clip:
+            return {"status": "error", "budget_exceeded": True,
+                    "error": "presupuesto diario agotado para video_segundos: llevas 16 de 16"}
         if self.fallar_desde_clip is not None and self.clips >= self.fallar_desde_clip:
             return {"status": "error", "error": "Veo devolvió 503"}
         destino = self.tmp_path / f"clip_{self.clips}.mp4"
@@ -173,3 +177,35 @@ def test_paso_agotado_no_vuelve_a_facturar(tmp_path, monkeypatch):
     assert portal.clips == 3
     assert adaptador.media_jobs.resumable() == []
     assert adaptador.media_jobs.list_jobs()[0].status == "abandonado"
+
+
+def test_tope_de_presupuesto_aplaza_el_trabajo_sin_gastar_intentos(tmp_path, monkeypatch):
+    """
+    Un tope de presupuesto no es un fallo del paso: mañana el mismo trabajo cabe.
+
+    Si consumiera intentos, tres días de tope cerrarían un encargo que nunca
+    llegó a fallar.
+    """
+    portal = PortalDoble(tmp_path, presupuesto_desde_clip=3)
+    adaptador = _adaptador(tmp_path, portal, monkeypatch)
+    canal = CanalDoble()
+
+    asyncio.run(adaptador._run_dm_media_delivery("42", "Productor", "canción y vídeo", canal))
+
+    trabajos = adaptador.media_jobs.resumable()
+    assert len(trabajos) == 1, "el trabajo sigue vivo, sólo aplazado"
+    aplazado = trabajos[0]
+    assert aplazado.step("clip_3").attempts == 0, "un tope no gasta intento"
+    assert aplazado.step("clip_3").status == "pendiente"
+    assert any("presupuesto" in texto for texto in canal.textos)
+
+    # Al día siguiente, con presupuesto, el trabajo termina sin repetir lo pagado.
+    portal2 = PortalDoble(tmp_path)
+    adaptador2 = _adaptador(tmp_path, portal2, monkeypatch)
+    recuperado = adaptador2.media_jobs.resumable()[0]
+    asyncio.run(adaptador2._run_dm_media_delivery(
+        "42", "Productor", recuperado.order, CanalDoble(), job=recuperado))
+
+    assert portal2.canciones == 0
+    assert portal2.clips == 2, "sólo los dos segmentos que faltaban"
+    assert adaptador2.media_jobs.get(recuperado.id).status == "terminado"

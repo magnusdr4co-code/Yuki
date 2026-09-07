@@ -63,6 +63,7 @@ data/vital_state.json
 data/honcho_profile.json
 # Trabajos multimedia en curso: viven en el disco de la instancia.
 data/media_jobs/
+data/spend_ledger.json
 data/runtime_overrides.json
 media_cache/
 

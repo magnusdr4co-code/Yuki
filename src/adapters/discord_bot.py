@@ -594,6 +594,12 @@ class DiscordAdapter:
                     song_step.mark_done(song_path)
                     self.media_jobs.save(job)
                     await asyncio.to_thread(self.agent.creation_library.inventory)
+                elif song.get("budget_exceeded"):
+                    # Un tope de presupuesto no es un fallo del paso: mañana el
+                    # mismo trabajo cabe. No gasta intento ni marca fallo.
+                    song_step.attempts -= 1
+                    self.media_jobs.save(job)
+                    await report(f"💳 Canción aplazada por presupuesto: {song.get('error')}")
                 else:
                     detalle = song.get("error") or song.get("note") or "sin detalle"
                     song_step.mark_failed(detalle)
@@ -642,6 +648,14 @@ class DiscordAdapter:
                     clip_step.mark_done(path)
                     self.media_jobs.save(job)
                     clips.append(path)
+                elif video.get("budget_exceeded"):
+                    clip_step.attempts -= 1
+                    self.media_jobs.save(job)
+                    await report(
+                        f"💳 Segmento {index} aplazado por presupuesto: {video.get('error')}. "
+                        "El trabajo queda pendiente; no se pierde lo generado."
+                    )
+                    break
                 else:
                     detalle = video.get("error") or video.get("note") or "sin detalle"
                     clip_step.mark_failed(detalle)

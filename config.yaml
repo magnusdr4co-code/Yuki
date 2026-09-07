@@ -82,6 +82,21 @@ vertex_ai:
     voice: "Aoede"
     language_code: "es-es"
 
+# Presupuesto diario de gasto, comprobado ANTES de llamar a un proveedor.
+# El vídeo se factura por segundo (≈0,10 USD/s): cuatro clips de 8 s son ~3,2 USD,
+# así que el límite por defecto son unos tres encargos y medio al día. Al agotarse,
+# la operación se rechaza con la cifra concreta en vez de gastar y avisar después.
+# El día se cierra en la zona horaria del planificador, no en UTC.
+budget:
+  enabled: true
+  daily_limits:
+    video_segundos: 120
+    imagenes: 40
+    musica_pistas: 12
+  # Techo global en dólares. Deja vacío para gobernar sólo por unidades; la
+  # estimación no incluye música, que no tiene precio de referencia registrado.
+  usd_per_day: null
+
 # Overlay persistente en data/runtime_overrides.json. El Productor emparejado
 # puede modificar sólo la lista explícita del arnés; la evolución sólo ajusta
 # temperatura a partir de eventos de crecimiento ya registrados.

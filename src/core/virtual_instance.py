@@ -21,6 +21,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .llm_router import is_usable_key, build_routes
+from .spend_budget import SpendLedger
 
 # Ficha de la instancia de producción, tomada de `docs/PRODUCTION_STATUS.md` y
 # `deploy/gce-startup.sh`. Está aquí para que la réplica local pueda
@@ -185,6 +186,12 @@ class VirtualInstance:
                 f"{etiqueta} vía {modelo}" if vertex
                 else f"{etiqueta}: marcador declarado como simulado (sin VERTEX_PROJECT_ID)",
             )
+        libro = SpendLedger.from_config(self.config)
+        self._cap(
+            "medios.presupuesto", "Medios", REAL if libro.enabled else INACTIVO,
+            (f"Límites diarios {libro.limits}, comprobados antes de generar; hoy: {libro.describe()}"
+             if libro.enabled else "Sección `budget` deshabilitada: nada acota el gasto de medios"),
+        )
         self._cap("medios.midi", "Medios", REAL,
                   "Partituras locales por `src/tools/midi_generator.py`, sin proveedor")
         pendientes = self.pending_media_jobs()
@@ -303,13 +310,25 @@ class VirtualInstance:
             proposals=["Programar snapshots del disco de datos y probar la restauración.",
                        "Exportar Biblioteca y `yuki_memory.db` a Cloud Storage tras la síntesis diaria."],
         )
+        presupuesto = SpendLedger.from_config(self.config)
         self._lim(
             id="L8", title="Vídeo facturado por segundo sin techo de gasto",
-            severity=GRAVE, status=ABIERTO,
-            evidence="Veo cuesta ≈0,10 USD/s y el encargo estándar son cuatro clips de 8 s por orden.",
-            impact="Unas pocas órdenes seguidas consumen el crédito que sostiene todo lo demás.",
-            proposals=["Presupuesto diario de segundos de vídeo, comprobado antes de generar.",
-                       "Alerta de facturación en el proyecto y corte automático al alcanzarla."],
+            severity=GRAVE, status=MITIGADO if presupuesto.enabled else ABIERTO,
+            evidence=(
+                f"Veo cuesta ≈0,10 USD/s y el encargo estándar son cuatro clips de 8 s por orden. "
+                + (f"El presupuesto diario ({presupuesto.limits}) se comprueba antes de llamar al "
+                   f"proveedor; hoy: {presupuesto.describe()}"
+                   if presupuesto.enabled else
+                   "La sección `budget` está deshabilitada: nada acota el gasto.")
+            ),
+            impact=("Un encargo que exceda el límite se rechaza con la cifra concreta en vez de "
+                    "gastar y avisar después. La música se cuenta por unidades: no hay precio de "
+                    "referencia registrado que aplicarle."
+                    if presupuesto.enabled else
+                    "Unas pocas órdenes seguidas consumen el crédito que sostiene todo lo demás."),
+            proposals=["Alerta de facturación en el proyecto, que es lo único que ve el gasto real.",
+                       "Registrar el precio de Lyria cuando esté publicado para cotizar la música.",
+                       "Exponer el consumo del día en el Salón junto al estado de los trabajos."],
         )
         self._lim(
             id="L9", title="Honcho dialéctico sin servicio remoto",

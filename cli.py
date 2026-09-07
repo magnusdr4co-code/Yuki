@@ -474,6 +474,44 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_spend(as_json=False):
+    """Gasto de hoy contra el presupuesto diario, sin tocar la red."""
+    import yaml
+    from src.core.spend_budget import SpendLedger
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    libro = SpendLedger.from_config(config)
+    if as_json:
+        print(json.dumps({"consumo": libro.today(), "limites": libro.limits,
+                          "usd_estimado": libro.usd_today(),
+                          "usd_por_dia": libro.usd_per_day,
+                          "habilitado": libro.enabled}, ensure_ascii=False, indent=2))
+        return libro
+
+    print_banner()
+    print(f"{YELLOW}{BOLD}💳 Presupuesto de hoy{RESET}\n")
+    print(f"{DIM}Libro: {libro.path} · zona: {libro.timezone_name} · "
+          f"{'activo' if libro.enabled else 'DESHABILITADO'}{RESET}\n")
+    consumo = libro.today()
+    if not consumo:
+        print(f"{GREEN}Sin gasto registrado hoy.{RESET}")
+    for unidad in sorted(set(consumo) | set(libro.limits)):
+        usado = consumo.get(unidad, 0)
+        limite = libro.limits.get(unidad)
+        if limite is None:
+            print(f"  {unidad}: {usado:g} {DIM}(sin límite){RESET}")
+            continue
+        agotado = usado >= limite
+        color = RED if agotado else GREEN
+        print(f"  {unidad}: {color}{usado:g}/{limite:g}{RESET}")
+    print(f"\n{DIM}Estimación: ${libro.usd_today():.2f}"
+          + (f" de ${libro.usd_per_day:.2f}" if libro.usd_per_day is not None else "")
+          + " · la música no se cotiza: no hay precio de referencia registrado.{}".format(RESET))
+    return libro
+
+
 def cmd_virtualize(output_path=None, as_json=False):
     """
     Gemelo virtual de la instancia: capacidades efectivas y limitadores.
@@ -549,6 +587,11 @@ def main():
     virt.add_argument("--output", help="Escribe el informe en un fichero en vez de la salida estándar")
     virt.add_argument("--json", action="store_true", help="Emite JSON en vez de Markdown")
 
+    gasto = subparsers.add_parser(
+        "spend", help="Gasto de hoy frente al presupuesto diario (vídeo, imagen, música, voz, tokens)",
+    )
+    gasto.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -581,6 +624,8 @@ def main():
         cmd_daemon()
     elif args.command == "virtualize":
         cmd_virtualize(output_path=args.output, as_json=args.json)
+    elif args.command == "spend":
+        cmd_spend(as_json=args.json)
     else:
         parser.print_help()
 
