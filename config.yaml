@@ -58,8 +58,8 @@ vertex_ai:
   # Confirma los identificadores con una petición real; `gcloud ai models
   # list` no representa necesariamente el catálogo de publisher models:
   #   python3 cli.py vertex-check
-  primary_model: "google/gemini-3.7-flash"
-  fallback_model: "google/gemini-3.6-flash"
+  primary_model: "google/gemini-3.8-flash"
+  fallback_model: "google/gemini-3.7-flash"
   temperature: 0.72
   max_tokens: 2048
   # Medios servidos por el mismo proyecto y el mismo crédito.

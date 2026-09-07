@@ -637,6 +637,8 @@ def test_real_config_yaml_keeps_vertex_inert_until_configured():
 
     vertex = [p for p in LLMRouter(config=config).providers if p.name == "vertex_ai"][0]
     assert not vertex.is_available()
+    assert vertex.primary_model == "google/gemini-3.8-flash"
+    assert vertex.fallback_model == "google/gemini-3.7-flash"
 
 
 # --- Orden de la cadena con Vertex activa ---

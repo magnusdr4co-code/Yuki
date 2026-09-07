@@ -19,7 +19,7 @@ variable y Yuki sigue hablando sin tocar código.
 
 Los modelos se nombran a través del agregador
 (`anthropic/claude-3.5-sonnet`, `google/gemini-2.0-flash`) o, en la ruta de
-Vertex, con el publisher de Google (`google/gemini-3.7-flash`).
+Vertex, con el publisher de Google (`google/gemini-3.8-flash`).
 """
 
 import os
@@ -44,8 +44,8 @@ VERTEX_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
 DEFAULT_VERTEX_LOCATION = "global"
 VERTEX_GLOBAL_LOCATION = "global"
 VERTEX_GLOBAL_HOST = "aiplatform.googleapis.com"
-DEFAULT_VERTEX_PRIMARY_MODEL = "google/gemini-3.7-flash"
-DEFAULT_VERTEX_FALLBACK_MODEL = "google/gemini-3.6-flash"
+DEFAULT_VERTEX_PRIMARY_MODEL = "google/gemini-3.8-flash"
+DEFAULT_VERTEX_FALLBACK_MODEL = "google/gemini-3.7-flash"
 
 # Clave de AI Studio. No se usa para nada aquí: sólo se mira para poder avisar,
 # porque tenerla puesta es la vía más fácil de facturar fuera del crédito.
@@ -161,13 +161,13 @@ def normalize_vertex_model(model: str) -> str:
     Deja el nombre como lo espera el endpoint OpenAI de Vertex.
 
     Vertex nombra los modelos de Google con el prefijo del publisher
-    (`google/gemini-3.7-flash`). Se admite escribirlos con o sin él, y con el
+    (`google/gemini-3.8-flash`). Se admite escribirlos con o sin él, y con el
     prefijo del agregador delante, para poder copiar valores de
     `hermes_config.yaml` sin retocarlos:
 
-        vertex/gemini-3.7-flash        -> google/gemini-3.7-flash
+        vertex/gemini-3.8-flash        -> google/gemini-3.8-flash
         openrouter/google/gemini-2.0-flash -> google/gemini-2.0-flash
-        gemini-3.7-flash               -> google/gemini-3.7-flash
+        gemini-3.8-flash               -> google/gemini-3.8-flash
     """
     if not model:
         return model
