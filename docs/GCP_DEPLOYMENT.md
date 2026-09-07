@@ -19,8 +19,8 @@ Guía completa: qué cuentas crear, qué secretos guardar y cómo desplegar.
 > Pendiente: el enrutado por tiers de `provider_routing.routes` (modelos
 > distintos según la tarea) todavía no se lee; se usa `agent.model`.
 >
-> Los módulos de medios (`src/tools/nous_portal.py`) y los adaptadores de
-> Telegram y Discord son simulaciones deliberadas: escriben ficheros marcador
+> Los módulos de medios (`src/tools/nous_portal.py`) y el adaptador de Telegram
+> son simulaciones deliberadas: escriben ficheros marcador
 > y registran en log. **Espera** a dar de alta las cuentas de pago de FAL,
 > Suno o Firecrawl hasta que exista el cliente HTTP que las consuma. Ver
 > `README.md` para el estado por módulo.

@@ -28,6 +28,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     ffmpeg \
     ca-certificates \
     curl \
+    tzdata \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /install /usr/local
@@ -45,6 +46,7 @@ RUN mkdir -p /app/data /app/media_cache /app/output/art /app/output/voice \
 ENV PYTHONUNBUFFERED=1 \
     PYTHONDONTWRITEBYTECODE=1 \
     ENVIRONMENT=production \
+    TZ=Europe/Madrid \
     PORT=8080
 
 USER yuki

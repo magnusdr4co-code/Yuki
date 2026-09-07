@@ -416,6 +416,14 @@ def test_vertex_endpoint_is_built_from_project_and_location():
     )
 
 
+def test_vertex_global_endpoint_uses_root_host():
+    p = VertexProvider(project_id="yuki-diva", location="global")
+    assert p.base_url == (
+        "https://aiplatform.googleapis.com/v1/"
+        "projects/yuki-diva/locations/global/endpoints/openapi"
+    )
+
+
 def test_vertex_location_defaults_to_global():
     assert VertexProvider(project_id="yuki-diva").location == "global"
 

@@ -11,8 +11,10 @@ agent:
   fallback_language: "en-US"
   model:
     provider: "openrouter" # o "anthropic", "google", "openai", "nous"
-    primary_model: "anthropic/claude-3.5-sonnet"
-    fallback_model: "google/gemini-2.0-flash"
+    # Solar Pro 4 ofrece buena calidad general a un coste muy bajo en OpenRouter.
+    # El identificador canónico no lleva guion entre "pro" y "4".
+    primary_model: "upstage/solar-pro4"
+    fallback_model: "qwen/qwen3-30b-a3b"
     temperature: 0.72
     max_tokens: 1024
 
@@ -23,22 +25,22 @@ provider_routing:
   routes:
     feed_summary:
       tier: "fast_and_cheap"
-      preferred_model: "google/gemini-2.0-flash"
+      preferred_model: "upstage/solar-pro4"
       max_tokens: 350
       temperature: 0.3
     social_formatting:
       tier: "fast_and_cheap"
-      preferred_model: "deepseek/deepseek-chat"
+      preferred_model: "upstage/solar-pro4"
       max_tokens: 250
       temperature: 0.4
     music_composition:
       tier: "creative_and_deep"
-      preferred_model: "anthropic/claude-3.5-sonnet"
+      preferred_model: "upstage/solar-pro4"
       max_tokens: 1500
       temperature: 0.8
     dialectic_synthesis:
       tier: "creative_and_deep"
-      preferred_model: "google/gemini-2.0-pro-exp"
+      preferred_model: "qwen/qwen3-30b-a3b"
       max_tokens: 1000
       temperature: 0.7
 
@@ -53,8 +55,9 @@ vertex_ai:
   enabled: true
   project_id: ""              # o la variable de entorno VERTEX_PROJECT_ID
   location: "global"          # o una región concreta: europe-southwest1
-  # Confirma los identificadores disponibles antes de fijarlos:
-  #   gcloud ai models list --region=<region>
+  # Confirma los identificadores con una petición real; `gcloud ai models
+  # list` no representa necesariamente el catálogo de publisher models:
+  #   python3 cli.py vertex-check
   primary_model: "google/gemini-3.7-flash"
   fallback_model: "google/gemini-3.6-flash"
   temperature: 0.72

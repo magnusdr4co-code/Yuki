@@ -41,6 +41,10 @@ VERTEX_ENDPOINT_TEMPLATE = (
     "https://{location}-aiplatform.googleapis.com/v1/"
     "projects/{project_id}/locations/{location}/endpoints/openapi"
 )
+VERTEX_GLOBAL_ENDPOINT_TEMPLATE = (
+    "https://aiplatform.googleapis.com/v1/"
+    "projects/{project_id}/locations/global/endpoints/openapi"
+)
 VERTEX_SCOPES = ("https://www.googleapis.com/auth/cloud-platform",)
 DEFAULT_VERTEX_LOCATION = "global"
 DEFAULT_VERTEX_PRIMARY_MODEL = "google/gemini-3.7-flash"
@@ -218,6 +222,10 @@ class VertexProvider(LLMProvider):
     def base_url(self) -> str:
         if self._base_url_override:
             return self._base_url_override
+        # La ubicación global usa el host raíz; no existe un endpoint
+        # `global-aiplatform.googleapis.com`. Las regiones sí usan prefijo.
+        if self.location == "global":
+            return VERTEX_GLOBAL_ENDPOINT_TEMPLATE.format(project_id=self.project_id)
         return VERTEX_ENDPOINT_TEMPLATE.format(location=self.location, project_id=self.project_id)
 
     def is_available(self) -> bool:

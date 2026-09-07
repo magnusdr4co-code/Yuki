@@ -100,26 +100,26 @@ steps:
         SECRETS="${_SECRETS}"
 
         for TASK in nocturnal_trend_reflection morning_inspiration_drop daily_memory_synthesis echo_ritual; do
-          JOB="yuki-$(echo $TASK | tr '_' '-')"
-          if gcloud run jobs describe "$JOB" --region="${_REGION}" >/dev/null 2>&1; then
+          JOB="yuki-$(echo $$TASK | tr '_' '-')"
+          if gcloud run jobs describe "$$JOB" --region="${_REGION}" >/dev/null 2>&1; then
             ACTION=update
           else
             ACTION=create
           fi
-          gcloud run jobs $ACTION "$JOB" \
-            --image="$IMAGE" \
+          gcloud run jobs $$ACTION "$$JOB" \
+            --image="$$IMAGE" \
             --region="${_REGION}" \
-            --service-account="$SA" \
+            --service-account="$$SA" \
             --memory=512Mi \
             --cpu=1 \
             --max-retries=1 \
             --task-timeout=600s \
             --set-env-vars=ENVIRONMENT=production,LOG_LEVEL=INFO,DATABASE_PATH=/app/data/yuki_memory.db,VERTEX_PROJECT_ID=${_VERTEX_PROJECT_ID},VERTEX_LOCATION=${_VERTEX_LOCATION} \
-            --set-secrets="$SECRETS" \
+            --set-secrets="$$SECRETS" \
             --add-volume=name=yuki-data,type=cloud-storage,bucket=${_BUCKET} \
             --add-volume-mount=volume=yuki-data,mount-path=/app/data \
             --command=python \
-            --args=cli.py,cron-task,--name,$TASK
+            --args=cli.py,cron-task,--name,$$TASK
         done
 
 timeout: 1800s

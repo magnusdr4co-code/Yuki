@@ -168,7 +168,8 @@ contratar servicios de pago o de prometer una demo.
 | Nous Portal: imagen, música, voz | ⚠️ Marcador | Sin Vertex configurado, `src/tools/nous_portal.py` escribe ficheros de marcador **declarados como simulados**. La música no tiene motor contratado en ninguna ruta: usa `local.midi` |
 | Firecrawl / búsqueda web | ⚠️ Simulado | Sin cliente HTTP |
 | Honcho dialéctico | ⚠️ Local | Perfil en JSON local; sin sincronización con el servicio remoto |
-| Adaptadores Telegram y Discord | ⚠️ Simulado | Registran en log; no usan `python-telegram-bot` ni `discord.py` |
+| Adaptador Discord | ✅ Real | WebSocket saliente; responde a menciones y mensajes directos con `discord.py` |
+| Adaptador Telegram | ⚠️ Simulado | Registra en log; aún no usa `python-telegram-bot` |
 
 **Sobre los proveedores.** Nous Portal es la pasarela de herramientas y
 OpenRouter el agregador de LLM. Los modelos se nombran siempre a través del
@@ -227,4 +228,3 @@ pasarela contratada sirve audio musical hoy; las partituras salen de
 - 🚀 [Guía de Despliegue en VPS y Serverless (`docs/DEPLOYMENT_GUIDE.md`)](docs/DEPLOYMENT_GUIDE.md)
 - ☁️ [Despliegue en Google Cloud (`docs/GCP_DEPLOYMENT.md`)](docs/GCP_DEPLOYMENT.md)
 - 🛰️ [Runbook: aterrizar Yuki en un proyecto real de GCloud (`docs/RUNBOOK_GCLOUD.md`)](docs/RUNBOOK_GCLOUD.md) — encargo autocontenido para un agente con acceso a `gcloud`
-

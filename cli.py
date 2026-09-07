@@ -417,8 +417,24 @@ def cmd_daemon():
         print(f"{GREEN}{BOLD}✨ Yuki Daemon Activo (24/7 Presencia Autónoma){RESET}")
         print(f"{DIM}Cron programado, adaptadores sociales preparados, memoria FTS5 en caliente.{RESET}\n")
         
-        cron_task = asyncio.create_task(agent.cron.start())
-        await cron_task
+        tasks = [asyncio.create_task(agent.cron.start())]
+        discord_adapter = None
+        if os.getenv("DISCORD_BOT_TOKEN"):
+            from src.adapters.discord_bot import DiscordAdapter
+            discord_adapter = DiscordAdapter(agent)
+            tasks.append(asyncio.create_task(discord_adapter.start()))
+            print(f"{DIM}Conector Discord real activado; solo menciones dentro del guild autorizado.{RESET}")
+
+        registered = ", ".join(
+            f"{name}={job['cron_expr']}" for name, job in agent.cron.jobs.items()
+        )
+        print(f"{DIM}Rutinas Hermes registradas ({agent.cron.timezone}): {registered}{RESET}")
+
+        try:
+            await asyncio.gather(*tasks)
+        finally:
+            if discord_adapter is not None:
+                await discord_adapter.close()
 
     asyncio.run(_daemon_loop())
 
