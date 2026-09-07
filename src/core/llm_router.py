@@ -606,6 +606,46 @@ class LLMRouter:
             LocalVoiceProvider(),
         ]
 
+    def generate_with_tools(self, messages, tools):
+        """Turno de herramientas real; nunca degrada a prosa local simulada."""
+        for provider in self.providers:
+            if not isinstance(provider, (VertexProvider, OpenRouterProvider)) or not provider.is_available():
+                continue
+            try:
+                if isinstance(provider, VertexProvider):
+                    from openai import OpenAI
+                    credential = provider._access_token()
+                    if not credential:
+                        continue
+                    client = OpenAI(api_key=credential, base_url=provider.base_url,
+                                    timeout=45, max_retries=1)
+                else:
+                    client = provider._client().with_options(timeout=45, max_retries=1)
+                for model in (provider.primary_model, provider.fallback_model):
+                    if not model:
+                        continue
+                    try:
+                        response = client.chat.completions.create(
+                            model=model, messages=messages, tools=tools, tool_choice="auto",
+                            max_tokens=max(provider.max_tokens, 4096),
+                        )
+                        choice = response.choices[0]
+                        if choice.finish_reason == "length":
+                            raise ValueError("Turno de herramientas incompleto")
+                        message = choice.message
+                        result = {"role": "assistant", "content": message.content or ""}
+                        if message.tool_calls:
+                            result["tool_calls"] = [call.model_dump(exclude_none=True) for call in message.tool_calls]
+                        if result["content"] or result.get("tool_calls"):
+                            logger.info("Turno agéntico servido por %s; tools=%d", model,
+                                        len(result.get("tool_calls", [])))
+                            return result
+                    except Exception as exc:
+                        logger.warning("Fallo de turno agéntico %s: %s", model, type(exc).__name__)
+            except Exception as exc:
+                logger.warning("Pasarela agéntica indisponible: %s", type(exc).__name__)
+        raise RuntimeError("Ningún proveedor devolvió un turno de herramientas completo")
+
     def generate(self, system_prompt: str, user_message: str) -> LLMResponse:
         for provider in self.providers:
             if not provider.is_available():

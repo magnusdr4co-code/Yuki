@@ -32,6 +32,8 @@ output/art/*
 output/voice/*
 output/music/*
 output/posts/*
+output/video/*
+output/Biblioteca/
 !output/**/.gitkeep
 
 # Python

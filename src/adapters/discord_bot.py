@@ -1,7 +1,7 @@
 """
 Adaptador de Discord para Yuki (Hermes Agent).
 Soporta presencia en canales públicos de servidores autorizados y DMs privadas
-exclusivas para el Productor emparejado (Dextrure) con capacidades Hermes completas.
+exclusivas para el Productor emparejado con herramientas explícitas del arnés.
 """
 
 import os
@@ -56,6 +56,7 @@ class DiscordAdapter:
         self.paired_producer_ids = _parse_id_set(paired_env) if paired_env else {DEFAULT_PAIRED_PRODUCER_ID}
         self.pairing_path = _resolve_pairing_path()
         self._workflow_tasks: Set[object] = set()
+        self._producer_lock = asyncio.Lock()
 
         intents = discord.Intents.none()
         intents.guilds = True
@@ -143,14 +144,18 @@ class DiscordAdapter:
                     return
 
                 # Procesamiento de comandos Hermes en DM (ya emparejado)
-                reply = await self.handle_producer_dm(
-                    author_id=author_id,
-                    author_name=message.author.display_name,
-                    content=content,
-                    origin_channel=message.channel,
-                )
-                if reply and reply != "NADA_QUE_DECIR":
-                    await self._send_long(message.channel, reply)
+                async with self._producer_lock:
+                    try:
+                        async with message.channel.typing():
+                            reply = await self.handle_producer_dm(
+                                author_id=author_id, author_name=message.author.display_name,
+                                content=content, origin_channel=message.channel,
+                            )
+                        if reply and reply != "NADA_QUE_DECIR":
+                            await self._send_long(message.channel, reply)
+                    except Exception:
+                        logger.exception("Fallo atendiendo DM de productor")
+                        await self._send_long(message.channel, "❌ No pude completar el turno. No doy la tarea por realizada; revisa el registro de ejecución.")
                 return
 
             # -----------------------------------------------------------------
@@ -192,12 +197,7 @@ class DiscordAdapter:
                 and self._is_paired(author_id)
                 and _looks_like_discord_production_request(content)
             ):
-                reply = self._launch_discord_production(
-                    author_id=author_id,
-                    author_name=message.author.display_name,
-                    content=content,
-                    origin_channel=message.channel,
-                )
+                reply = "🔒 Envíame la orden por DM emparejado para ejecutar herramientas de producción."
                 await message.channel.send(
                     reply,
                     allowed_mentions=discord.AllowedMentions.none(),
@@ -273,11 +273,10 @@ class DiscordAdapter:
         origin_channel=None,
     ) -> str:
         """
-        Atiende al Productor emparejado (Dextrure) por DM con plenas capacidades Hermes:
-        - Soporta comandos (`!status`, `!pair`, `!skill`, `!cron`)
-        - Rol activo: `producer`
-        - Invocación Hermes completa sin filtros de canal público
+        DM autenticado: comandos concretos, producción y Biblioteca con herramientas.
         """
+        if author_id not in self.paired_producer_ids or not self._is_paired(author_id):
+            return "🔒 Se requiere DM del productor emparejado."
         if _looks_like_discord_production_request(content):
             return self._launch_discord_production(
                 author_id=author_id,
@@ -295,7 +294,9 @@ class DiscordAdapter:
                 f"• **Emparejamiento:** Productor Autenticado (`{author_name}` / ID `{author_id}`)\n"
                 f"• **Fase Circadiana:** {phase}\n"
                 f"• **Estado Vital:** {vital}\n"
-                f"• **Canal:** DM Privada (Hermes Activo)"
+                f"• **Canal:** DM privada con herramientas de Biblioteca y producción.\n"
+                f"• **Tareas de producción activas:** {len(self._workflow_tasks)}\n"
+                "• No hay shell ni auto-configuración general habilitados."
             )
 
         if content.startswith("!cron "):
@@ -311,7 +312,8 @@ class DiscordAdapter:
             user_name=author_name,
             message=content,
             channel_type="direct_message",
-            active_role="producer"
+            active_role="producer",
+            producer_tools=True,
         )
 
     async def handle_public_message(self, channel_id: str, author_id: str, author_name: str, content: str) -> str:
@@ -355,9 +357,9 @@ class DiscordAdapter:
     def _find_guild(self, requested_name: str):
         wanted = _fold(requested_name)
         exact = next((g for g in self.client.guilds if _fold(g.name) == wanted), None)
-        if exact:
+        if exact and str(exact.id) in self.allowed_guild_ids:
             return exact
-        return next((g for g in self.client.guilds if wanted in _fold(g.name)), None)
+        return next((g for g in self.client.guilds if str(g.id) in self.allowed_guild_ids and wanted in _fold(g.name)), None)
 
     @staticmethod
     def _permission_names(guild) -> Set[str]:
@@ -490,6 +492,8 @@ class DiscordAdapter:
                 active_role="producer",
             )
             await self._send_long(channel, f"### Presentación\n{presentation}")
+            await asyncio.to_thread(self.agent.creation_library.save_text, "Presentación del Salón", presentation,
+                                    source=f"discord:{guild.id}/{channel.id}")
 
             poem = await self.agent.generate_response(
                 user_id=author_id,
@@ -503,6 +507,8 @@ class DiscordAdapter:
                 active_role="producer",
             )
             await self._send_long(channel, f"### Poema / letra — Herrumbre y Escarcha\n{poem}")
+            await asyncio.to_thread(self.agent.creation_library.save_text, "Herrumbre y Escarcha", poem,
+                                    source=f"discord:{guild.id}/{channel.id}")
 
             music_engine = "midi_only"
             media_creator = getattr(self.agent, "media_creator", None)
@@ -578,6 +584,8 @@ class DiscordAdapter:
             else:
                 await self._send_long(channel, "⏭️ Vídeo omitido hasta conceder `Attach Files`.")
             await self._send_long(channel, "✅ Secuencia de producción terminada.")
+            inventory = await asyncio.to_thread(self.agent.creation_library.inventory)
+            await report_origin(f"✅ Producción finalizada en `{channel.name}`. Biblioteca: {inventory['total']} piezas indexadas; los fallos parciales están detallados en el canal.")
         except Exception as exc:
             logger.exception("Fallo en producción Discord de Yuki")
             await report_origin(f"❌ La producción se detuvo con un error: {exc}")

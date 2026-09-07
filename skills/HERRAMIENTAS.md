@@ -24,6 +24,7 @@
 | `vertex.tts` | Gemini TTS | Vertex AI | Notas de voz, OGG Opus nativo | `portal.tts` |
 | `local.midi` | `src/tools/midi_generator.py` | Local | Partituras MIDI multipista | — |
 | `local.memory` | `src/memory/fts5_memory.py` | Local (SQLite FTS5) | Memoria: leer y escribir | — |
+| `local.library` | `src/tools/creation_library.py` | Local, DM emparejado | Inventariar, archivar texto, leer y cambiar estado por tipo/estado; índice y hashes en `output/Biblioteca/` | Fallo explícito, sin simulación |
 | `local.ffmpeg` | `ffmpeg` en el contenedor | Local | Transcodificar audio a OGG Opus | — |
 | `adapter.telegram` | `src/adapters/telegram_bot.py` | Local (*long polling*) | Publicar y responder | — |
 | `adapter.discord` | `src/adapters/discord_bot.py` | Local (Gateway WS) | Publicar y responder | — |
