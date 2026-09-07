@@ -9,8 +9,10 @@ import json
 import time
 import asyncio
 import logging
+import subprocess
+import tempfile
 from pathlib import Path
-from typing import Optional, Set
+from typing import Optional, Set, List, Dict, Any
 
 import discord
 from .discord_intents import (
@@ -18,6 +20,7 @@ from .discord_intents import (
     extract_production_target as _extract_production_target,
     fold as _fold,
     looks_like_discord_production_request as _looks_like_discord_production_request,
+    looks_like_media_delivery_request as _looks_like_media_delivery_request,
 )
 from .discord_text import split_discord_text
 
@@ -284,6 +287,13 @@ class DiscordAdapter:
                 content=content,
                 origin_channel=origin_channel,
             )
+        if _looks_like_media_delivery_request(content):
+            return self._launch_dm_media_delivery(
+                author_id=author_id,
+                author_name=author_name,
+                content=content,
+                origin_channel=origin_channel,
+            )
 
         # Comandos Hermes
         if content.startswith("!status") or content.startswith("!state") or content.startswith("!pair") or content.startswith("!pairing"):
@@ -381,12 +391,147 @@ class DiscordAdapter:
     async def _send_file(self, channel, path: Optional[str], caption: str) -> bool:
         if not path or not Path(path).is_file():
             return False
-        await channel.send(
-            caption,
-            file=discord.File(path, filename=Path(path).name),
-            allowed_mentions=discord.AllowedMentions.none(),
+        try:
+            await channel.send(
+                caption,
+                file=discord.File(path, filename=Path(path).name),
+                allowed_mentions=discord.AllowedMentions.none(),
+            )
+            return True
+        except discord.HTTPException as exc:
+            logger.warning("Discord no pudo adjuntar %s: %s", path, type(exc).__name__)
+            return False
+
+    def _launch_dm_media_delivery(self, author_id: str, author_name: str, content: str, origin_channel) -> str:
+        """El trabajo pesado no bloquea el gateway; los binarios se entregan en el mismo DM."""
+        if origin_channel is None:
+            return "❌ No tengo un canal de DM para entregar los archivos."
+        task = asyncio.create_task(self._run_dm_media_delivery(author_id, author_name, content, origin_channel))
+        self._workflow_tasks.add(task)
+        task.add_done_callback(self._workflow_tasks.discard)
+        return (
+            "⚡ Producción multimedia iniciada. Generaré primero la canción y después los segmentos "
+            "de vídeo; sólo confirmaré y adjuntaré archivos reales en este DM."
         )
-        return True
+
+    def _library_entry(self, kind: str, keywords: tuple[str, ...]) -> Optional[Dict[str, Any]]:
+        """Selecciona una obra existente por metadatos, sin interpretar rutas del usuario."""
+        library = self.agent.creation_library
+        entries = library.list_entries().get("entries", [])
+        candidates = [entry for entry in entries if entry.get("kind") == kind]
+        for entry in candidates:
+            haystack = f"{entry.get('title', '')} {entry.get('source', '')}".casefold()
+            if any(word in haystack for word in keywords):
+                return entry
+        return candidates[-1] if candidates else None
+
+    def _library_file(self, entry: Optional[Dict[str, Any]]) -> Optional[str]:
+        if not entry:
+            return None
+        path = (self.agent.creation_library.root / entry["path"]).resolve()
+        root = self.agent.creation_library.root.resolve()
+        return str(path) if path.is_relative_to(root) and path.is_file() else None
+
+    @staticmethod
+    def _concat_videos(paths: List[str]) -> Optional[str]:
+        """Une clips de Veo ya verificados; no ejecuta shell ni acepta rutas externas."""
+        if not paths or not all(Path(path).is_file() for path in paths):
+            return None
+        output_dir = Path(paths[0]).parent
+        destination = output_dir / f"yuki_salon_final_{int(time.time())}.mp4"
+        with tempfile.NamedTemporaryFile("w", suffix=".txt", dir=output_dir, delete=False, encoding="utf-8") as listing:
+            for path in paths:
+                listing.write("file '" + str(Path(path).resolve()).replace("'", "'\\''") + "'\n")
+            listing_path = listing.name
+        try:
+            result = subprocess.run(
+                ["ffmpeg", "-y", "-f", "concat", "-safe", "0", "-i", listing_path,
+                 "-c", "copy", str(destination)],
+                capture_output=True, text=True, timeout=90, check=False,
+            )
+            return str(destination) if result.returncode == 0 and destination.is_file() else None
+        except (OSError, subprocess.TimeoutExpired):
+            return None
+        finally:
+            Path(listing_path).unlink(missing_ok=True)
+
+    async def _run_dm_media_delivery(self, author_id: str, author_name: str, content: str, channel) -> None:
+        """Genera canción cantada y vídeo desde obras existentes; entrega sólo adjuntos reales."""
+        async def report(text: str) -> None:
+            await self._send_long(channel, text)
+
+        try:
+            lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema", "herrumbre"))
+            lyrics_path = self._library_file(lyrics_entry)
+            if not lyrics_entry or not lyrics_path:
+                await report("❌ No encuentro una letra verificable en la Biblioteca; no generaré una canción sin texto fuente.")
+                return
+            lyrics = self.agent.creation_library.read_entry(lyrics_entry["id"]).get("content", "")
+            if len(lyrics.strip()) < 80:
+                await report("❌ La letra recuperada es demasiado breve para una canción; no la presentaré como canto completo.")
+                return
+
+            await report("🎵 Generando canción con la letra archivada. El adjunto sólo saldrá si Lyria devuelve audio real.")
+            song_prompt = (
+                "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
+                "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
+                "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
+                "and chorus structure:\n" + lyrics[:12000]
+            )
+            song = await self.agent.nous_portal.generate_music_flow(
+                title="Herrumbre y Escarcha — voz", prompt=song_prompt,
+                engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
+            )
+            song_path = song.get("local_path") if song.get("status") == "success" else None
+            if song_path and Path(song_path).is_file():
+                await asyncio.to_thread(self.agent.creation_library.inventory)
+                if not await self._send_file(channel, song_path, "🎵 Canción con letra — archivo generado"):
+                    await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
+            else:
+                await report(f"⚠️ No se generó canción: {song.get('error') or song.get('note') or 'sin detalle'}")
+
+            script_entry = self._library_entry("palabra", ("guion", "audiovisual", "video"))
+            script = ""
+            if script_entry:
+                script = self.agent.creation_library.read_entry(script_entry["id"]).get("content", "")
+            visual_entry = self._library_entry("visual", ("herrumbre", "salon", "escarcha"))
+            visual_path = self._library_file(visual_entry)
+            await report("🎬 Generando cuatro segmentos de 8 s y ensamblándolos; no sustituiré el vídeo por un marcador.")
+            storyboard = [
+                "Exterior del muelle: lluvia sobre acero oxidado, la escarcha empieza a aparecer.",
+                "Entrada al Salón: vapor de té, seda oscura y reflejos de urushi sobre hierro.",
+                "Interior: la intérprete respira y el poema encuentra su estribillo entre cuerdas tensas.",
+                "Salida: agua, niebla y una luz contenida sobre el metal; final pausado, sin corte brusco.",
+            ]
+            clips = []
+            for index, beat in enumerate(storyboard, 1):
+                prompt = (
+                    "Cinematic 16:9, 24 fps, slow meditative camera, no fast cuts. " + beat +
+                    " Guion de referencia: " + (script[:2500] or "Herrumbre y Escarcha, agua, hierro e invierno.")
+                )
+                video = await self.agent.nous_portal.generate_video_frontier(
+                    prompt=prompt, duration_seconds=8, aspect_ratio="16:9", image_path=visual_path,
+                )
+                path = video.get("local_path") if video.get("status") == "success" else None
+                if path and Path(path).is_file():
+                    clips.append(path)
+                else:
+                    await report(f"⚠️ Segmento {index} no generado: {video.get('error') or video.get('note') or 'sin detalle'}")
+                    break
+            final_video = await asyncio.to_thread(self._concat_videos, clips) if len(clips) == 4 else None
+            if final_video:
+                await asyncio.to_thread(self.agent.creation_library.inventory)
+                if not await self._send_file(channel, final_video, "🎬 Vídeo final — 32 s, cuatro segmentos ensamblados"):
+                    await report("⚠️ El vídeo se generó, pero Discord rechazó el adjunto; no lo doy por entregado.")
+            elif clips:
+                await report("⚠️ No pude ensamblar el vídeo final; adjunto sólo los segmentos reales disponibles.")
+                for index, path in enumerate(clips, 1):
+                    await self._send_file(channel, path, f"🎬 Segmento {index}")
+            else:
+                await report("⚠️ No se generó ningún segmento de vídeo; no hay vídeo que adjuntar.")
+        except Exception:
+            logger.exception("Fallo en producción multimedia por DM")
+            await report("❌ La producción multimedia falló; no doy por generados ni entregados archivos que no consten adjuntos.")
 
     async def _run_discord_production(
         self,

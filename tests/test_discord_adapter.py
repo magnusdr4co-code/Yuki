@@ -9,6 +9,7 @@ from src.adapters.discord_intents import (
     channel_slug,
     extract_production_target,
     looks_like_discord_production_request,
+    looks_like_media_delivery_request,
 )
 from src.adapters.discord_text import split_discord_text
 
@@ -20,6 +21,12 @@ def test_production_request_is_detected_only_for_explicit_channel_request():
     )
     assert looks_like_discord_production_request(request)
     assert not looks_like_discord_production_request("Escribe un poema sobre el salón.")
+
+
+def test_media_delivery_request_requires_creation_media_and_delivery():
+    assert looks_like_media_delivery_request("Crea la canción y el vídeo, y pásamelos por aquí.")
+    assert looks_like_media_delivery_request("Genera un mp3 y adjúntalo aquí")
+    assert not looks_like_media_delivery_request("El vídeo anterior duró tres segundos.")
 
 
 def test_production_target_and_channel_slug_are_stable():
