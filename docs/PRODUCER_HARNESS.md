@@ -6,7 +6,9 @@ Los canales públicos no reciben herramientas. El modelo actual es configurado e
 
 `ProducerHarness` usa llamadas nativas `tools`/`tool_calls` de la pasarela OpenAI-compatible,
 devuelve resultados con el mismo `tool_call_id` y repite hasta una respuesta final
-(máximo seis rondas, ocho operaciones por ronda). No hay shell ni autoedición general.
+(máximo ocho rondas y dieciséis operaciones totales). Si el presupuesto se agota,
+ejecuta un cierre sin herramientas a partir de la evidencia ya obtenida: no expone un
+aviso técnico ni deja trabajo en segundo plano. No hay shell ni autoedición general.
 El contexto reciente del usuario se recupera de SQLite, con límites; las promesas
 anteriores no son prueba de ejecución. Cada respuesta lleva recibos deterministas.
 Un fallo o límite devuelve resultado parcial; no se promete trabajo futuro inexistente.

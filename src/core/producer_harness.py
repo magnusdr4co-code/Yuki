@@ -5,6 +5,9 @@ import logging
 
 logger = logging.getLogger("Yuki.ProducerHarness")
 
+MAX_TOOL_ROUNDS = 8
+MAX_TOOL_CALLS = 16
+
 
 def spec(name, description, properties=None, required=None):
     return {"type": "function", "function": {"name": name, "description": description,
@@ -46,6 +49,11 @@ incluyen código, permisos Discord/IAM, emparejamiento, credenciales ni infraest
 Ante una orden ejecutable, llama las herramientas AHORA antes de confirmar resultados.
 Ante conversación o propuestas sin orden, responde sin modificar archivos.
 No prometas seguimiento ni trabajo en segundo plano: este turno termina con tu respuesta.
+Antes de actuar, elige el plan mínimo. Para ordenar o revisar Biblioteca empieza por
+`library_inventory` o `library_list` y lee sólo las piezas imprescindibles. No llames
+`terminal_run` salvo que el Productor pida expresamente diagnóstico, terminal, pruebas
+o configuración de software. Si queda poco presupuesto de herramientas, deja de pedir
+más y redacta el resultado con las pruebas ya obtenidas.
 La Biblioteca canónica se organiza en sonora/visual/palabra/audiovisual y
 semilla/en-desarrollo/terminado. Lo importado comienza en-desarrollo; no infieras
 que está terminado por estar publicado. Inventario crea los directorios y el canon.
@@ -63,6 +71,8 @@ class ProducerHarness:
         messages = [{"role": "system", "content": system_prompt + POLICY},
                     {"role": "user", "content": user_message}]
         receipts = []
+        evidence = []
+        tool_calls_used = 0
         library = self.agent.creation_library
         handlers = {"library_inventory": library.inventory, "library_list": library.list_entries,
                     "library_save_text": library.save_text, "library_read": library.read_entry,
@@ -74,16 +84,17 @@ class ProducerHarness:
                     "runtime_config_rollback": lambda path, reason="": self.agent.rollback_runtime(
                         path, actor="producer", reason=reason)}
         try:
-            for _ in range(6):
+            for _ in range(MAX_TOOL_ROUNDS):
                 turn = await asyncio.to_thread(self.agent.llm_router.generate_with_tools, messages, TOOLS)
                 calls = turn.get("tool_calls", [])
                 if not calls:
                     answer = turn.get("content") or "No he obtenido una respuesta final."
                     break
-                if len(calls) > 8:
+                if len(calls) > 8 or tool_calls_used + len(calls) > MAX_TOOL_CALLS:
                     raise ValueError("Demasiadas operaciones en un turno")
                 messages.append(turn)
                 for call in calls:
+                    tool_calls_used += 1
                     function = call["function"]
                     name = function["name"]
                     try:
@@ -101,16 +112,39 @@ class ProducerHarness:
                                  (f"exit={result['exit_code']}" if "exit_code" in result else "") or
                                  f"{result.get('total', '')}")
                         receipts.append(f"✓ {name}: {proof}")
+                        evidence.append({"tool": name, "ok": True, "result": result})
                     except Exception as exc:
                         output = {"ok": False, "error": type(exc).__name__}
                         receipts.append(f"✗ {name}: {type(exc).__name__}")
+                        evidence.append({"tool": name, "ok": False, "error": type(exc).__name__})
                     logger.info("Acción DM %s ok=%s", name, output["ok"])
                     messages.append({"role": "tool", "tool_call_id": call["id"],
                                      "content": json.dumps(output, ensure_ascii=False)[:30000]})
             else:
-                answer = "He alcanzado el límite de pasos. No queda ninguna tarea ejecutándose; estos son los resultados parciales."
+                # El límite protege coste y tiempo, pero nunca debe robar la
+                # respuesta final al Productor. Se cierra sin herramientas: no
+                # puede causar nuevos efectos y sólo resume evidencia real.
+                answer = await self._finalize(user_message, evidence)
         except Exception as exc:
             logger.warning("Turno DM interrumpido: %s", type(exc).__name__)
             answer = "No he podido completar este turno. No queda ninguna tarea ejecutándose; conserva los resultados parciales de abajo."
         # Recibos emitidos por el ejecutor, no inventados por el modelo.
         return answer + "\n\n**Registro de ejecución:**\n" + ("\n".join(receipts) or "Sin herramientas ejecutadas en este turno.")
+
+    async def _finalize(self, user_message, evidence):
+        compact_evidence = json.dumps(evidence, ensure_ascii=False)[:18000]
+        prompt = (
+            "Redacta la respuesta final para el Productor basándote exclusivamente en esta evidencia "
+            "de herramientas ya ejecutadas. No pidas ni anuncies más operaciones, no inventes efectos, "
+            "y explica con claridad cualquier parte no completada.\n"
+            f"Orden original: {user_message}\nEvidencia: {compact_evidence}"
+        )
+        try:
+            return await asyncio.to_thread(
+                self.agent._call_llm_inference,
+                "Eres el cierre fiable del arnés de producción de Yuki.", prompt,
+            )
+        except Exception as exc:
+            logger.warning("No se pudo redactar el cierre tras el límite: %s", type(exc).__name__)
+            return ("He detenido nuevas operaciones al alcanzar el presupuesto de herramientas. "
+                    "El registro siguiente contiene los resultados verificables ya obtenidos.")

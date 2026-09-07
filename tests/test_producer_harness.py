@@ -74,6 +74,7 @@ def agent_for(tmp_path, turns, allowed=True):
                             producer_terminal=ProducerTerminal(), runtime_config_get=store.get_public)
     agent.reconfigure_runtime = lambda path, value, actor, reason="": store.set(path, value, actor=actor, reason=reason)
     agent.rollback_runtime = lambda path, actor, reason="": store.rollback(path, actor=actor, reason=reason)
+    agent._call_llm_inference = lambda system, message: "Cierre fiable basado en los resultados ejecutados."
     return agent
 
 
@@ -96,11 +97,13 @@ def test_harness_denies_unknown_tools_and_rejected_arguments(tmp_path, tool, all
     assert not agent.creation_library.root.exists()
 
 
-def test_harness_reports_limit_and_no_background_work(tmp_path):
-    turns = [{"role": "assistant", "content": "", "tool_calls": [call("library_list")]} for _ in range(6)]
+def test_harness_finalizes_after_tool_budget_instead_of_exposing_limit(tmp_path):
+    from src.core.producer_harness import MAX_TOOL_ROUNDS
+    turns = [{"role": "assistant", "content": "", "tool_calls": [call("library_list")]} for _ in range(MAX_TOOL_ROUNDS)]
     answer = asyncio.run(ProducerHarness(agent_for(tmp_path, turns)).run("Yuki", "lista"))
-    assert "límite de pasos" in answer
-    assert "ninguna tarea ejecutándose" in answer
+    assert "Cierre fiable" in answer
+    assert "límite de pasos" not in answer
+    assert answer.count("✓ library_list") == MAX_TOOL_ROUNDS
 
 
 def test_harness_runs_safe_terminal_and_reconfigures_overlay(tmp_path):
