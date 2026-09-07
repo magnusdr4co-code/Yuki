@@ -1,5 +1,3 @@
-import os
-
 from src.security.model_armor import ModelArmorClient
 
 
@@ -91,3 +89,14 @@ def test_model_armor_fail_closed_blocks_transport_errors():
     decision = client.sanitize_user_prompt("Mensaje")
     assert not decision.allowed
 
+
+def test_model_armor_inherits_vertex_project_when_armor_project_is_empty(monkeypatch):
+    monkeypatch.setenv("VERTEX_PROJECT_ID", "yuki-prod")
+    monkeypatch.delenv("MODEL_ARMOR_PROJECT_ID", raising=False)
+
+    client = ModelArmorClient.from_config(
+        {"vertex_ai": {"project_id": ""}, "model_armor": {"project_id": ""}}
+    )
+
+    assert client.project_id == "yuki-prod"
+    assert client.enabled

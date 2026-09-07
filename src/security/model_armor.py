@@ -71,10 +71,13 @@ class ModelArmorClient:
 
         enabled_raw = env_or_config("MODEL_ARMOR_ENABLED", "enabled", "true")
         fail_closed_raw = env_or_config("MODEL_ARMOR_FAIL_CLOSED", "fail_closed", "false")
-        project_id = env_or_config(
-            "MODEL_ARMOR_PROJECT_ID",
-            "project_id",
-            os.getenv("VERTEX_PROJECT_ID", vertex_cfg.get("project_id", "")),
+        # Un valor vacío en YAML significa "hereda del entorno"; no debe
+        # ocultar VERTEX_PROJECT_ID dentro de la VM.
+        project_id = (
+            os.getenv("MODEL_ARMOR_PROJECT_ID")
+            or armor_cfg.get("project_id")
+            or os.getenv("VERTEX_PROJECT_ID")
+            or vertex_cfg.get("project_id", "")
         )
         location = env_or_config("MODEL_ARMOR_LOCATION", "location", DEFAULT_LOCATION)
         template_id = env_or_config(
@@ -212,4 +215,3 @@ def _as_bool(value: Any, *, default: bool) -> bool:
     if normalized in {"0", "false", "no", "off", "disabled"}:
         return False
     return default
-
