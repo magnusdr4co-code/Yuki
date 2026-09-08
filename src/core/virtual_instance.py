@@ -288,6 +288,19 @@ class VirtualInstance:
             f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor",
         )
 
+        # El gemelo dice lo que la instancia puede saber de sí misma. Que sepa
+        # distinguir «el proceso corre» de «Yuki hace cosas» es una capacidad,
+        # no un adorno: sin ella, el fallo más silencioso queda invisible.
+        try:
+            from .pulse import Pulse
+
+            lectura = Pulse(self.config).read()
+            self._cap("mente.pulso", "Mente", REAL,
+                      f"Signos vitales: {lectura.estado} — {lectura.motivo}")
+        except Exception as exc:
+            self._cap("mente.pulso", "Mente", INACTIVO,
+                      f"La sonda de signos vitales no responde: {type(exc).__name__}")
+
         biblioteca = self.root / "output" / "Biblioteca"
         self._cap("mente.biblioteca", "Mente", REAL,
                   f"Canon en {biblioteca} ({'presente' if biblioteca.is_dir() else 'vacía en este entorno'})")

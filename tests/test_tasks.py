@@ -59,12 +59,17 @@ def _agente(*, energia=0.8, humor=0.5, interacciones=10, fase="atelier", **extra
         generadas.append(kwargs)
         return f"texto para {kwargs['user_name']}"
 
+    fases_dormidas: list = []
     agente = types.SimpleNamespace(
         vital_state=types.SimpleNamespace(
             energy=energia, mood=humor, curiosity=0.9,
             accumulated_interactions_today=interacciones,
             accumulated_creations_today=0, inspiration=0.5,
-            will_queue=[], save=lambda: None),
+            will_queue=[], save=lambda: None,
+            # Sellar la noche es parte de dormir: si el doble no lo tuviera, la
+            # traza podría desaparecer del código real sin que nada avisara.
+            last_sleep_cycle=None,
+            mark_sleep_cycle=lambda fase="nrem": fases_dormidas.append(fase)),
         circadian=types.SimpleNamespace(current_phase=lambda: fase),
         memory_manager=MemoriaFalsa(),
         nous_portal=PortalFalso(),
@@ -90,6 +95,7 @@ def _agente(*, energia=0.8, humor=0.5, interacciones=10, fase="atelier", **extra
     agente.generadas = generadas
     for clave, valor in extra.items():
         setattr(agente, clave, valor)
+    agente.fases_dormidas = fases_dormidas
     return agente
 
 
@@ -250,6 +256,9 @@ def test_sin_material_no_hay_sueno_ni_impulso():
     resultado = asyncio.run(AutonomousTasks(agente).rem_dream())
 
     assert resultado["sonado"] is False
+    # Se sella igual: la traza dice que la fase corrió, no que produjera imagen.
+    # Una noche sin material es normal; una fase parada tres días, no.
+    assert agente.fases_dormidas == ["rem"]
 
 
 def test_del_sueno_nace_un_impulso_en_la_cola():
@@ -265,6 +274,7 @@ def test_del_sueno_nace_un_impulso_en_la_cola():
 
     assert len(impulsos) == 1
     assert impulsos[0].source == "sueno" and impulsos[0].tool_hint == "write"
+    assert agente.fases_dormidas == ["rem"], "la fase REM tiene que dejar traza de que corrió"
 
 
 def test_el_olvido_semanal_devuelve_su_recibo():

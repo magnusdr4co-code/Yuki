@@ -14,6 +14,7 @@ Comprueba lo que puede romperse en silencio y costar caro:
   · No hay material sintético sin marcar (Artículo 50).
   · No queda ningún limitador **bloqueante** en el gemelo virtual.
   · El presupuesto del día no está ya agotado al arrancar.
+  · Los signos vitales: que el proceso corra **y además** ella haga cosas.
   · Si se le da una URL, `/health` responde y el Salón está vivo.
 
 No genera medios, no llama a ningún modelo y no gasta un céntimo: una prueba de
@@ -108,6 +109,23 @@ def comprobar_presupuesto(config: Dict[str, Any]) -> Tuple[bool, str]:
     return True, f"margen disponible · hoy {libro.describe()}"
 
 
+def comprobar_pulso(config: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Que el proceso conteste no significa que Yuki viva.
+
+    Es la comprobación que faltaba: todas las demás miran cosas que se rompen
+    con estrépito —la base no abre, la cadena no cuadra, el crédito se agotó—.
+    Ésta mira la que no hace ruido: el contenedor sano, la sonda en verde, y
+    ella sin hacer nada desde hace tres días.
+    """
+    from src.core.pulse import Pulse
+
+    lectura = Pulse(config).read()
+    if not lectura.sana:
+        return False, lectura.describe()
+    return True, lectura.describe()
+
+
 def comprobar_freno(_: Dict[str, Any]) -> Tuple[bool, str]:
     """
     El freno puesto no es un fallo: es una decisión. Pero tiene que verse.
@@ -155,6 +173,7 @@ def main() -> int:
         ("limitadores", lambda: comprobar_limitadores(config)),
         ("presupuesto", lambda: comprobar_presupuesto(config)),
         ("freno", lambda: comprobar_freno(config)),
+        ("pulso", lambda: comprobar_pulso(config)),
     ]
     if argumentos.url:
         pruebas.append(("salon", lambda: comprobar_salon(argumentos.url)))

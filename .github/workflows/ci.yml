@@ -77,7 +77,7 @@ jobs:
       - name: Comprobación de humo (lo que no depende del entorno)
         # Las comprobaciones de Vertex y presupuesto dependen de credenciales
         # que una CI no tiene ni debe tener; se ejecutan en el despliegue real.
-        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50
+        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso
 
       - name: Gemelo virtual
         run: python scripts/virtualize_instance.py --json > /tmp/gemelo.json
@@ -115,9 +115,10 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Romper a Yuki a propósito
-        # Nueve modos de fallo reales —reinicio a mitad de encargo, proveedor
-        # caído, estado corrupto, bitácora manipulada, reloj que salta— contra
-        # un sandbox temporal. Si una invariante se rompe, la rama no pasa.
+        # Once modos de fallo reales —reinicio a mitad de encargo, proveedor
+        # caído, estado corrupto, bitácora manipulada, reloj que salta, hilo de
+        # tareas muerto con el contenedor en verde— contra un sandbox temporal.
+        # Si una invariante se rompe, la rama no pasa.
         run: python scripts/chaos_drill.py
 
       - name: La copia se puede restaurar

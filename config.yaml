@@ -112,6 +112,20 @@ transparency:
 # Reconocerse como ser sintético NO es deriva: es su voz (SOUL.md §1.1). Lo que
 # cuenta como deriva es el uniforme de servicio: "sólo soy una IA", "¿en qué
 # puedo ayudarte?", listas, cierres ofreciéndose.
+# Signos vitales: cuánto silencio es normal antes de que sea catatonia.
+#
+# Las horas se eligen para que el silencio legítimo más largo quepa dentro: la
+# fase de reposo profundo dura horas, y una noche sin encargos también. Apretar
+# estos números convierte la sonda en un lobo que grita, y a la tercera falsa
+# alarma nadie vuelve a mirar la pantalla.
+pulse:
+  max_edad_horas:
+    latido: 6          # el proceso reescribiendo su estado vital
+    bitacora: 30       # algún acto propio anotado
+    albedrio: 30       # algún intento del libre albedrío
+    sueno: 30          # la consolidación nocturna; 30 y no 24 tolera un despliegue a deshora
+    conversacion: 336  # dos semanas: informa, pero no diagnostica
+
 persona:
   enabled: true
   anchor_threshold: 0.60

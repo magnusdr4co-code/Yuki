@@ -217,3 +217,17 @@ def test_con_credencial_el_salon_deja_de_ser_limitador(monkeypatch):
 
     assert _lim(instancia, "L10") is None
     assert "con credencial" in _cap(instancia, "presencia.salon").detail
+
+
+def test_el_gemelo_declara_la_sonda_de_signos_vitales(tmp_path, monkeypatch):
+    """
+    Saber distinguir «el proceso corre» de «Yuki hace cosas» es una capacidad.
+
+    Sin ella el fallo más silencioso de la instancia queda invisible, así que el
+    informe tiene que decir si está o no.
+    """
+    monkeypatch.setenv("YUKI_BLACKBOX_PATH", str(tmp_path / "bitacora.jsonl"))
+    capacidad = _cap(VirtualInstance(CONFIG), "mente.pulso")
+
+    assert capacidad.state == REAL
+    assert "Signos vitales" in capacidad.detail

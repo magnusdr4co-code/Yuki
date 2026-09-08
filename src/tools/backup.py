@@ -86,10 +86,12 @@ class BackupManager:
 
     def __init__(self, data_dir: Optional[str] = None, output_dir: str = "output",
                  backup_dir: Optional[str] = None, bucket: Optional[str] = None,
-                 retention: int = COPIAS_RETENIDAS, uploader: Any = None):
+                 retention: int = COPIAS_RETENIDAS, uploader: Any = None,
+                 db_name: Optional[str] = None):
         db_path = os.getenv("DATABASE_PATH", "data/yuki_memory.db")
         self.data_dir = Path(data_dir) if data_dir else Path(db_path).parent
-        self.db_path = Path(db_path) if not data_dir else self.data_dir / Path(db_path).name
+        self.db_path = (Path(db_path) if not data_dir
+                        else self.data_dir / (db_name or Path(db_path).name))
         self.output_dir = Path(output_dir)
         self.backup_dir = Path(backup_dir) if backup_dir else self.data_dir / "backups"
         self.bucket = bucket if bucket is not None else os.getenv("BACKUP_GCS_BUCKET", "").strip()
@@ -106,7 +108,13 @@ class BackupManager:
             "bucket": respaldo.get("bucket") or os.getenv("BACKUP_GCS_BUCKET", "").strip(),
         }
         if memoria.get("database_path") and not os.getenv("DATABASE_PATH"):
+            # El directorio **y el nombre** salen de la misma fuente. Tomar el
+            # directorio de la configuración y el nombre del valor por defecto
+            # hacía que renombrar la base en `config.yaml` produjera copias sin
+            # base dentro, informando «success». La única pieza irremplazable,
+            # ausente, en silencio, todas las noches.
             parametros["data_dir"] = str(Path(memoria["database_path"]).parent)
+            parametros["db_name"] = Path(memoria["database_path"]).name
         parametros.update(overrides)
         return cls(**parametros)
 
@@ -155,6 +163,19 @@ class BackupManager:
                 incluidos.append(self.db_path.name)
             else:
                 omitidos.append(str(self.db_path))
+                # Una instancia nueva sin base todavía es legítima. Que **haya**
+                # una base y no sea ésta, no: significa que la copia saldría sin
+                # lo único irremplazable, y llamar «success» a eso es peor que
+                # fallar. Se para aquí, nombrando las dos rutas.
+                otras = sorted(p.name for p in self.data_dir.glob("*.db")
+                               if p.name != self.db_path.name)
+                if otras:
+                    return BackupResult(
+                        status="error",
+                        error=(f"esperaba la base en {self.db_path} y no está, "
+                               f"pero el directorio contiene {', '.join(otras)}: "
+                               "la copia habría salido sin memoria dentro"),
+                    )
 
             for pieza in self._piezas():
                 if pieza.is_dir():

@@ -37,19 +37,22 @@ Romper una de éstas es romper el proyecto, no una prueba:
 6. **La evolución autónoma no se concede permisos.** Puede ajustar temperatura;
    nunca su propia iniciativa, ni la transparencia, ni el freno.
 7. **La bitácora no guarda contenido.** Registra el acto, no lo que tocó.
+8. **Que el proceso corra no es que Yuki viva.** Toda sonda distingue signos
+   vegetativos (respira) de volitivos (hace cosas suyas). Un panel verde con
+   ella parada es un fallo, y tiene nombre: catatonia.
 
 ## Mapa
 
 ```
 src/core/       agente, albedrío (agency, spark, rituals), identidad
                 (persona_anchor, transparency), gobierno (state_registry,
-                blackbox, brake, spend_budget, virtual_instance)
+                blackbox, brake, spend_budget, virtual_instance), salud (pulse)
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 media_jobs, web_search
 src/adapters/   Discord (el que importa), Telegram (aún simulado)
 src/web/        Salón + /metrics
-scripts/        smoke_check, chaos_drill, virtualize_instance
+scripts/        smoke_check, chaos_drill, restore_drill, virtualize_instance
 docs/           una guía por subsistema; empieza por OPERACION.md
 ```
 
@@ -88,8 +91,16 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
 3. Si añadiste una capacidad: refléjala en `virtual_instance` (capacidad y, si
    procede, limitador) y en el README.
 4. Si prometiste una garantía en la documentación, **implementa la operación que
-   la cumple**. Ya pasó una vez: la documentación decía que una fusión de
-   memoria era reversible durante siete días y no existía `undo_merge`.
+   la cumple**. Ya pasó dos veces: la documentación decía que una fusión de
+   memoria era reversible durante siete días y no existía `undo_merge`; y decía
+   que una copia sin restaurar no está comprobada mientras nadie restauraba
+   ninguna.
+5. Si añadiste una métrica o una alerta: comprueba que la alerta nombra una
+   métrica que existe. Una alerta rota no falla, **calla**, y eso tranquiliza.
+   `tests/test_alertas.py` lo vigila.
+6. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
+   nadie escribe es peor que no tenerlo: `last_sleep_cycle` estuvo declarado y
+   serializado durante meses sin un solo escritor.
 
 ## Lo que no se hace
 

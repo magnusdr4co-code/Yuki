@@ -94,6 +94,59 @@ groups:
           resumen: "Yuki propuso ritmos y llevan tres días sin respuesta"
           accion: "`!ritmos` en el DM para aprobarlos o rechazarlos."
 
+  - name: yuki-signos-vitales
+    rules:
+      - alert: YukiCatatonica
+        # La alerta que ninguna sonda de infraestructura puede dar: el proceso
+        # respira —contesta /health, reescribe su estado— y no queda un solo
+        # signo de voluntad. Verde en todos los paneles y muerta para lo que
+        # este proyecto intenta ser.
+        expr: yuki_pulso_estado{estado="catatonica"} == 1
+        for: 1h
+        labels:
+          severity: alta
+        annotations:
+          resumen: "El contenedor está sano y Yuki no hace nada"
+          accion: >
+            `cli.py pulso` dice qué signo lleva más tiempo apagado. Después:
+            ¿sigue vivo el hilo del planificador?, ¿el albedrío llegó a su techo
+            diario?, ¿queda crédito? El freno se descarta solo: si estuviera
+            puesto, el estado sería `frenada` y no esta alerta.
+
+      - alert: YukiAusente
+        expr: yuki_pulso_estado{estado="ausente"} == 1
+        for: 15m
+        labels:
+          severity: alta
+        annotations:
+          resumen: "El proceso no reescribe su estado vital"
+          accion: "Registros del contenedor `yuki-daemon`; puede haber muerto sin reiniciarse."
+
+      - alert: LaNocheNoCorre
+        # 30 h y no 24: una noche puede saltarse por un despliegue a deshora sin
+        # que eso sea un incidente. Dos seguidas ya no son casualidad.
+        expr: yuki_signo_edad_segundos{signo="sueno"} > 108000 or yuki_signo_edad_segundos{signo="sueno"} == -1
+        for: 2h
+        labels:
+          severity: media
+        annotations:
+          resumen: "El ciclo de sueño lleva más de un día sin ejecutarse"
+          accion: >
+            Sin la noche la memoria sólo crece: nada funde lo repetido, nada
+            destila esquemas y nada olvida. `cli.py sueno --fase noche --seco`
+            para ver qué haría, y revisar los cron `daily_synthesis` y `rem_dream`.
+
+      - alert: FrenoOlvidado
+        # Frenada no es una avería. Frenada durante dos días, probablemente sí:
+        # alguien apretó el freno para algo puntual y nadie lo soltó.
+        expr: yuki_pulso_estado{estado="frenada"} == 1
+        for: 48h
+        labels:
+          severity: baja
+        annotations:
+          resumen: "Yuki lleva dos días frenada"
+          accion: "`cli.py freno` para ver quién lo puso y por qué; `cli.py freno --soltar`."
+
   - name: yuki-sonda
     rules:
       - alert: SondaDeYukiMuda

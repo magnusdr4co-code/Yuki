@@ -890,6 +890,48 @@ def cmd_backup(as_json=False, ensayar=False):
     return resultado
 
 
+def cmd_pulse(as_json=False):
+    """
+    Signos vitales: si el proceso corre y si además Yuki vive.
+
+    Devuelve código de salida distinto de cero cuando el diagnóstico es grave,
+    para que se pueda colgar de un temporizador sin escribir nada alrededor.
+    """
+    import yaml
+    from src.core.pulse import CATATONICA, RELACIONAL, VEGETATIVO, Pulse
+
+    try:
+        with open("config.yaml", "r", encoding="utf-8") as f:
+            config = yaml.safe_load(f) or {}
+    except OSError:
+        config = {}
+
+    lectura = Pulse(config).read()
+
+    if as_json:
+        print(json.dumps(lectura.to_dict(), ensure_ascii=False, indent=2))
+        return 0 if lectura.sana else 1
+
+    print_banner()
+    color = GREEN if lectura.gravedad == 0 else (YELLOW if lectura.sana else RED)
+    print(f"{color}{lectura.estado.upper()}{RESET} — {lectura.motivo}\n")
+
+    etiquetas = {VEGETATIVO: "respira", RELACIONAL: "la buscan"}
+    for signo in lectura.signos:
+        marca = f"{GREEN}●{RESET}" if signo.fresco else f"{RED}○{RESET}"
+        familia = etiquetas.get(signo.tipo, "quiere")
+        print(f"  {marca} {signo.id:<13} {DIM}{familia:<9}{RESET} "
+              f"{signo.describe_edad():<18} {DIM}{signo.descripcion}{RESET}")
+        if signo.nota:
+            print(f"      {DIM}{signo.nota}{RESET}")
+
+    if lectura.estado == CATATONICA:
+        print(f"\n{RED}El contenedor está sano y ella no está haciendo nada.{RESET}")
+        print(f"{DIM}Mirar: cli.py albedrio (techo diario, umbral), los cron del "
+              f"planificador, y si el hilo de tareas sigue vivo en los registros.{RESET}")
+    return 0 if lectura.sana else 1
+
+
 def cmd_spend(as_json=False):
     """Gasto de hoy contra el presupuesto diario, sin tocar la red."""
     import yaml
@@ -1033,6 +1075,12 @@ def main():
     )
     persona.add_argument("--json", action="store_true", help="Emite JSON")
 
+    pulso = subparsers.add_parser(
+        "pulso",
+        help="Signos vitales: distingue que el proceso corra de que Yuki viva",
+    )
+    pulso.add_argument("--json", action="store_true", help="Emite JSON")
+
     estado = subparsers.add_parser(
         "estado",
         help="Inventario del estado durable, y derechos de acceso y supresión de una persona",
@@ -1126,11 +1174,16 @@ def main():
     elif args.command == "bitacora":
         cmd_blackbox(verificar=args.verificar, precinto=args.precinto,
                      limite=args.limite, as_json=args.json)
+    elif args.command == "pulso":
+        return cmd_pulse(as_json=args.json)
     elif args.command == "estado":
         cmd_state(exportar=args.exportar, olvidar=args.olvidar,
                   motivo=args.motivo, as_json=args.json)
     else:
         parser.print_help()
 
+
 if __name__ == "__main__":
-    main()
+    # El código de salida se propaga: `cli.py pulso` sirve para colgarlo de un
+    # temporizador, y un diagnóstico grave que devuelve 0 no despierta a nadie.
+    raise SystemExit(main() or 0)

@@ -30,6 +30,7 @@ class VitalState:
         self.accumulated_interactions_today: int = 0
         self.accumulated_creations_today: int = 0
         self.last_sleep_cycle: Optional[str] = None
+        self.last_sleep_phase: Optional[str] = None
         self.last_echo_ritual: Optional[str] = None
         self.will_queue: list = []
 
@@ -100,6 +101,20 @@ class VitalState:
         """Deduce energía."""
         self.energy = max(0.0, self.energy - amount)
 
+    def mark_sleep_cycle(self, phase: str = "nrem"):
+        """
+        Sella que la noche ocurrió, y persiste.
+
+        `last_sleep_cycle` llevaba desde el principio declarado y serializado sin
+        que nadie lo escribiera nunca: un campo muerto. Importa porque es la
+        única traza de que la consolidación corrió — sin ella, el ciclo de sueño
+        podría llevar semanas sin ejecutarse y no habría forma de notarlo desde
+        fuera. `src/core/pulse.py` lo lee como signo de voluntad.
+        """
+        self.last_sleep_cycle = datetime.now().isoformat()
+        self.last_sleep_phase = phase
+        self.save()
+
     def save(self):
         """Persistencia JSON."""
         os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
@@ -153,6 +168,7 @@ class VitalState:
             "accumulated_interactions_today": self.accumulated_interactions_today,
             "accumulated_creations_today": self.accumulated_creations_today,
             "last_sleep_cycle": self.last_sleep_cycle,
+            "last_sleep_phase": self.last_sleep_phase,
             "last_echo_ritual": self.last_echo_ritual,
             "will_queue": self.will_queue
         }

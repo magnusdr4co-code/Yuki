@@ -163,3 +163,25 @@ def test_el_circuito_completo_no_toca_la_bitacora_de_la_instancia(tmp_path, monk
 
     assert not real.exists()
     assert os.environ["YUKI_BLACKBOX_PATH"] == str(real)
+
+
+def test_el_circuito_no_depende_del_entorno_heredado(tmp_path, monkeypatch):
+    """
+    Una variable heredada no puede vaciar la copia en silencio.
+
+    `BackupManager` deduce el nombre del fichero de base de `DATABASE_PATH`. Con
+    una apuntando a otro nombre, la copia saldría **sin base dentro** y el
+    ensayo daría por buena una copia vacía: exactamente el fallo que este guion
+    existe para detectar. Apareció como una prueba que fallaba una vez de cada
+    muchas, según qué otra prueba corriera antes.
+    """
+    monkeypatch.setenv("DATABASE_PATH", "/ruta/que/no/existe/otro_nombre.db")
+    monkeypatch.setenv("YUKI_BLACKBOX_PATH", "/ruta/que/no/existe/bitacora.jsonl")
+
+    copia, informe = ciclo_completo(tmp_path)
+
+    assert copia is not None
+    assert all(r["ok"] for r in informe), [r for r in informe if not r["ok"]]
+    assert "3 recuerdo(s)" in _resultado(informe, "memoria")["detalle"]
+    # Y el entorno queda como estaba: el ensayo no deja rastro en quien lo llama.
+    assert os.environ["DATABASE_PATH"] == "/ruta/que/no/existe/otro_nombre.db"

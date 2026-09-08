@@ -196,8 +196,15 @@ def ciclo_completo(raiz: Path) -> Tuple[Optional[Path], List[Dict[str, Any]]]:
     (salida / "Biblioteca" / "poema.md").write_text(
         "# Ensayo\n\nLos medios se regeneran; lo escrito, no.\n", encoding="utf-8")
 
-    anterior = os.environ.get("YUKI_BLACKBOX_PATH")
-    os.environ["YUKI_BLACKBOX_PATH"] = str(datos / "bitacora.jsonl")
+    # El entorno del ensayo se fija entero, no a medias. `BackupManager` deduce
+    # el nombre del fichero de base de `DATABASE_PATH`: con una variable heredada
+    # apuntando a otro nombre, la copia se crearía **sin base dentro** y el
+    # ensayo daría por buena una copia vacía. Es justo el fallo que este guion
+    # existe para detectar, así que no puede cometerlo él.
+    entorno = {"YUKI_BLACKBOX_PATH": str(datos / "bitacora.jsonl"),
+               "DATABASE_PATH": str(datos / "yuki_memory.db")}
+    anteriores = {clave: os.environ.get(clave) for clave in entorno}
+    os.environ.update(entorno)
     try:
         from src.core.blackbox import BlackBox
         from src.tools.backup import BackupManager
@@ -222,10 +229,11 @@ def ciclo_completo(raiz: Path) -> Tuple[Optional[Path], List[Dict[str, Any]]]:
         resultados.extend(restaurar(copia, raiz / "restaurado"))
         return copia, resultados
     finally:
-        if anterior is None:
-            os.environ.pop("YUKI_BLACKBOX_PATH", None)
-        else:
-            os.environ["YUKI_BLACKBOX_PATH"] = anterior
+        for clave, valor in anteriores.items():
+            if valor is None:
+                os.environ.pop(clave, None)
+            else:
+                os.environ[clave] = valor
 
 
 def main() -> int:

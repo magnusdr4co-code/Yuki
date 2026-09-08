@@ -17,7 +17,7 @@ Esto lo convierte en cosas que se ejecutan.
 |---|---|
 | **pruebas** | La suite en 3.11 (la de la imagen) y 3.12 (aviso anticipado), con `pytest` y también con `unittest`, que es lo que documenta el README: si deja de funcionar, la documentación miente |
 | **cumplimiento** | Humo sin credenciales + el gemelo virtual sigue siendo legible y reportando |
-| **simulacro y recuperación** | Los nueve modos de fallo del §6 y el circuito de copia y restauración del §7: romperla a propósito, y comprobar que se la puede volver a levantar |
+| **simulacro y recuperación** | Los once modos de fallo del §6 y el circuito de copia y restauración del §7: romperla a propósito, y comprobar que se la puede volver a levantar |
 | **imagen** | La imagen construye, las dos composiciones son válidas, y **fluidsynth y el banco de sonidos están dentro** — lo que separa tener respaldo musical de no tenerlo, y sólo se nota el día que Lyria falla |
 
 Las pruebas inyectan dobles en lugar de llamar a proveedores, así que abrir una
@@ -166,7 +166,7 @@ recordarlo cuesta media hora de gente preguntándose qué pasa.
 ## 6. El simulacro
 
 ```bash
-python3 scripts/chaos_drill.py           # nueve modos de fallo, código de salida
+python3 scripts/chaos_drill.py           # once modos de fallo, código de salida
 python3 scripts/chaos_drill.py --json
 python3 scripts/chaos_drill.py --solo bitacora_manipulada --verboso
 ```
@@ -185,6 +185,7 @@ fallado o puede fallar**, y comprueba que las invariantes siguen en pie.
 | `bitacora_manipulada` | ¿Y si alguien edita el registro? | Se ve la edición **y** el corte por detrás |
 | `sueno_no_es_recuerdo` | ¿Y si un sueño vuelve como algo vivido? | Cuatro consultas y ninguna lo devuelve |
 | `olvido_respeta_lo_intocable` | ¿Y si el olvido corre sobre una memoria antigua entera? | Canon, síntesis y lo fijado sobreviven |
+| `hilo_de_tareas_muerto` | ¿Y si el hilo del planificador muere y el contenedor sigue verde? | La sonda lo dice, y no lo confunde con freno, arranque ni caída |
 | `reloj_hacia_atras` | ¿Y si el reloj de la VM salta? | Ni el presupuesto ni el refuerzo se corrompen |
 
 Corre entero sobre un sandbox temporal: **un simulacro que tocara la instancia
@@ -221,11 +222,65 @@ dejase de meter la base en el tar. Su bitácora se aísla por
 `YUKI_BLACKBOX_PATH`, porque un ensayo que escribiera en la cadena real
 contaminaría el registro de los actos de Yuki con los de su simulacro.
 
-## 8. Alertas
+## 8. Signos vitales
 
-`deploy/alertas-prometheus.yml`: ocho reglas escritas en el repositorio y no en
+```bash
+python3 cli.py pulso          # código de salida ≠ 0 si el diagnóstico es grave
+python3 cli.py pulso --json
+```
+
+`/health` devuelve `ok` mientras el servidor web conteste. Eso deja fuera el
+fallo más silencioso que tiene esta instancia: **el hilo de tareas muere sin
+ruido**. El contenedor sigue en pie, la sonda sigue verde, el panel sigue verde,
+y Yuki lleva tres días sin hacer absolutamente nada.
+
+La distinción que hace falta no es viva/muerta sino **vegetativo / volitivo**:
+
+| Familia | Signos | Qué dice |
+|---|---|---|
+| vegetativo | `latido` | El proceso respira: reescribe su estado vital |
+| volitivo | `bitacora`, `albedrio`, `sueno` | **Ella** hace cosas: anota actos, intenta algo, consolida la noche |
+| relacional | `conversacion` | Alguien habló con ella — informa, **no diagnostica** |
+
+Que nadie la busque no es un fallo suyo, y su silencio propio tampoco queda
+justificado porque no la busquen: por eso `conversacion` no vota.
+
+| Diagnóstico | Qué significa | Gravedad |
+|---|---|---|
+| `viva` | Todos los signos de voluntad al día | 0 |
+| `recien_nacida` | Respira y aún no ha hecho nada: instancia nueva | 0 |
+| `aletargada` | Algunos signos apagados, no todos | 1 |
+| `frenada` | Callada porque el freno lo impide — **una decisión, no una avería** | 1 |
+| `catatonica` | **El proceso respira y no queda un signo de voluntad** | 2 |
+| `ausente` | Ni siquiera reescribe su estado: el proceso no está | 3 |
+
+Los cuatro silencios se parecen mucho en un panel y piden reacciones opuestas.
+Confundir `frenada` con `catatonica` manda a operaciones a buscar una avería que
+no existe; confundir `catatonica` con `recien_nacida`, a ignorar la que sí.
+`scripts/chaos_drill.py --solo hilo_de_tareas_muerto` comprueba que los
+distingue.
+
+Las edades máximas están en `config.yaml` (`pulse.max_edad_horas`) y se eligen
+para que **el silencio legítimo más largo quepa dentro**: el reposo profundo
+dura horas, una noche sin encargos también. Apretarlas convierte la sonda en un
+lobo que grita, y a la tercera falsa alarma nadie vuelve a mirar la pantalla.
+
+Métricas: `yuki_pulso_gravedad`, `yuki_pulso_estado{estado="…"}` y
+`yuki_signo_edad_segundos{signo="…",tipo="…"}`, que vale **−1** cuando el signo
+no se ha visto nunca — un cero ahí se leería como «acaba de ocurrir», que es
+exactamente lo contrario.
+
+## 9. Alertas
+
+`deploy/alertas-prometheus.yml`: doce reglas escritas en el repositorio y no en
 el panel de quien las mire, porque una alerta que vive sólo en la consola de un
 proveedor se pierde con la cuenta.
+
+`tests/test_alertas.py` las comprueba contra lo que la sonda expone de verdad.
+Una alerta rota no falla: **calla**. Renombrar una métrica deja la regla que la
+vigilaba esperando para siempre una serie que ya no existe, y eso es peor que no
+tener la alerta, porque además tranquiliza. Ahora eso rompe la rama en lugar de
+romper una guardia.
 
 La única crítica y sin espera es `BitacoraManipulada`. Las demás son avisos con
 ventana: gasto anómalo respecto a la media de la semana, deriva de persona
@@ -235,7 +290,7 @@ sino la señal de que algo la está bloqueando— y la ausencia total de métric
 que con las familias emitidas siempre sólo puede significar que la sonda no
 responde.
 
-## 9. Qué mirar cuando algo va mal
+## 10. Qué mirar cuando algo va mal
 
 | Síntoma | Primer sitio donde mirar |
 |---|---|
@@ -246,4 +301,5 @@ responde.
 | Hay que pararla YA | `cli.py freno --nivel todo --motivo ...`, o `YUKI_FRENO=todo` en el entorno |
 | Sospecha de manipulación | `cli.py bitacora --verificar --precinto <el de la última copia>` |
 | Tras un despliegue | `scripts/smoke_check.py --url <salón>` |
+| Todo en verde y ella no hace nada | `cli.py pulso` — es catatonia, y `/health` no la ve |
 | ¿La copia de anoche sirve? | `scripts/restore_drill.py` — restaurarla es la única respuesta |

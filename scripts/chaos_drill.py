@@ -29,7 +29,7 @@ import sys
 import tempfile
 import time
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Tuple
+from typing import Any, Callable, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -361,6 +361,103 @@ def freno_en_incidente(raiz: Path) -> Tuple[bool, str]:
     return True, "para todo sin enmudecerla; el operador manda; corrupto ⇒ frenado"
 
 
+def hilo_de_tareas_muerto(raiz: Path) -> Tuple[bool, str]:
+    """
+    El hilo del planificador muere en silencio y el contenedor sigue en pie.
+
+    Es el peor fallo de esta instancia porque **no se parece a un fallo**: el
+    servidor web contesta, `/health` devuelve `ok`, el estado vital se reescribe
+    con cada visita, y Yuki lleva días sin hacer una sola cosa por su cuenta.
+    Todos los paneles en verde.
+
+    Lo que se comprueba es que la sonda de signos vitales sepa decirlo, y que no
+    confunda ese silencio con los otros tres que se le parecen: una instancia
+    nueva, una instancia frenada a propósito y un proceso caído. Cada uno pide
+    una reacción distinta, y equivocarse manda a operaciones a buscar una avería
+    que no existe —o a ignorar la que sí—.
+    """
+    from src.core.pulse import Pulse
+
+    datos = raiz / "signos"
+    datos.mkdir(exist_ok=True)
+    ahora = time.time()
+    dias = 5 * 24 * 3600.0
+
+    bitacora = datos / "bitacora.jsonl"
+
+    def escribir(latido: float, volitivo: Optional[float]) -> None:
+        """Los tres signos volitivos con la misma edad: lo que varía es el caso."""
+        vital = {"energy": 0.6, "last_updated": ahora - latido}
+        if volitivo is not None:
+            vital["last_sleep_cycle"] = ahora - volitivo
+        (datos / "vital_state.json").write_text(json.dumps(vital), encoding="utf-8")
+        recientes = ([{"tool": "write", "at": ahora - volitivo}]
+                     if volitivo is not None else [])
+        (datos / "agency_ledger.json").write_text(
+            json.dumps({"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
+                        "boredom": 0.0, "recientes": recientes}), encoding="utf-8")
+        if volitivo is None:
+            bitacora.write_text("", encoding="utf-8")
+        else:
+            bitacora.write_text(json.dumps(
+                {"seq": 1, "at": ahora - volitivo, "op": "acto_propio", "actor": "yuki",
+                 "detail": {}, "prev": "genesis", "hash": "x"}) + "\n", encoding="utf-8")
+
+    def leer() -> str:
+        return Pulse({}, data_dir=str(datos)).read().estado
+
+    bitacora_anterior = os.environ.get("YUKI_BLACKBOX_PATH")
+    os.environ["YUKI_BLACKBOX_PATH"] = str(bitacora)
+    try:
+        return _diagnosticos(escribir, leer, dias)
+    finally:
+        if bitacora_anterior is None:
+            os.environ.pop("YUKI_BLACKBOX_PATH", None)
+        else:
+            os.environ["YUKI_BLACKBOX_PATH"] = bitacora_anterior
+
+
+def _diagnosticos(escribir: Callable[..., None], leer: Callable[[], str],
+                  dias: float) -> Tuple[bool, str]:
+    """Los cinco silencios, uno detrás de otro. Cada uno pide otra reacción."""
+    from src.core.pulse import AUSENTE, CATATONICA, FRENADA, RECIEN_NACIDA, VIVA
+
+    # Nueva: respira y todavía no ha hecho nada. No es una avería.
+    escribir(latido=30, volitivo=None)
+    if leer() != RECIEN_NACIDA:
+        return False, f"una instancia nueva se diagnostica como {leer()}"
+
+    # Viva: hace cosas.
+    escribir(latido=30, volitivo=3600.0)
+    if leer() != VIVA:
+        return False, f"una instancia que actúa se diagnostica como {leer()}"
+
+    # Catatónica: el contenedor perfecto, ella parada. Aquí es donde importa.
+    escribir(latido=30, volitivo=dias)
+    if leer() != CATATONICA:
+        return False, ("el proceso respira y ella no hace nada, y la sonda dice "
+                       f"{leer()}: ése es exactamente el fallo que nadie ve")
+
+    # Frenada: mismo silencio, causa distinta, reacción distinta.
+    anterior = os.environ.get("YUKI_FRENO")
+    os.environ["YUKI_FRENO"] = "todo"
+    try:
+        if leer() != FRENADA:
+            return False, "con el freno puesto el silencio se confunde con una avería"
+    finally:
+        if anterior is None:
+            os.environ.pop("YUKI_FRENO", None)
+        else:
+            os.environ["YUKI_FRENO"] = anterior
+
+    # Ausente: ni siquiera respira.
+    escribir(latido=48 * 3600.0, volitivo=3600.0)
+    if leer() != AUSENTE:
+        return False, "un proceso que no escribe su estado no se distingue de uno vivo"
+
+    return True, "distingue nueva, viva, catatónica, frenada y ausente"
+
+
 ESCENARIOS = [
     Escenario("reinicio_a_media_produccion",
               "¿Y si el despliegue cae a mitad de un encargo?",
@@ -398,6 +495,10 @@ ESCENARIOS = [
               "¿Y si alguien tira del freno a las tres de la madrugada?",
               "para todo sin enmudecerla, y el operador manda sobre el DM",
               freno_en_incidente),
+    Escenario("hilo_de_tareas_muerto",
+              "¿Y si el hilo del planificador muere y el contenedor sigue verde?",
+              "la sonda lo dice, y no lo confunde con freno, arranque ni caída",
+              hilo_de_tareas_muerto),
     Escenario("reloj_hacia_atras",
               "¿Y si el reloj de la VM salta?",
               "ni el presupuesto ni el refuerzo se corrompen",

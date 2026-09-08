@@ -170,3 +170,41 @@ def test_from_config_respeta_retencion_y_bucket(monkeypatch):
     gestor = BackupManager.from_config({"backup": {"retention": 3, "bucket": "cubo"}})
 
     assert gestor.retention == 3 and gestor.bucket == "cubo"
+
+
+def test_renombrar_la_base_en_la_configuracion_no_produce_copias_sin_memoria(tmp_path, monkeypatch):
+    """
+    El fallo que se coló durante meses: directorio de la configuración, nombre
+    del valor por defecto.
+
+    Renombrar la base en `config.yaml` bastaba para que todas las copias
+    nocturnas salieran **sin memoria dentro** informando `success`. Una copia
+    así no se nota hasta el día en que hay que restaurarla.
+    """
+    monkeypatch.delenv("DATABASE_PATH", raising=False)
+    datos = tmp_path / "data"
+    datos.mkdir()
+    sqlite3.connect(datos / "memoria_de_yuki.db").close()
+
+    gestor = BackupManager.from_config(
+        {"memory": {"database_path": str(datos / "memoria_de_yuki.db")}})
+
+    assert gestor.db_path.name == "memoria_de_yuki.db"
+
+
+def test_una_base_que_existe_con_otro_nombre_para_la_copia(tmp_path, instancia):
+    """
+    Nueva sin base es legítimo; con base y sin encontrarla, no.
+
+    Llamar «success» a una copia que se deja fuera lo único irremplazable es
+    peor que fallar: nadie va a mirar dos veces un trabajo que dijo que salió
+    bien.
+    """
+    data, _ = instancia
+    (data / "yuki_memory.db").rename(data / "otra_memoria.db")
+
+    resultado = _gestor(tmp_path, instancia).create()
+
+    assert resultado.status == "error"
+    assert "otra_memoria.db" in resultado.error
+    assert "sin memoria dentro" in resultado.error

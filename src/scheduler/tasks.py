@@ -172,6 +172,7 @@ class AutonomousTasks:
         # lo de hoy ya está guardado y nadie está esperando respuesta.
         try:
             consolidacion = await self.agent.sleep.nrem()
+            self.agent.vital_state.mark_sleep_cycle("nrem")
             logger.info("Consolidación NREM: %s", consolidacion)
         except Exception:
             logger.exception("La consolidación NREM falló; la memoria queda intacta")
@@ -250,6 +251,10 @@ class AutonomousTasks:
         """
         logger.info("🌙 [CRON 03:20] Fase REM: soñando…")
         sueno = await self.agent.sleep.dream()
+        # Se sella haya o no sueño: lo que la traza dice es que la fase corrió,
+        # no que produjera imagen. Una noche sin material es normal; una fase que
+        # lleva días sin ejecutarse, no.
+        self.agent.vital_state.mark_sleep_cycle("rem")
         if not sueno.get("sonado"):
             logger.info("Sin sueño esta noche: %s", sueno.get("motivo", "sin material"))
             return sueno

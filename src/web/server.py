@@ -137,6 +137,7 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         from ..core.blackbox import BlackBox
         from ..core.brake import NIVELES, Brake
         from ..core.persona_anchor import PersonaAnchor, PersonaPolicy
+        from ..core.pulse import GRAVEDAD, Pulse
         from ..core.rituals import RitualStore
         from ..core.spend_budget import (
             IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, TOKENS_ENTRADA, TOKENS_SALIDA,
@@ -224,6 +225,25 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         for accion in ("publicar", "medios", "iniciativa"):
             metrica("freno_permite", "1 si el freno deja pasar ese tipo de acto",
                     1 if freno.permits(accion) else 0, etiquetas=f'accion="{accion}"')
+
+        # Signos vitales. La métrica que faltaba: `up` y `/health` sólo dicen que
+        # el proceso contesta, y el fallo más silencioso de esta instancia es
+        # justamente que conteste mientras ella no hace absolutamente nada.
+        lectura = Pulse(config).read()
+        metrica("pulso_gravedad",
+                "0 viva o nueva, 1 letargo o freno, 2 catatónica, 3 ausente",
+                lectura.gravedad)
+        for nombre_estado in GRAVEDAD:
+            metrica("pulso_estado", "1 en el estado diagnosticado ahora mismo",
+                    1 if lectura.estado == nombre_estado else 0,
+                    etiquetas=f'estado="{nombre_estado}"')
+        for signo in lectura.signos:
+            # -1 y no cero para «nunca»: un cero aquí se leería como
+            # «acaba de ocurrir», que es exactamente lo contrario.
+            metrica("signo_edad_segundos",
+                    "Tiempo desde la última vez que se vio ese signo (-1 si nunca)",
+                    int(signo.edad) if signo.edad is not None else -1,
+                    etiquetas=f'signo="{signo.id}",tipo="{signo.tipo}"')
 
         cadena = BlackBox().verify()
         metrica("bitacora_entradas", "Anotaciones en la bitácora encadenada",
