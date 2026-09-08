@@ -46,8 +46,13 @@ omit = ["src/serverless/*"]
 
 [tool.coverage.report]
 # El umbral es el que hay hoy, no una aspiración: sirve para que la cobertura no
-# baje sin que nadie lo note, no para presumir de un número.
-fail_under = 78
+# baje sin que nadie lo note, no para presumir de un número. Sube a 80 porque
+# hoy hay 80.6: dejarlo en 78 permitiría perder en silencio lo que costó ganar.
+#
+# Sólo cuenta `src/`. Los guiones de `scripts/` tienen sus propias pruebas, pero
+# la mitad se ejecutan como subproceso en la CI —romper a Yuki a propósito,
+# restaurar una copia— y contarlos aquí daría un número que no significa nada.
+fail_under = 80
 show_missing = true
 
 [tool.pytest.ini_options]
