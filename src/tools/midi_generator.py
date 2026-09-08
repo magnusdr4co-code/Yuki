@@ -7,7 +7,9 @@ y líneas de bajo orgánico / lofi sin dependencias externas.
 import struct
 import os
 import time
-from typing import List, Dict, Any, Tuple
+from typing import Any, Dict, List, Optional, Tuple
+
+from ..core.rutas import salida
 
 # Escalas Tradicionales Japonesas (intervalos desde tónica en semitonos)
 JAPANESE_SCALES = {
@@ -77,7 +79,7 @@ class YukiMIDIGenerator:
         root_note: int = 60, # 60 = C4
         bpm: int = 84,
         num_bars: int = 16,
-        output_dir: str = "output/music"
+        output_dir: Optional[str] = None
     ) -> Dict[str, Any]:
         """
         Genera un archivo MIDI multipista completo y válido:
@@ -86,6 +88,9 @@ class YukiMIDIGenerator:
         - Pista 2: Koto Arpegios (armonía estacional)
         - Pista 3: 808 Sub-bass (raíz de acero industrial)
         """
+        # Se resuelve aquí, no en el valor por defecto: ese se evalúa al
+        # importar, antes de que nadie pueda reubicar el directorio.
+        output_dir = output_dir or str(salida("music"))
         os.makedirs(output_dir, exist_ok=True)
         scale_intervals = JAPANESE_SCALES.get(scale_name.lower(), JAPANESE_SCALES["insen"])
 

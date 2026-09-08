@@ -14,6 +14,7 @@ import yaml
 import logging
 from typing import Dict, Any, Optional
 
+from .rutas import base_de_datos
 from ..memory.memory_manager import MemoryManager
 from ..honcho.dialectic import HonchoDialecticClient
 from ..tools.nous_portal import NousPortalClient
@@ -68,8 +69,7 @@ class YukiAgent:
         #
         # De paso deja de contaminar: la suite construye el agente entero, y sin
         # esto escribía recuerdos de verdad en la base de la instancia.
-        db_path = (os.getenv("DATABASE_PATH", "").strip()
-                   or self.config.get("memory", {}).get("database_path", "data/yuki_memory.db"))
+        db_path = str(base_de_datos(self.config))
         memory_md = self.config.get("memory", {}).get("memory_md_path", "MEMORY.md")
         self.memory_manager = MemoryManager(db_path=db_path, memory_md_path=memory_md)
 

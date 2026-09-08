@@ -12,6 +12,7 @@ from typing import Dict, Any, Optional
 from .nous_portal import NousPortalClient
 from .midi_generator import YukiMIDIGenerator
 from ..core.seasons import get_current_micro_season
+from ..core.rutas import salida
 
 class MediaCreatorTool:
     def __init__(self, portal_client: Optional[NousPortalClient] = None):
@@ -161,7 +162,7 @@ class MediaCreatorTool:
         Compone una pieza musical con Lyria 3 y genera también la partitura MIDI
         generando también la partitura MIDI multipista procedural en ./output/music/.
         """
-        music_dir = "output/music"
+        music_dir = str(salida("music"))
         os.makedirs(music_dir, exist_ok=True)
 
         # 1. Generar archivo MIDI binario real

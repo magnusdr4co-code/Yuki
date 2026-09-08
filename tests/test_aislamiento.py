@@ -76,3 +76,73 @@ def test_la_suite_no_deja_recuerdos_en_la_base_de_la_instancia(monkeypatch, tmp_
 
     if antes is not None:
         assert os.path.getsize(real) == antes, "la suite escribió en la base de la instancia"
+
+
+# --- La otra variable de reubicación: dónde acaba lo que Yuki crea ---
+
+def test_la_salida_se_reubica_entera_o_no_sirve_de_nada(monkeypatch, tmp_path):
+    """
+    Cinco módulos escribían en `output/…` fijo mientras uno respetaba la
+    variable, y la auditoría del Artículo 50 mira la de la variable.
+
+    Es decir: material sintético sin marcar que el auditor **no puede ver**. Eso
+    ya no es ruido en las pruebas, es un agujero de cumplimiento.
+    """
+    from src.tools.creation_library import CreationLibrary
+    from src.tools.music_fallback import LocalMusicEngine
+    from src.tools.vertex_media import VertexMediaClient
+
+    destino = tmp_path / "otra_salida"
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(destino))
+
+    medios = VertexMediaClient.__new__(VertexMediaClient)
+    VertexMediaClient.__init__(medios, project_id="", location="global")
+    motor = LocalMusicEngine()
+    biblioteca = CreationLibrary()
+
+    for ruta in (medios.art_dir, medios.voice_dir, medios.music_dir, medios.video_dir,
+                 motor.music_dir, str(biblioteca.output)):
+        assert str(destino) in str(ruta), f"{ruta} se quedó fuera de la reubicación"
+
+
+def test_la_ruta_se_resuelve_al_llamar_y_no_al_importar(monkeypatch, tmp_path):
+    """
+    Un `def f(dir="output/art")` congela el valor en el momento de importar el
+    módulo, que es antes de que nadie haya podido reubicar nada. El síntoma es
+    desconcertante: la variable funciona o no según qué se importó primero.
+    """
+    from src.core.rutas import salida
+
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "primera"))
+    assert str(tmp_path / "primera" / "art") == str(salida("art"))
+
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "segunda"))
+    assert str(tmp_path / "segunda" / "art") == str(salida("art"))
+
+
+def test_la_precedencia_es_la_misma_para_las_dos_variables(monkeypatch, tmp_path):
+    """Entorno, luego configuración, luego el valor por defecto. Sin excepciones."""
+    from src.core.rutas import base_de_datos, salida
+
+    monkeypatch.delenv("DATABASE_PATH", raising=False)
+    monkeypatch.delenv("YUKI_OUTPUT_DIR", raising=False)
+    assert str(base_de_datos()) == "data/yuki_memory.db"
+    assert str(base_de_datos({"memory": {"database_path": "otra/mem.db"}})) == "otra/mem.db"
+    assert str(salida()) == "output"
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "manda.db"))
+    assert str(base_de_datos({"memory": {"database_path": "otra/mem.db"}})) == str(tmp_path / "manda.db")
+
+
+def test_la_suite_no_deja_medios_sin_marcar_en_la_salida_del_repositorio():
+    """
+    Cinco ficheros de medios aparecieron en `output/` del repositorio durante una
+    pasada de la suite, y la comprobación de humo los denunció como material
+    sintético sin marcar. Se comprueba que la salida real queda intacta.
+    """
+    from src.core.transparency import audit_directory
+
+    auditoria = audit_directory(os.path.join(os.path.dirname(__file__), "..", "output"))
+
+    assert not auditoria["sin_marcar"], (
+        f"hay material sin marcar en la salida real: {auditoria['sin_marcar'][:5]}")

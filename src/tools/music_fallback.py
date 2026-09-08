@@ -31,6 +31,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..core.transparency import MediaMarker
+from ..core.rutas import salida
 from .midi_generator import YukiMIDIGenerator
 
 logger = logging.getLogger("Yuki.MusicFallback")
@@ -66,11 +67,11 @@ class LocalMusicEngine:
 
     name = "local.fluidsynth"
 
-    def __init__(self, soundfont: Optional[str] = None, music_dir: str = "output/music",
+    def __init__(self, soundfont: Optional[str] = None, music_dir: Optional[str] = None,
                  runner: Any = None, midi_generator: Optional[YukiMIDIGenerator] = None,
                  marker: Optional[MediaMarker] = None):
         self.soundfont = soundfont or self._soundfont_disponible()
-        self.music_dir = music_dir
+        self.music_dir = music_dir or str(salida("music"))
         # Inyectable en pruebas: la suite no invoca binarios del sistema.
         self._runner = runner or subprocess.run
         self.midi = midi_generator or YukiMIDIGenerator()

@@ -3,6 +3,7 @@ import hashlib
 import json
 import shutil
 import threading
+from ..core.rutas import salida
 from pathlib import Path
 
 KINDS = ("sonora", "visual", "palabra", "audiovisual")
@@ -30,8 +31,8 @@ Los marcadores simulados no se catalogan como medios reales.
 
 
 class CreationLibrary:
-    def __init__(self, output_dir="output"):
-        self.output = Path(output_dir).resolve()
+    def __init__(self, output_dir=None):
+        self.output = Path(output_dir or salida()).resolve()
         self.root = self.output / "Biblioteca"
         self._lock = threading.RLock()
 

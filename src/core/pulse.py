@@ -29,13 +29,14 @@ catatonia es la manera más rápida de que nadie vuelva a mirar esta pantalla.
 """
 
 import json
-import os
 import sqlite3
 import time
 from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+
+from .rutas import base_de_datos
 
 VEGETATIVO = "vegetativo"
 VOLITIVO = "volitivo"
@@ -185,11 +186,7 @@ class Pulse:
     def __init__(self, config: Optional[Dict[str, Any]] = None,
                  data_dir: Optional[str] = None):
         self.config = config or {}
-        db_path = ((self.config.get("memory", {}) or {}).get("database_path")
-                   or os.getenv("DATABASE_PATH", "data/yuki_memory.db"))
-        if os.getenv("DATABASE_PATH"):
-            db_path = os.environ["DATABASE_PATH"]
-        self.db_path = Path(db_path)
+        self.db_path = base_de_datos(self.config)
         self.data_dir = Path(data_dir) if data_dir else self.db_path.parent
         edades = (self.config.get("pulse", {}) or {}).get("max_edad_horas", {}) or {}
         self.edades = dict(EDADES_POR_DEFECTO)

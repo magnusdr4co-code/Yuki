@@ -34,6 +34,7 @@ from ..core.spend_budget import (
     SpendLedger,
 )
 from ..core.brake import Brake
+from ..core.rutas import salida
 from ..core.transparency import MediaMarker
 
 logger = logging.getLogger("Yuki.VertexMedia")
@@ -97,10 +98,10 @@ class VertexMediaClient:
                  voice: str = DEFAULT_VOICE,
                  language_code: str = DEFAULT_LANGUAGE_CODE,
                  enabled: bool = True,
-                 art_dir: str = "output/art",
-                 voice_dir: str = "output/voice",
-                 music_dir: str = "output/music",
-                 video_dir: str = "output/video",
+                 art_dir: Optional[str] = None,
+                 voice_dir: Optional[str] = None,
+                 music_dir: Optional[str] = None,
+                 video_dir: Optional[str] = None,
                  client: Any = None, tts_client: Any = None,
                  budget: Optional[SpendLedger] = None,
                  marker: Optional[MediaMarker] = None,
@@ -118,10 +119,13 @@ class VertexMediaClient:
         self.language_code = language_code
         self.enabled = enabled
 
-        self.art_dir = art_dir
-        self.voice_dir = voice_dir
-        self.music_dir = music_dir
-        self.video_dir = video_dir
+        # Resueltos aquí y no en el valor por defecto del argumento: un
+        # `= "output/art"` se evalúa al importar el módulo, que es antes de que
+        # nadie haya podido reubicar el directorio con `YUKI_OUTPUT_DIR`.
+        self.art_dir = art_dir or str(salida("art"))
+        self.voice_dir = voice_dir or str(salida("voice"))
+        self.music_dir = music_dir or str(salida("music"))
+        self.video_dir = video_dir or str(salida("video"))
 
         # Presupuesto diario. Se comprueba antes de llamar al proveedor: el
         # vídeo se factura por segundo y avisar después no devuelve el crédito.
