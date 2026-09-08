@@ -40,6 +40,16 @@ ignore = [
 # Los módulos de prueba importan cosas que sólo usan para forzar un fallo.
 "tests/*" = ["F841"]
 
+[tool.coverage.run]
+source = ["src"]
+omit = ["src/serverless/*"]
+
+[tool.coverage.report]
+# El umbral es el que hay hoy, no una aspiración: sirve para que la cobertura no
+# baje sin que nadie lo note, no para presumir de un número.
+fail_under = 78
+show_missing = true
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

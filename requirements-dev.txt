@@ -13,3 +13,6 @@ discord.py>=2.3.2
 # El linter no es cosmética aquí: encontró dos NameError vivos que ninguna
 # prueba tocaba, uno de ellos en la ruta que corre a las tres de la mañana.
 ruff>=0.6
+
+# Cobertura: el umbral de pyproject impide que baje sin que nadie lo note.
+pytest-cov>=5.0

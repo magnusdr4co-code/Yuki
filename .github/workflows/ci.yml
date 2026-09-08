@@ -50,8 +50,8 @@ jobs:
           pip install ruff
           ruff check .
 
-      - name: Suite completa
-        run: python -m pytest tests -q
+      - name: Suite completa, con umbral de cobertura
+        run: python -m pytest tests -q --cov --cov-report=term:skip-covered
 
       - name: Suite con el ejecutor estándar
         # `python -m unittest` es lo que documenta el README: si algún día deja

@@ -7,7 +7,7 @@
 .DEFAULT_GOAL := ayuda
 PY ?= python3
 
-.PHONY: ayuda instalar pruebas linter humo simulacro estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
+.PHONY: ayuda instalar pruebas cobertura linter humo simulacro estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
 
 ayuda:  ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -18,6 +18,9 @@ instalar:  ## Dependencias mínimas para desarrollar y probar
 
 pruebas:  ## La suite completa
 	$(PY) -m pytest tests -q
+
+cobertura:  ## Suite con informe de cobertura por fichero
+	$(PY) -m pytest tests -q --cov --cov-report=term-missing
 
 linter:  ## Ruff sobre todo el proyecto
 	ruff check .
