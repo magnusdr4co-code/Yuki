@@ -1,0 +1,11 @@
+# Dependencias mínimas para ejecutar la suite.
+#
+# `requirements.txt` instala también los SDK de medios, Modal y Telegram, que en
+# integración continua tardan minutos y no hacen falta: las pruebas inyectan
+# dobles en su lugar. Una CI que tarda cinco minutos en instalar deja de
+# ejecutarse en cada empujón, y una CI que no se ejecuta no protege nada.
+pyyaml>=6.0.2
+pytest>=8.2.0
+# El adaptador de Discord se importa de verdad en varias pruebas; sin esto se
+# saltan justo las que cubren la entrega multimedia y el marcado en la salida.
+discord.py>=2.3.2

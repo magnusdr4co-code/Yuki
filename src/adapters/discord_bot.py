@@ -369,6 +369,22 @@ class DiscordAdapter:
         if content.startswith("!ritmos") or content.startswith("!ritmo "):
             return self._handle_rituals_command(content, author_id, author_name)
 
+        if content.startswith("!bitacora") or content.startswith("!bitácora"):
+            from ..core.blackbox import BlackBox
+
+            caja = BlackBox()
+            informe = caja.verify()
+            ultimas = caja.entries(limite=5)
+            estado = "✅ íntegra" if informe["integra"] else "🚨 **MANIPULADA**"
+            lineas = [f"⛓️ **Bitácora** — {estado}",
+                      f"{informe['entradas']} anotación(es) · cabeza `{informe['cabeza'][:16]}…`"]
+            for problema in informe["problemas"][:3]:
+                lineas.append(f"• 🚨 seq {problema['seq']}: {problema['fallo']} — {problema['detalle']}")
+            if ultimas:
+                lineas.append("\n**Últimos actos:**")
+                lineas += [f"• `{e.seq}` {e.op} _(por {e.actor})_" for e in reversed(ultimas)]
+            return "\n".join(lineas)
+
         if content.startswith("!estado ") or content.strip() == "!estado":
             return self._handle_state_command(content, author_name)
 

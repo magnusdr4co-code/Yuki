@@ -18,6 +18,7 @@ import asyncio
 import logging
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from typing import Any, Dict, List
 from urllib.parse import urlparse, parse_qs
 
 # Asegurar path
@@ -32,6 +33,9 @@ DEFAULT_PORT = 8080
 # Rutas que responden sin credencial: la sonda de la plataforma y la página.
 # Todo lo demás toca memoria, perfil dialéctico o gasto de modelo.
 RUTAS_ABIERTAS = ("/health", "/healthz", "/_ah/health", "/", "/index.html", "/salon")
+
+# `/metrics` NO está abierta: el gasto, la deriva de persona y los ritmos dicen
+# bastante de la instancia. Una sonda externa se configura con el token.
 
 # Techo de conversación por cliente. Existe aunque no haya credencial: quien
 # alcance el puerto puede gastar crédito y, peor, escribir en la memoria de
@@ -119,6 +123,109 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def _metricas(self) -> str:
+        """
+        Estado de Yuki en formato de exposición de Prometheus.
+
+        Se construye leyendo ficheros y configuración, sin tocar el agente: una
+        sonda de métricas que despertara la memoria FTS5 o el modelo cambiaría
+        lo que mide, y además convertiría al scraper en una fuente de gasto.
+        """
+        import yaml
+
+        from ..core.agency import AgencyLedger, AgencyPolicy
+        from ..core.blackbox import BlackBox
+        from ..core.persona_anchor import PersonaAnchor, PersonaPolicy
+        from ..core.rituals import RitualStore
+        from ..core.spend_budget import (
+            IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, TOKENS_ENTRADA, TOKENS_SALIDA,
+            VIDEO_SEGUNDOS, VOZ_CARACTERES, SpendLedger,
+        )
+        from ..core.transparency import audit_directory
+
+        try:
+            with open("config.yaml", "r", encoding="utf-8") as fichero:
+                config = yaml.safe_load(fichero) or {}
+        except OSError:
+            config = {}
+
+        # Las familias se acumulan y se vuelcan al final: el formato de
+        # exposición exige `# HELP` y `# TYPE` **una vez por familia**, antes de
+        # todas sus muestras. Repetirlos por muestra —lo natural al escribir el
+        # bucle— hace que un parser estricto rechace la página entera.
+        familias: Dict[str, Dict[str, Any]] = {}
+
+        def metrica(nombre: str, ayuda: str, valor: Any, tipo: str = "gauge",
+                    etiquetas: str = "") -> None:
+            familia = familias.setdefault(nombre, {"ayuda": ayuda, "tipo": tipo, "muestras": []})
+            sufijo = "{" + etiquetas + "}" if etiquetas else ""
+            familia["muestras"].append(f"yuki_{nombre}{sufijo} {valor}")
+
+        # Gasto: lo que de verdad puede dejar a Yuki sin crédito.
+        libro = SpendLedger.from_config(config)
+        consumo = libro.today()
+        # Se emiten todas las unidades conocidas aunque hoy valgan cero. Una
+        # familia que desaparece cuando no hay consumo deja al scraper sin poder
+        # distinguir «no ha gastado nada» de «la sonda está rota», que es
+        # justamente la diferencia que uno quiere ver a las cuatro de la mañana.
+        unidades = (VIDEO_SEGUNDOS, IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS,
+                    VOZ_CARACTERES, TOKENS_ENTRADA, TOKENS_SALIDA)
+        for unidad in sorted(set(unidades) | set(consumo) | set(libro.limits)):
+            metrica("gasto_hoy", "Consumo del día por unidad", consumo.get(unidad, 0),
+                    etiquetas=f'unidad="{unidad}"')
+        for unidad, limite in sorted(libro.limits.items()):
+            metrica("gasto_limite", "Límite diario por unidad", limite,
+                    etiquetas=f'unidad="{unidad}"')
+        metrica("gasto_usd_estimado", "Coste estimado de hoy en USD (música no cotizada)",
+                libro.usd_today())
+
+        # Albedrío: cuánta iniciativa está teniendo, y con cuánta tensión.
+        politica = AgencyPolicy.from_config(config)
+        diario = AgencyLedger(timezone_name=politica.timezone)
+        datos = diario.snapshot()
+        metrica("agencia_actos_hoy", "Actos autónomos ejecutados hoy", diario.acciones_hoy())
+        metrica("agencia_actos_limite", "Techo diario de actos autónomos",
+                politica.max_actions_per_day)
+        metrica("agencia_aburrimiento", "Tensión acumulada sin actuar (0-1)",
+                round(float(datos.get("boredom", 0.0)), 4))
+        metrica("agencia_esperando_eco", "Actos autónomos aún sin respuesta",
+                len(datos.get("pendientes", [])))
+
+        # Persona: si su voz se está yendo hacia el registro de asistente.
+        vigia = PersonaAnchor(policy=PersonaPolicy.from_config(config))
+        informe = vigia.report()
+        # -1 significa «aún no hay muestras»: un valor imposible en el rango real
+        # (0-1) que el panel puede filtrar, en vez de una serie que aparece y
+        # desaparece según haya hablado o no.
+        metrica("persona_registro", "Fidelidad reciente a su registro (0-1; -1 sin muestras)",
+                informe["media_reciente"] if informe["media_reciente"] is not None else -1)
+        metrica("persona_reanclajes", "Veces que hubo que reanclar la persona",
+                informe["anclajes"], tipo="counter")
+
+        # Cumplimiento: material sintético sin marcar.
+        auditoria = audit_directory("output")
+        metrica("material_marcado", "Ficheros generados con marca de origen sintético",
+                len(auditoria["marcados"]))
+        metrica("material_sin_marcar", "Ficheros generados sin marca (incumplimiento)",
+                len(auditoria["sin_marcar"]))
+
+        # Ritmos y bitácora.
+        ritmos = RitualStore()
+        metrica("ritmos_propios", "Ritmos propios activos", len(ritmos.aprobados()))
+        metrica("ritmos_propuestos", "Propuestas esperando al Productor", len(ritmos.pendientes()))
+        cadena = BlackBox().verify()
+        metrica("bitacora_entradas", "Anotaciones en la bitácora encadenada",
+                cadena["entradas"], tipo="counter")
+        metrica("bitacora_integra", "1 si la cadena de auditoría no ha sido manipulada",
+                1 if cadena["integra"] else 0)
+
+        lineas: List[str] = []
+        for nombre, familia in familias.items():
+            lineas.append(f"# HELP yuki_{nombre} {familia['ayuda']}")
+            lineas.append(f"# TYPE yuki_{nombre} {familia['tipo']}")
+            lineas.extend(familia["muestras"])
+        return "\n".join(lineas) + "\n"
+
     def do_GET(self):
         parsed = urlparse(self.path)
         path = parsed.path
@@ -145,6 +252,23 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
                     self._send_html(f.read())
             else:
                 self._send_html("<h1>Salón de Yuki no encontrado</h1>", status_code=404)
+
+        # 1.5. Métricas para la sonda externa. Va detrás de la credencial como
+        #      el resto de /api: el consumo, la deriva y los ritmos dicen
+        #      bastante de la instancia como para dejarlos abiertos.
+        elif path in ("/metrics", "/api/metrics"):
+            try:
+                cuerpo = self._metricas().encode("utf-8")
+            except Exception:
+                logger.exception("Fallo componiendo las métricas")
+                self._send_json({"error": "no se pudieron componer las métricas"},
+                                status_code=500)
+                return
+            self.send_response(200)
+            self.send_header("Content-Type", "text/plain; version=0.0.4; charset=utf-8")
+            self.send_header("Content-Length", str(len(cuerpo)))
+            self.end_headers()
+            self.wfile.write(cuerpo)
 
         # 2. API: Lista de Recuerdos en SQLite FTS5
         elif path == "/api/memories":

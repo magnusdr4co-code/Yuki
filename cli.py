@@ -539,6 +539,62 @@ def cmd_sleep(fase="noche", seco=False, as_json=False, deshacer=None):
     return resultado
 
 
+def cmd_blackbox(verificar=False, precinto=None, limite=10, as_json=False):
+    """Bitácora encadenada: leerla, verificarla y sellarla."""
+    from src.core.blackbox import BlackBox
+
+    caja = BlackBox()
+
+    if precinto == "crear":
+        sello = caja.seal()
+        print(json.dumps(sello, ensure_ascii=False, indent=2))
+        return sello
+
+    sello = None
+    if precinto:
+        try:
+            with open(precinto, "r", encoding="utf-8") as fichero:
+                sello = json.load(fichero)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"{RED}✗ No pude leer el precinto: {exc}{RESET}")
+            return None
+
+    if verificar or sello:
+        informe = caja.verify(seal=sello)
+        if as_json:
+            print(json.dumps(informe, ensure_ascii=False, indent=2))
+            return informe
+        print_banner()
+        estado = f"{GREEN}íntegra{RESET}" if informe["integra"] else f"{RED}MANIPULADA{RESET}"
+        print(f"{CYAN}{BOLD}⛓️  Bitácora — {estado}{RESET}\n")
+        print(f"  Anotaciones: {informe['entradas']}")
+        print(f"  Cabeza: {DIM}{informe['cabeza'][:32]}…{RESET}")
+        if sello:
+            print(f"  Precinto contrastado: {DIM}{sello.get('head','')[:32]}…{RESET}")
+        for problema in informe["problemas"]:
+            print(f"  {RED}✗ seq {problema['seq']}: {problema['fallo']}{RESET} "
+                  f"{DIM}{problema['detalle']}{RESET}")
+        return informe
+
+    entradas = caja.entries(limite=limite)
+    if as_json:
+        print(json.dumps([e.__dict__ for e in entradas], ensure_ascii=False, indent=2))
+        return entradas
+    print_banner()
+    print(f"{CYAN}{BOLD}⛓️  Bitácora — últimas {len(entradas)} anotaciones{RESET}\n")
+    for entrada in entradas:
+        import datetime as _dt
+
+        cuando = _dt.datetime.fromtimestamp(entrada.at).strftime("%Y-%m-%d %H:%M")
+        print(f"  {DIM}{entrada.seq:>4} {cuando}{RESET}  {BOLD}{entrada.op}{RESET} "
+              f"{DIM}por {entrada.actor}{RESET}")
+        for clave, valor in list(entrada.detail.items())[:4]:
+            print(f"       {DIM}{clave}: {valor}{RESET}")
+    if not entradas:
+        print(f"  {DIM}Todavía no hay nada anotado.{RESET}")
+    return entradas
+
+
 def cmd_state(exportar=None, olvidar=None, motivo="", as_json=False):
     """Inventario del estado durable, y los derechos de acceso y supresión."""
     from src.core.state_registry import StateRegistry
@@ -927,6 +983,17 @@ def main():
                        help="Ensayo en seco: calcula y muestra, sin tocar la memoria")
     sueno.add_argument("--json", action="store_true", help="Emite JSON")
 
+    bitacora = subparsers.add_parser(
+        "bitacora",
+        help="Bitácora encadenada de actos: leerla, verificar que nadie la tocó, sellarla",
+    )
+    bitacora.add_argument("--verificar", action="store_true",
+                          help="Recorre la cadena y dice si alguien la manipuló")
+    bitacora.add_argument("--precinto", metavar="RUTA|crear",
+                          help="'crear' emite un precinto; una ruta lo contrasta con la cadena")
+    bitacora.add_argument("--limite", type=int, default=10)
+    bitacora.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -971,6 +1038,9 @@ def main():
         cmd_persona(as_json=args.json)
     elif args.command == "sueno":
         cmd_sleep(fase=args.fase, seco=args.seco, as_json=args.json, deshacer=args.deshacer)
+    elif args.command == "bitacora":
+        cmd_blackbox(verificar=args.verificar, precinto=args.precinto,
+                     limite=args.limite, as_json=args.json)
     elif args.command == "estado":
         cmd_state(exportar=args.exportar, olvidar=args.olvidar,
                   motivo=args.motivo, as_json=args.json)

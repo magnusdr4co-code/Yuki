@@ -69,6 +69,7 @@ data/runtime_rituals.json
 data/transparency.json
 data/persona_drift.json
 data/state_audit.log
+data/bitacora.jsonl
 data/*.lock
 data/backups/
 data/runtime_overrides.json

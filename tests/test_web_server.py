@@ -167,3 +167,64 @@ def test_el_techo_de_peticiones_protege_memoria_y_credito(monkeypatch):
     # Otro cliente no hereda el castigo del primero.
     assert _handler("/api/chat", cliente="203.0.113.8")._dentro_del_limite()
     SalonHTTPHandler._historial_peticiones.clear()
+
+
+# --- Métricas para la sonda externa ---
+
+def _metricas(monkeypatch=None):
+    from src.web.server import SalonHTTPHandler
+
+    handler = SalonHTTPHandler.__new__(SalonHTTPHandler)
+    return handler._metricas()
+
+
+def test_las_metricas_declaran_cada_familia_una_sola_vez():
+    """
+    El formato de exposición lo exige, y repetirlo por muestra —lo natural al
+    escribir el bucle— hace que un parser estricto rechace la página entera.
+    """
+    salida = _metricas()
+
+    ayudas = [linea.split()[2] for linea in salida.splitlines() if linea.startswith("# HELP")]
+    tipos = [linea.split()[2] for linea in salida.splitlines() if linea.startswith("# TYPE")]
+
+    assert ayudas, "debe exponer algo"
+    assert len(ayudas) == len(set(ayudas)), f"familias repetidas: {ayudas}"
+    assert sorted(ayudas) == sorted(tipos)
+
+
+def test_cada_muestra_va_despues_de_su_familia():
+    salida = _metricas()
+
+    familia_actual = None
+    for linea in salida.splitlines():
+        if linea.startswith("# HELP"):
+            familia_actual = linea.split()[2]
+        elif linea and not linea.startswith("#"):
+            assert familia_actual and linea.startswith(familia_actual), linea
+
+
+def test_las_metricas_cubren_lo_que_puede_doler():
+    """Gasto, iniciativa, deriva, cumplimiento e integridad de la bitácora."""
+    salida = _metricas()
+
+    for esperada in ("yuki_gasto_hoy", "yuki_agencia_actos_hoy", "yuki_persona_reanclajes",
+                     "yuki_material_sin_marcar", "yuki_bitacora_integra"):
+        assert esperada in salida, f"falta {esperada}"
+
+
+def test_los_valores_son_numeros_parseables():
+    salida = _metricas()
+
+    for linea in salida.splitlines():
+        if linea and not linea.startswith("#"):
+            valor = linea.rsplit(" ", 1)[1]
+            float(valor)  # levanta si no es un número
+
+
+def test_las_metricas_no_estan_abiertas(monkeypatch):
+    """Consumo, deriva y ritmos dicen bastante de la instancia."""
+    monkeypatch.setenv("SALON_API_TOKEN", "secreto-del-salon")
+
+    assert not _handler("/metrics")._autorizado("/metrics")
+    assert _handler("/health")._autorizado("/health")

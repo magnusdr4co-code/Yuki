@@ -38,6 +38,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from .blackbox import BlackBox
+
 logger = logging.getLogger("Yuki.Estado")
 
 # Autoridad: quién puede escribir esta pieza.
@@ -210,10 +212,14 @@ class StateRegistry:
     """Inventario, exportación y olvido del estado durable."""
 
     def __init__(self, db_path: Optional[str] = None, items: Optional[List[StateItem]] = None,
-                 audit_path: Optional[str] = None):
+                 audit_path: Optional[str] = None, blackbox: Optional[BlackBox] = None):
         self.db_path = db_path or os.getenv("DATABASE_PATH", "data/yuki_memory.db")
         self.items = items if items is not None else build_registry()
         self.audit_path = Path(audit_path) if audit_path else _data_dir() / "state_audit.log"
+        # La bitácora encadenada duplica el registro a propósito: el log de texto
+        # es cómodo de leer y trivial de editar; la cadena es incómoda de leer y
+        # delata cualquier edición. Cada una hace lo que la otra no.
+        self.blackbox = blackbox if blackbox is not None else BlackBox()
 
     # -- Inventario ------------------------------------------------------
 
@@ -352,6 +358,7 @@ class StateRegistry:
         linea = json.dumps({"op": operacion, "at": time.time(), **detalle}, ensure_ascii=False)
         with open(self.audit_path, "a", encoding="utf-8") as registro:
             registro.write(linea + "\n")
+        self.blackbox.record(operacion, detalle, actor=str(detalle.get("actor", "sistema")))
 
     def record(self, operacion: str, detalle: Dict[str, Any]) -> None:
         """

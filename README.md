@@ -123,6 +123,12 @@ python3 cli.py estado
 # Ciclo de sueño: --fase nrem|rem|olvido|noche, con --seco para ensayar sin tocar nada
 python3 cli.py sueno --fase nrem --seco
 
+# ¿Alguien ha tocado el registro de lo que hizo?
+python3 cli.py bitacora --verificar
+
+# Comprobación de humo tras un despliegue (código de salida ≠ 0 si algo falla)
+python3 scripts/smoke_check.py --url https://<salon>
+
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
 python3 cli.py backup
 ```
@@ -200,6 +206,8 @@ contratar servicios de pago o de prometer una demo.
 | Refuerzo de la iniciativa | ✅ Real | Aprende de qué actos obtienen respuesta y en qué franja; refuerzo intermitente, aburrimiento acumulado y exploración para que no se apague ni se encasille |
 | Ritmos propios propuestos por Yuki | ✅ Real | `src/core/rituals.py`: propone un cron fundado en sus datos; sólo entra en el planificador si el Productor lo aprueba por DM |
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
+| Bitácora encadenada de actos | ✅ Real | `src/core/blackbox.py`: cada anotación lleva el hash de la anterior, así que editar el pasado deja marca. El precinto sale con la copia diaria y detecta también el corte por detrás |
+| Métricas y humo operables | ✅ Real | `GET /metrics` (Prometheus, tras credencial) y `scripts/smoke_check.py` con código de salida. CI en `.github/workflows/ci.yml`. Ver [`docs/OPERACION.md`](docs/OPERACION.md) |
 | Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT`. Rutas `/api` con credencial si se declara `SALON_API_TOKEN`, y techo de peticiones por cliente siempre activo |
 | Generación de texto vía OpenRouter | ✅ Real | Peticiones HTTP reales al agregador, con modelo de respaldo si el primario falla |
 | Generación de texto vía Vertex AI | ✅ Real | Endpoint compatible con OpenAI, autenticado con credenciales del proyecto (ADC). Opcional: inactiva hasta declarar `VERTEX_PROJECT_ID` |
@@ -284,3 +292,4 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - 🪞 [Identidad sintética y deriva de persona (`docs/IDENTIDAD_SINTETICA.md`)](docs/IDENTIDAD_SINTETICA.md) — el vestido y lo que hay debajo, y cómo se sostiene el registro
 - 🔬 [Estado del arte 2026 y qué se adoptó (`docs/ESTADO_DEL_ARTE_2026.md`)](docs/ESTADO_DEL_ARTE_2026.md) — investigación sobre simulación de seres sintéticos, con fuentes
 - 🌙 [El ciclo de sueño (`docs/CICLO_DE_SUENO.md`)](docs/CICLO_DE_SUENO.md) — consolidación NREM, fase REM y olvido intencional
+- 🛠️ [Operar a Yuki (`docs/OPERACION.md`)](docs/OPERACION.md) — CI, métricas, comprobación de humo y bitácora encadenada

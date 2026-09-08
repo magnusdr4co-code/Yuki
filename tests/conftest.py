@@ -19,3 +19,4 @@ def libro_de_gasto_aislado(tmp_path, monkeypatch):
     # Y que la obra falsa de las pruebas no acabe en el `output/` del repositorio.
     monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "output"))
     monkeypatch.setenv("YUKI_PERSONA_PATH", str(tmp_path / "persona_drift.json"))
+    monkeypatch.setenv("YUKI_BLACKBOX_PATH", str(tmp_path / "bitacora.jsonl"))

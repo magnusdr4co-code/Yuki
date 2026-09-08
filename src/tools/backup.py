@@ -122,6 +122,7 @@ class BackupManager:
             self.data_dir / "discord_pairing.json",
             self.data_dir / "spend_ledger.json",
             self.data_dir / "media_jobs",
+            self.data_dir / "bitacora.jsonl",
         ]
 
     # -- Copia -----------------------------------------------------------
@@ -165,9 +166,21 @@ class BackupManager:
                 else:
                     omitidos.append(str(pieza))
 
+            # El precinto de la bitácora sale con la copia: es lo único que
+            # detecta un corte por detrás, porque una cadena truncada sigue
+            # siendo internamente coherente. Dentro de la instancia no sirve de
+            # nada; fuera, es la prueba.
+            try:
+                from ..core.blackbox import BlackBox
+
+                precinto = BlackBox().seal()
+            except Exception:
+                precinto = {"error": "no se pudo sellar la bitácora"}
+
             (escenario / "MANIFIESTO.json").write_text(
                 json.dumps({"creado": marca, "incluidos": incluidos, "omitidos": omitidos,
-                            "integridad_db": integridad}, ensure_ascii=False, indent=2),
+                            "integridad_db": integridad, "precinto_bitacora": precinto},
+                           ensure_ascii=False, indent=2),
                 encoding="utf-8",
             )
 

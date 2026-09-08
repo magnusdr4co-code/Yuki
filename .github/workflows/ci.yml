@@ -1,0 +1,116 @@
+# Integración continua de Yuki.
+#
+# Tres trabajos, y ninguno necesita red más allá de PyPI: la suite inyecta
+# dobles en lugar de llamar a proveedores, así que una rama nunca puede gastar
+# crédito ni generar medios por accidente al abrirse un PR.
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  # Un empujón nuevo cancela la ejecución anterior de la misma rama: lo que
+  # importa es el estado de la punta, no la historia de cada commit intermedio.
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pruebas:
+    name: Suite (${{ matrix.python }})
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        # 3.11 es la de la imagen de producción; 3.12 avisa con antelación de lo
+        # que se romperá al actualizarla.
+        python: ["3.11", "3.12"]
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python }}
+          cache: pip
+
+      - name: Instalar dependencias de prueba
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Suite completa
+        run: python -m pytest tests -q
+
+      - name: Suite con el ejecutor estándar
+        # `python -m unittest` es lo que documenta el README: si algún día deja
+        # de funcionar, la documentación miente y esto lo dice.
+        run: python -m unittest discover -s tests
+
+  cumplimiento:
+    name: Cumplimiento y estado
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias de prueba
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Comprobación de humo (lo que no depende del entorno)
+        # Las comprobaciones de Vertex y presupuesto dependen de credenciales
+        # que una CI no tiene ni debe tener; se ejecutan en el despliegue real.
+        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50
+
+      - name: Gemelo virtual
+        run: python scripts/virtualize_instance.py --json > /tmp/gemelo.json
+
+      - name: El gemelo virtual sigue siendo legible
+        run: |
+          python - <<'PY'
+          import json
+          with open("/tmp/gemelo.json", encoding="utf-8") as fichero:
+              datos = json.load(fichero)
+          assert datos["capacidades"], "el gemelo no reporta capacidades"
+          assert datos["limitadores"], "el gemelo no reporta limitadores"
+          print(f"{len(datos['capacidades'])} capacidades, "
+                f"{len(datos['limitadores'])} limitadores")
+          PY
+
+      - name: Informe de limitadores
+        if: always()
+        run: python scripts/virtualize_instance.py
+
+  imagen:
+    name: Imagen y réplica
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: La imagen construye
+        run: docker build -t yuki-agent:ci .
+
+      - name: Las dos composiciones son válidas
+        run: |
+          docker compose -f docker-compose.yml config > /dev/null
+          docker compose -f deploy/virtual/docker-compose.virtual.yml config > /dev/null
+
+      - name: El sintetizador del respaldo musical está en la imagen
+        # Se comprueba aquí porque es lo que hace la diferencia entre tener
+        # respaldo musical y no tenerlo, y sólo se nota el día que Lyria falla.
+        run: |
+          docker run --rm --entrypoint sh yuki-agent:ci -c \
+            'command -v fluidsynth && command -v ffmpeg && ls /usr/share/sounds/sf2/ | head -3'
+
+      - name: El gemelo virtual corre dentro de la imagen
+        run: docker run --rm yuki-agent:ci python cli.py virtualize --json > /dev/null
