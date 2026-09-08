@@ -110,11 +110,37 @@ class RuntimeConfigStore:
         value = self._validate(path, value, actor)
         data = self._load()
         self._assign(data["overrides"], path, value)
+        self._rechazar_si_apaga_una_facultad(data["overrides"], path)
         data["history"].append({"at": int(time.time()), "actor": actor, "path": path,
                                 "value": value, "reason": str(reason)[:240]})
         data["history"] = data["history"][-100:]
         self._write(data)
         return {"path": path, "value": value, "actor": actor, "persistence": str(self.path)}
+
+    def _rechazar_si_apaga_una_facultad(self, overrides, path):
+        """
+        Un ajuste en caliente no puede dejar el carácter contradiciéndose.
+
+        `spontaneous_threshold` se afina por DM, y puesto por encima del tope del
+        aburrimiento deja a Yuki incapaz de querer nada por su cuenta — que es
+        exactamente el fallo que estuvo meses vivo sin dar un solo error. La
+        comprobación de `config.yaml` no cubre esta puerta, así que se comprueba
+        el resultado: sólo se rechaza lo que **introduce** una contradicción
+        nueva, para no dejar atrapado a quien esté arreglando una anterior.
+        """
+        if not path.startswith("agency."):
+            return
+        from .agency import AgencyPolicy
+
+        antes = set(AgencyPolicy.from_config(self.effective_config()).incoherencias())
+        # `_merge` fusiona en el sitio y no devuelve nada: encadenarlo dejaba
+        # `propuesto` en None, y la política salía con los valores por defecto,
+        # que son coherentes. La comprobación pasaba siempre.
+        propuesto = copy.deepcopy(self.base_config)
+        _merge(propuesto, overrides)
+        nuevas = set(AgencyPolicy.from_config(propuesto).incoherencias()) - antes
+        if nuevas:
+            raise ValueError("ese ajuste apaga una facultad entera: " + "; ".join(sorted(nuevas)))
 
     def rollback(self, path, *, actor, reason=""):
         self._validate(path, self.get_public()["values"].get(path, self._base_value(path)), actor)

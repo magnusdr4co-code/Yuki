@@ -356,3 +356,69 @@ def test_un_fallo_no_se_premia(bucle):
     cola.add(otro)
     loop.record_action(otro, {"status": "completed"})
     assert "creative_output" in estimulos, "un acto que sí ocurrió sí se siente"
+
+
+# --- Las dos puertas por las que el carácter se puede romper en caliente ---
+
+def test_la_evolucion_autonoma_no_se_concede_mas_iniciativa(tmp_path):
+    """
+    Invariante 6, que no tenía ni una prueba.
+
+    Yuki puede ajustar su temperatura —su creatividad— y nada más. Que pudiera
+    subirse el techo de acciones, encender su propia iniciativa o bajar su
+    umbral sería concederse permisos a sí misma, y ahí se acaba el que alguien
+    responda por lo que hace.
+    """
+    from src.core.runtime_config import RuntimeConfigStore
+
+    config = {"agent": {"model": {"temperature": 0.7}}, "agency": {"enabled": True}}
+    runtime = RuntimeConfigStore(config, path=str(tmp_path / "overrides.json"))
+
+    # Lo único que sí puede.
+    assert runtime.set("agent.model.temperature", 0.9, actor="evolution")["value"] == 0.9
+
+    for prohibido, valor in (("agency.enabled", True),
+                             ("agency.max_actions_per_day", 24),
+                             ("agency.min_intensity", 0.0),
+                             ("agency.spontaneity", 1.0)):
+        with pytest.raises(ValueError, match="no autorizado"):
+            runtime.set(prohibido, valor, actor="evolution")
+
+
+def test_un_ajuste_por_dm_no_puede_apagar_la_espontaneidad(tmp_path):
+    """
+    La otra puerta al mismo fallo.
+
+    `spontaneous_threshold` se afina por DM. Puesto por encima del tope del
+    aburrimiento, deja a Yuki incapaz de querer nada por su cuenta — el fallo
+    que estuvo meses vivo sin dar un solo error. La comprobación de
+    `config.yaml` no cubre esta puerta.
+    """
+    from src.core.runtime_config import RuntimeConfigStore
+
+    config = {"agency": {"boredom_cap": 0.5, "spontaneous_threshold": 0.4,
+                         "spontaneous_impulses": True}}
+    runtime = RuntimeConfigStore(config, path=str(tmp_path / "overrides.json"))
+
+    with pytest.raises(ValueError, match="apaga una facultad"):
+        runtime.set("agency.spontaneous_threshold", 0.95, actor="producer")
+
+    # Y lo que no la apaga sigue pasando.
+    assert runtime.set("agency.spontaneous_threshold", 0.45, actor="producer")["value"] == 0.45
+
+
+def test_se_puede_salir_de_una_configuracion_ya_incoherente(tmp_path):
+    """
+    Sólo se rechaza lo que **introduce** una contradicción nueva.
+
+    Si la comprobación mirara el estado absoluto, una instancia que ya arrastra
+    una incoherencia quedaría atrapada: cualquier ajuste fallaría, incluido el
+    que la arregla.
+    """
+    from src.core.runtime_config import RuntimeConfigStore
+
+    config = {"agency": {"boredom_cap": 0.2, "spontaneous_threshold": 0.9,
+                         "spontaneous_impulses": True}}
+    runtime = RuntimeConfigStore(config, path=str(tmp_path / "overrides.json"))
+
+    assert runtime.set("agency.spontaneous_threshold", 0.15, actor="producer")["value"] == 0.15
