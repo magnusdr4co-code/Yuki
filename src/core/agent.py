@@ -20,6 +20,7 @@ from ..tools.nous_portal import NousPortalClient
 from ..tools.media_creator import MediaCreatorTool
 from ..scheduler.cron_engine import CronEngine, CronParseError
 from ..scheduler.tasks import AutonomousTasks
+from .persona_anchor import PersonaAnchor, PersonaPolicy
 from .prompt_builder import PromptBuilder
 from .vital_state import VitalState
 from .circadian import CircadianClock
@@ -140,6 +141,14 @@ class YukiAgent:
         self.transparency = TransparencyPolicy.from_config(self.config)
         self.disclosures = DisclosureLedger(reminder_days=self.transparency.reminder_days)
         self.marker = MediaMarker(self.transparency)
+
+        # Vigilancia de la deriva de persona. La literatura de 2026 la mide en
+        # caídas del 20-40% en diez o quince turnos hacia el registro de
+        # asistente; un ancla de un disparo basta para recuperar el registro.
+        self.persona = PersonaAnchor(
+            soul_text=self.prompt_builder._soul_cache,
+            policy=PersonaPolicy.from_config(self.config),
+        )
 
         self.evolution = EvolutionHarness(self)
 
@@ -373,6 +382,13 @@ class YukiAgent:
             evolution_context=self.growth_journal.get_evolution_context()
         )
 
+        # El ancla no va en cada turno: sólo cuando hay evidencia de deriva. Se
+        # añade al prompt del sistema, que es donde la literatura encuentra que
+        # restaura el registro, y no como un turno más de conversación.
+        if self.persona.needs_anchor():
+            system_prompt += self.persona.anchor_block()
+            logger.warning("Ancla de persona reinyectada tras detectar deriva.")
+
         # Sólo el adaptador autenticado habilita el ejecutor. Ni el rol ni el
         # contenido del mensaje por sí solos conceden herramientas.
         if producer_tools:
@@ -402,6 +418,13 @@ class YukiAgent:
             response_text = "🔒 He retenido esta respuesta porque activa una protección de seguridad."
         else:
             response_text = response_decision.text
+
+        # La deriva se mide sobre lo que Yuki dijo de verdad, no sobre la
+        # declaración que se le antepone: si no, cada primer contacto contaría
+        # como una respuesta más larga y distinta de su voz.
+        if not is_internal_thought and response_text != "NADA_QUE_DECIR":
+            self.persona.observe(response_text, channel=channel_type,
+                                 model=getattr(self, "_ultimo_modelo", ""))
 
         # La declaración va delante de la respuesta ya saneada: es lo primero
         # que lee quien acaba de llegar, no una nota al pie.
@@ -454,6 +477,9 @@ class YukiAgent:
             logger.info(f"Respuesta simulada por la pasarela '{response.provider}' (sin generación real).")
         else:
             logger.info(f"Respuesta generada por '{response.provider}' con el modelo '{response.model}'.")
+        # Se guarda para el registro de deriva: saber si un modelo sostiene la
+        # persona peor que otro es media respuesta cuando empieza a irse.
+        self._ultimo_modelo = response.model or response.provider
 
         if response.finish_reason in {"length", "max_tokens", "MAX_TOKENS"}:
             logger.warning(

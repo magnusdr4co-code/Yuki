@@ -103,6 +103,21 @@ transparency:
   # Vacío = se usa la declaración por defecto de src/core/transparency.py.
   disclosure_text: ""
 
+# Deriva de persona. En conversaciones largas los modelos se deslizan desde el
+# personaje hacia el registro de "asistente útil" —la literatura de 2026 mide
+# caídas del 20-40% en diez o quince turnos, y más en registros íntimos, que son
+# los de Yuki—. Se vigila por marcadores observables en el texto y se corrige con
+# un ancla de un disparo, que es lo que basta para restaurar el registro.
+#
+# Reconocerse como ser sintético NO es deriva: es su voz (SOUL.md §1.1). Lo que
+# cuenta como deriva es el uniforme de servicio: "sólo soy una IA", "¿en qué
+# puedo ayudarte?", listas, cierres ofreciéndose.
+persona:
+  enabled: true
+  anchor_threshold: 0.60
+  min_turns_between_anchors: 3
+  soul_excerpt_chars: 1200
+
 # Libre albedrío: el carácter de la iniciativa de Yuki, en números.
 #
 # Antes todo esto vivía incrustado en el código y no había forma de afinarlo.

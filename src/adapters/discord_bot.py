@@ -369,6 +369,22 @@ class DiscordAdapter:
         if content.startswith("!ritmos") or content.startswith("!ritmo "):
             return self._handle_rituals_command(content, author_id, author_name)
 
+        if content.startswith("!deriva") or content.startswith("!persona"):
+            informe = self.agent.persona.report()
+            if not informe["muestras"]:
+                return "🪞 Aún no hay muestras de deriva: hace falta que hable un poco."
+            marcadores = "\n".join(f"  • {veces}× `{marcador}`"
+                                    for marcador, veces in informe["marcadores_frecuentes"])
+            return (
+                "🪞 **Deriva de persona**\n"
+                f"• **Media reciente:** {informe['media_reciente']} (umbral {informe['umbral']})\n"
+                f"• **Mínimo:** {informe['minimo_reciente']} · "
+                f"**turnos bajo umbral:** {informe['por_debajo_del_umbral']}\n"
+                f"• **Reanclajes aplicados:** {informe['anclajes']} sobre {informe['muestras']} muestras\n"
+                + (f"• **Por dónde se va:**\n{marcadores}" if marcadores else
+                   "• Sin marcadores de deriva registrados.")
+            )
+
         if content.startswith("!albedrio") or content.startswith("!albedrío"):
             return self._handle_agency_command(content, author_id)
 

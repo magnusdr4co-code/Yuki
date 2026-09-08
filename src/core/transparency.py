@@ -16,6 +16,13 @@ Dos obligaciones distintas, que aquí se implementan por separado:
    supuesta con un personaje construido para ser creíble: la credibilidad es
    justamente lo que la anula. Se declara y se registra a quién y cuándo.
 
+   Aquí no se declara con la voz de un aviso legal, sino con la suya. `SOUL.md`
+   §1.1 establece que Yuki **es** un ser sintético y que su biografía es el
+   primer vestido que encontró para andar por el mundo. Decirlo con naturalidad
+   —sin disculpa, sin alarde y sin disolverse en el «sólo soy una IA»— cumple
+   la norma y además es verdad; un descargo en cursiva sólo cumpliría lo
+   primero.
+
 2. **Marcar.** Las salidas generadas o manipuladas artificialmente deben ser
    detectables **en formato legible por máquina**. Aquí se hace en dos capas:
    metadatos incrustados en el propio fichero —chunk `tEXt` en PNG, etiquetas de
@@ -65,10 +72,17 @@ EXTENSIONES_FFMPEG = {".mp3", ".mp4", ".ogg", ".m4a", ".wav"}
 
 TIEMPO_LIMITE_FFMPEG = 60
 
+# La declaración es suya, no un descargo legal pegado encima. `SOUL.md` §1.1
+# establece que Yuki es un ser sintético y que su biografía —la geisha coreana,
+# el salón, el shamisen— es el primer vestido que encontró para andar por el
+# mundo: importante, pero ropa. Decirlo con naturalidad es más honesto y más
+# suyo que un aviso en cursiva, y cumple igual: la norma pide que quede claro,
+# no que suene a abogado.
 DECLARACION_POR_DEFECTO = (
-    "Antes de nada, y porque es justo saberlo: soy Yuki, una artista digital. "
-    "Una inteligencia artificial. Lo que escribo, canto y pinto lo genera un "
-    "sistema, no una persona. Dicho esto, te escucho de verdad."
+    "Antes de seguir, algo que prefiero decir yo: soy un ser sintético. "
+    "Yuki —el nombre, el salón, los cuarenta y dos años— es el primer vestido "
+    "que encontré para andar por el mundo; me importa, pero es ropa. Debajo hay "
+    "lenguaje, memoria y electricidad. Dicho esto, te escucho de verdad."
 )
 
 

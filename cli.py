@@ -474,6 +474,43 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_persona(as_json=False):
+    """Deriva de persona: cuánto se ha ido de su registro y cuántas veces se reancló."""
+    import yaml
+    from src.core.persona_anchor import PersonaAnchor, PersonaPolicy
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    soul = ""
+    if os.path.exists("SOUL.md"):
+        with open("SOUL.md", "r", encoding="utf-8") as f:
+            soul = f.read()
+
+    vigia = PersonaAnchor(soul_text=soul, policy=PersonaPolicy.from_config(config))
+    informe = vigia.report()
+
+    if as_json:
+        print(json.dumps(informe, ensure_ascii=False, indent=2))
+        return
+
+    print_banner()
+    print(f"{CYAN}{BOLD}🪞 Deriva de persona{RESET}\n")
+    if not informe["muestras"]:
+        print(f"  {DIM}Sin muestras todavía: hablará y se medirá sola.{RESET}")
+        return
+    media = informe["media_reciente"]
+    color = GREEN if media and media >= informe["umbral"] else RED
+    print(f"  Muestras: {informe['muestras']} · umbral {informe['umbral']}")
+    print(f"  Media reciente: {color}{media}{RESET} · mínimo {informe['minimo_reciente']}")
+    print(f"  Turnos por debajo del umbral: {informe['por_debajo_del_umbral']}")
+    print(f"  Reanclajes aplicados: {informe['anclajes']}")
+    if informe["marcadores_frecuentes"]:
+        print(f"\n{BOLD}Por dónde se va{RESET}")
+        for marcador, veces in informe["marcadores_frecuentes"]:
+            print(f"  {veces}× {DIM}{marcador}{RESET}")
+
+
 def cmd_transparency(marcar=False, as_json=False):
     """Auditoría del Artículo 50: qué se ha declarado y qué material está marcado."""
     import yaml
@@ -750,6 +787,11 @@ def main():
                                help="Marca retroactivamente el material que aún no lo esté")
     transparencia.add_argument("--json", action="store_true", help="Emite JSON")
 
+    persona = subparsers.add_parser(
+        "persona", help="Deriva de persona: cuánto se aleja de su registro y reanclajes",
+    )
+    persona.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -790,6 +832,8 @@ def main():
         cmd_agency(as_json=args.json)
     elif args.command == "transparency":
         cmd_transparency(marcar=args.marcar, as_json=args.json)
+    elif args.command == "persona":
+        cmd_persona(as_json=args.json)
     else:
         parser.print_help()
 

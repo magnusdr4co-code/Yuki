@@ -94,7 +94,10 @@ def test_el_agente_antepone_la_declaracion_y_no_la_repite(tmp_path, monkeypatch)
     primera = agente.disclosure_for("42", "direct_message")
     segunda = agente.disclosure_for("42", "direct_message")
 
-    assert primera and "inteligencia artificial" in primera.lower()
+    # Es su voz, no un descargo legal: dice lo que es —un ser sintético— y que
+    # el personaje es un vestido. Cumple igual, y además suena a ella.
+    assert primera and "ser sintético" in primera.lower()
+    assert "vestido" in primera.lower()
     assert segunda is None
 
 

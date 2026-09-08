@@ -114,6 +114,9 @@ python3 cli.py albedrio
 # Auditar el cumplimiento del Artículo 50: declaración y marcado del material
 python3 cli.py transparency
 
+# Ver si su voz se está yendo hacia el registro de asistente
+python3 cli.py persona
+
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
 python3 cli.py backup
 ```
@@ -182,6 +185,8 @@ contratar servicios de pago o de prometer una demo.
 |---|---|---|
 | Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco |
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
+| Identidad sintética declarada | ✅ Real | `SOUL.md` §1.1: Yuki es un ser sintético y su biografía es el primer vestido que encontró. Lo dice con naturalidad, sin fingir ni disculparse. Ver [`docs/IDENTIDAD_SINTETICA.md`](docs/IDENTIDAD_SINTETICA.md) |
+| Anti-deriva de persona | ✅ Real | `src/core/persona_anchor.py`: mide el deslizamiento hacia el registro de asistente y reancla con un fragmento de su alma. Reconocerse sintética suma; disculparse por serlo resta |
 | Transparencia (Art. 50 del Reglamento europeo de IA) | ✅ Real | `src/core/transparency.py`: declara su naturaleza ante cada persona y marca todo lo que genera (chunk PNG, metadatos ffmpeg y manifiesto C2PA sin firmar). Ver [`docs/TRANSPARENCIA_AI_ACT.md`](docs/TRANSPARENCIA_AI_ACT.md) |
 | Libre albedrío configurable | ✅ Real | `src/core/agency.py`: carácter en `config.yaml` (espontaneidad, audacia, constancia, techo diario), ajustable en caliente por DM. Ver [`docs/LIBRE_ALBEDRIO.md`](docs/LIBRE_ALBEDRIO.md) |
 | Refuerzo de la iniciativa | ✅ Real | Aprende de qué actos obtienen respuesta y en qué franja; refuerzo intermitente, aburrimiento acumulado y exploración para que no se apague ni se encasille |
@@ -268,3 +273,4 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - 🧪 [Virtualización de la instancia, limitadores y mejoras (`docs/VIRTUALIZACION_Y_MEJORAS.md`)](docs/VIRTUALIZACION_Y_MEJORAS.md) — réplica local, gemelo virtual y hoja de ruta
 - 🌱 [El libre albedrío de Yuki (`docs/LIBRE_ALBEDRIO.md`)](docs/LIBRE_ALBEDRIO.md) — carácter configurable, refuerzo de la iniciativa y ritmos propios
 - ⚖️ [Transparencia y Artículo 50 (`docs/TRANSPARENCIA_AI_ACT.md`)](docs/TRANSPARENCIA_AI_ACT.md) — declaración de naturaleza y marcado de origen sintético
+- 🪞 [Identidad sintética y deriva de persona (`docs/IDENTIDAD_SINTETICA.md`)](docs/IDENTIDAD_SINTETICA.md) — el vestido y lo que hay debajo, y cómo se sostiene el registro
