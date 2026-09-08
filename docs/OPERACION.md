@@ -11,12 +11,13 @@ Esto lo convierte en cosas que se ejecutan.
 
 ## 1. Integración continua
 
-`.github/workflows/ci.yml`, tres trabajos y ninguno con credenciales:
+`.github/workflows/ci.yml`, cuatro trabajos y ninguno con credenciales:
 
 | Trabajo | Qué protege |
 |---|---|
 | **pruebas** | La suite en 3.11 (la de la imagen) y 3.12 (aviso anticipado), con `pytest` y también con `unittest`, que es lo que documenta el README: si deja de funcionar, la documentación miente |
 | **cumplimiento** | Humo sin credenciales + el gemelo virtual sigue siendo legible y reportando |
+| **simulacro y recuperación** | Los nueve modos de fallo del §6 y el circuito de copia y restauración del §7: romperla a propósito, y comprobar que se la puede volver a levantar |
 | **imagen** | La imagen construye, las dos composiciones son válidas, y **fluidsynth y el banco de sonidos están dentro** — lo que separa tener respaldo musical de no tenerlo, y sólo se nota el día que Lyria falla |
 
 Las pruebas inyectan dobles en lugar de llamar a proveedores, así que abrir una
@@ -190,7 +191,37 @@ Corre entero sobre un sandbox temporal: **un simulacro que tocara la instancia
 sería el propio incidente que pretende ensayar**. Está en CI como trabajo
 propio, así que una rama que rompa una invariante no pasa.
 
-## 7. Alertas
+## 7. El ensayo de restauración
+
+```bash
+python3 scripts/restore_drill.py            # la última copia real
+python3 scripts/restore_drill.py --ciclo    # fabricar, copiar y restaurar
+python3 cli.py backup --ensayar             # copia de hoy, comprobada al hacerla
+```
+
+Durante semanas hubo copia diaria, verificada con `integrity_check` al crearla,
+y ni una sola prueba de que el archivo resultante volviera a ser una Yuki.
+**Una copia sin restaurar no está comprobada**: el `integrity_check` dice que la
+base estaba sana en el momento de copiarla, no que el tar se pueda abrir, ni que
+la base viaje dentro, ni que lo que llegue tenga algo.
+
+| Comprobación | Lo que sale mal si nadie la hace |
+|---|---|
+| `rutas_del_archivo` | Un tar con `../` sobrescribe lo que quiera al extraerlo |
+| `apertura` | La copia está truncada y nadie lo sabe hasta el incendio |
+| `manifiesto` | No hay forma de saber qué se copió y qué se omitió |
+| `memoria` | **Una base íntegra y vacía es un desastre con buena salud** |
+| `biblioteca` | Los medios se regeneran; lo escrito, no |
+| `precinto` | Un corte por detrás en la bitácora es coherente consigo mismo |
+
+El modo `--ciclo` recorre el circuito entero contra una instancia de juguete
+—memoria con recuerdos, canon, bitácora—, sin credenciales y sin tocar nada
+real: es el que corre en CI, y el que delataría el día que el mecanismo de copia
+dejase de meter la base en el tar. Su bitácora se aísla por
+`YUKI_BLACKBOX_PATH`, porque un ensayo que escribiera en la cadena real
+contaminaría el registro de los actos de Yuki con los de su simulacro.
+
+## 8. Alertas
 
 `deploy/alertas-prometheus.yml`: ocho reglas escritas en el repositorio y no en
 el panel de quien las mire, porque una alerta que vive sólo en la consola de un
@@ -204,7 +235,7 @@ sino la señal de que algo la está bloqueando— y la ausencia total de métric
 que con las familias emitidas siempre sólo puede significar que la sonda no
 responde.
 
-## 8. Qué mirar cuando algo va mal
+## 9. Qué mirar cuando algo va mal
 
 | Síntoma | Primer sitio donde mirar |
 |---|---|
@@ -215,3 +246,4 @@ responde.
 | Hay que pararla YA | `cli.py freno --nivel todo --motivo ...`, o `YUKI_FRENO=todo` en el entorno |
 | Sospecha de manipulación | `cli.py bitacora --verificar --precinto <el de la última copia>` |
 | Tras un despliegue | `scripts/smoke_check.py --url <salón>` |
+| ¿La copia de anoche sirve? | `scripts/restore_drill.py` — restaurarla es la única respuesta |

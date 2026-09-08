@@ -7,7 +7,7 @@
 .DEFAULT_GOAL := ayuda
 PY ?= python3
 
-.PHONY: ayuda instalar pruebas cobertura linter humo simulacro estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
+.PHONY: ayuda instalar pruebas cobertura linter humo simulacro restaurar circuito estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
 
 ayuda:  ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -31,7 +31,13 @@ humo:  ## Comprobación de humo (URL=... para incluir el Salón)
 simulacro:  ## Rompe a Yuki a propósito y comprueba las invariantes
 	$(PY) scripts/chaos_drill.py
 
-todo: linter pruebas simulacro humo  ## Lo que ejecuta la CI, en local
+restaurar:  ## Restaura la última copia real y comprueba que sirve
+	$(PY) scripts/restore_drill.py
+
+circuito:  ## Fabrica una copia y la restaura: no necesita copia previa
+	$(PY) scripts/restore_drill.py --ciclo
+
+todo: linter pruebas simulacro circuito humo  ## Lo que ejecuta la CI, en local
 
 estado:  ## Inventario del estado durable
 	$(PY) cli.py estado

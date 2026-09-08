@@ -826,7 +826,7 @@ def cmd_agency(as_json=False):
             print(f"      {DIM}{ritmo.reason}{RESET}")
 
 
-def cmd_backup(as_json=False):
+def cmd_backup(as_json=False, ensayar=False):
     """Copia verificada de memoria, canon y estado; sube a Cloud Storage si hay bucket."""
     import yaml
     from src.tools.backup import BackupManager
@@ -837,8 +837,28 @@ def cmd_backup(as_json=False):
     gestor = BackupManager.from_config(config)
     resultado = gestor.create()
 
+    # Ensayar la copia recién hecha es la única forma de saber que sirve. El
+    # `integrity_check` del momento de crearla dice que la base estaba sana, no
+    # que el archivo se pueda volver a abrir.
+    ensayo = None
+    if ensayar and resultado.status == "success" and resultado.path:
+        import shutil
+        import tempfile
+
+        from scripts.restore_drill import restaurar
+
+        destino = Path(tempfile.mkdtemp(prefix="yuki-restauracion-"))
+        try:
+            ensayo = restaurar(Path(resultado.path), destino)
+        finally:
+            shutil.rmtree(destino, ignore_errors=True)
+
     if as_json:
-        print(json.dumps(resultado.to_dict(), ensure_ascii=False, indent=2))
+        datos = resultado.to_dict()
+        if ensayo is not None:
+            datos["ensayo_de_restauracion"] = {"ok": all(r["ok"] for r in ensayo),
+                                               "resultados": ensayo}
+        print(json.dumps(datos, ensure_ascii=False, indent=2))
         return resultado
 
     print_banner()
@@ -856,6 +876,17 @@ def cmd_backup(as_json=False):
         print(f"{GREEN}✓ Fuera de la instancia:{RESET} {resultado.remote_uri}")
     else:
         print(f"{YELLOW}⚠ No sale de la instancia: {resultado.remote_error}{RESET}")
+
+    if ensayo is not None:
+        fallidas = [r for r in ensayo if not r["ok"]]
+        print(f"\n{DIM}Ensayo de restauración:{RESET}")
+        for prueba in ensayo:
+            marca = f"{GREEN}✓{RESET}" if prueba["ok"] else f"{RED}✗{RESET}"
+            print(f"  {marca} {prueba['prueba']:<18} {DIM}{prueba['detalle']}{RESET}")
+        if fallidas:
+            print(f"{RED}✗ La copia existe pero NO restaura.{RESET}")
+        else:
+            print(f"{GREEN}✓ Comprobada: la copia vuelve a levantarse.{RESET}")
     return resultado
 
 
@@ -981,6 +1012,8 @@ def main():
         "backup", help="Copia verificada de memoria, canon y estado (y subida si hay bucket)",
     )
     copia.add_argument("--json", action="store_true", help="Emite JSON")
+    copia.add_argument("--ensayar", action="store_true",
+                       help="Restaura la copia recién creada para comprobar que sirve")
 
     albedrio = subparsers.add_parser(
         "albedrio", help="Estado del libre albedrío: carácter, refuerzo y ritmos propios",
@@ -1078,7 +1111,7 @@ def main():
     elif args.command == "spend":
         cmd_spend(as_json=args.json)
     elif args.command == "backup":
-        cmd_backup(as_json=args.json)
+        cmd_backup(as_json=args.json, ensayar=args.ensayar)
     elif args.command == "albedrio":
         cmd_agency(as_json=args.json)
     elif args.command == "transparency":

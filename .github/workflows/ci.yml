@@ -99,7 +99,7 @@ jobs:
         run: python scripts/virtualize_instance.py
 
   simulacro:
-    name: Simulacro de fallos
+    name: Simulacro y recuperación
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -119,6 +119,13 @@ jobs:
         # caído, estado corrupto, bitácora manipulada, reloj que salta— contra
         # un sandbox temporal. Si una invariante se rompe, la rama no pasa.
         run: python scripts/chaos_drill.py
+
+      - name: La copia se puede restaurar
+        # Circuito entero contra una instancia de juguete: fabricar, copiar,
+        # restaurar. Una copia sin restaurar no está comprobada, y el fallo que
+        # esto vigila —que el mecanismo deje de meter la base en el tar— no se
+        # nota hasta el día que hace falta, que es el peor día para notarlo.
+        run: python scripts/restore_drill.py --ciclo
 
   imagen:
     name: Imagen y réplica
