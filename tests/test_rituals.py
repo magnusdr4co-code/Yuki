@@ -190,3 +190,67 @@ def test_sin_eco_destacado_no_hay_propuesta(store, tmp_path):
         libro.registrar_intento("write", "al vacío")
 
     assert proponer_desde_experiencia(libro, store) is None
+
+
+# --- El camino que ve el Productor ---
+
+def test_la_sintesis_diaria_propone_y_avisa_por_dm(tmp_path, monkeypatch):
+    """
+    Una iniciativa que sólo se ve si alguien la busca no es iniciativa.
+
+    Tras sintetizar el día, Yuki mira su experiencia, propone un ritmo si ve un
+    patrón y lo lleva al DM del Productor con su identificador, para que decidir
+    sea una línea y no una arqueología.
+    """
+    import asyncio
+    import types
+
+    from src.core.agency import AgencyLedger
+    from src.scheduler.tasks import AutonomousTasks
+
+    libro = AgencyLedger(path=str(tmp_path / "agencia.json"))
+    for _ in range(4):
+        libro.registrar_intento("write", "unos versos")
+        libro.registrar_eco(6.0)
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+
+    avisos = []
+
+    class AdaptadorFalso:
+        async def notify_producer(self, texto):
+            avisos.append(texto)
+            return True
+
+    from src.core.agent import YukiAgent
+
+    agente = types.SimpleNamespace(agency_ledger=libro, rituals=store,
+                                   discord_adapter=AdaptadorFalso())
+    agente.propose_own_ritual = types.MethodType(YukiAgent.propose_own_ritual, agente)
+    tareas = AutonomousTasks(agente)
+
+    propuesta = asyncio.run(agente.propose_own_ritual())
+    asyncio.run(tareas._avisar_al_productor(
+        f"🕯️ He propuesto un ritmo propio: **{propuesta['name']}** "
+        f"(`{propuesta['cron']}`). `!ritmo aprobar {propuesta['id']}`"))
+
+    assert propuesta["action"] == "escribir"
+    assert len(avisos) == 1
+    assert propuesta["id"] in avisos[0], "el aviso lleva el id con el que decidir"
+    assert store.pendientes()[0].id == propuesta["id"]
+
+
+def test_sin_adaptador_la_propuesta_no_se_pierde(tmp_path):
+    """Sin Discord —CLI, pruebas, arranque sin token— queda en `!ritmos`."""
+    import asyncio
+    import types
+
+    from src.scheduler.tasks import AutonomousTasks
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    propuesta = store.propose("versos", "0 20 * * *", "escribir", "motivo")
+    tareas = AutonomousTasks(types.SimpleNamespace(discord_adapter=None, rituals=store))
+
+    entregado = asyncio.run(tareas._avisar_al_productor("aviso"))
+
+    assert entregado is False
+    assert store.pendientes()[0].id == propuesta.id
