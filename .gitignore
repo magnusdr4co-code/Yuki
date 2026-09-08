@@ -64,6 +64,7 @@ data/honcho_profile.json
 # Trabajos multimedia en curso: viven en el disco de la instancia.
 data/media_jobs/
 data/spend_ledger.json
+data/agency_ledger.json
 data/*.lock
 data/backups/
 data/runtime_overrides.json

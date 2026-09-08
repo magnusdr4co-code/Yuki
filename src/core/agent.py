@@ -23,7 +23,9 @@ from ..scheduler.tasks import AutonomousTasks
 from .prompt_builder import PromptBuilder
 from .vital_state import VitalState
 from .circadian import CircadianClock
+from ..tools.web_search import describe_origin
 from .spark import WillQueue, EchoRitual, AgencyLoop
+from .agency import AgencyLedger, AgencyPolicy
 from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
@@ -96,9 +98,15 @@ class YukiAgent:
             memory_manager=self.memory_manager,
             growth_journal=self.growth_journal
         )
+        # El carácter del albedrío sale de `config.yaml: agency`, así que se
+        # puede afinar sin tocar código —y recargarse en caliente desde el DM.
+        self.agency_policy = AgencyPolicy.from_config(self.config)
+        self.agency_ledger = AgencyLedger(timezone_name=self.agency_policy.timezone)
         self.agency_loop = AgencyLoop(
             will_queue=self.will_queue,
-            vital_state_ref=self.vital_state
+            vital_state_ref=self.vital_state,
+            policy=self.agency_policy,
+            ledger=self.agency_ledger,
         )
         self.inner_monologue = InnerMonologue(
             memory_manager=self.memory_manager,
@@ -145,6 +153,11 @@ class YukiAgent:
         self.config = self.runtime_config.effective_config()
         self.llm_router = LLMRouter(config=self.config)
         self.model_armor = ModelArmorClient.from_config(self.config)
+        # El albedrío se reajusta con el resto: cambiar la espontaneidad por DM
+        # tiene efecto en el siguiente ciclo, no en el siguiente despliegue.
+        self.agency_policy = AgencyPolicy.from_config(self.config)
+        self.agency_loop.policy = self.agency_policy
+        self.agency_loop.model.policy = self.agency_policy
 
     def reconfigure_runtime(self, path: str, value: Any, *, actor: str, reason: str = "") -> Dict[str, Any]:
         """Aplica un ajuste permitido y reversible, sin tocar código, secretos o IAM."""
@@ -315,6 +328,11 @@ class YukiAgent:
                 user_id=user_id
             )
             self.vital_state.apply_stimulus('positive_interaction', 0.3)
+            # Alguien ha respondido de verdad: lo que Yuki hizo por su cuenta en
+            # las últimas horas recibe su eco. Es la única señal que distingue
+            # hablar al vacío de ser escuchada.
+            if user_id not in ("autonomous_cron", "yuki_internal"):
+                self.agency_loop.note_external_signal()
             
         phase = self.circadian.current_phase()
         self.vital_state.update_tick(phase, 0)
@@ -349,9 +367,46 @@ class YukiAgent:
         return response.text
         
     async def execute_autonomous_will(self, impulse) -> Dict[str, Any]:
-        """Ejecuta un impulso de la Cola de Voluntad por iniciativa propia."""
-        logger.info(f"🔥 [CHISPA] Ejecutando voluntad autónoma: {impulse.desire}")
-        result = await self.media_creator.create_from_impulse(impulse, self.vital_state)
+        """
+        Ejecuta un impulso de la Cola de Voluntad por iniciativa propia.
+
+        Antes todo pasaba por `media_creator`, incluido «quiero contemplar en
+        silencio»: un deseo de mirar el mundo terminaba en el generador de
+        imágenes, que hoy además consume presupuesto. Ahora cada tipo va a lo
+        suyo y sólo `compose` y `paint` tocan medios.
+        """
+        logger.info(f"🔥 [CHISPA] Ejecutando voluntad autónoma ({impulse.tool_hint}): {impulse.desire}")
+
+        if impulse.tool_hint in ("compose", "paint"):
+            result = await self.media_creator.create_from_impulse(impulse, self.vital_state)
+        elif impulse.tool_hint == "search":
+            hallazgos = await self.nous_portal.search_trends_firecrawl(impulse.desire, limit=3)
+            self.vital_state.apply_stimulus("trend_search", 0.6)
+            result = {"status": "completed", "type": "search",
+                      "origen": describe_origin(hallazgos), "hallazgos": hallazgos}
+        elif impulse.tool_hint in ("write", "contemplate", "reach_out", "publish"):
+            # Son actos de lenguaje: se piensan y quedan en memoria. `publish` y
+            # `reach_out` dejan el texto listo; llevarlo a un canal sigue siendo
+            # decisión de presencia, no de impulso.
+            texto = await self.generate_response(
+                user_id="yuki_internal",
+                user_name="Voluntad",
+                message=(f"Sigue este impulso propio y llévalo a su forma, en primera persona y "
+                         f"sin dirigirte a nadie salvo que el impulso lo pida: «{impulse.desire}»"),
+                is_internal_thought=True,
+                route="social_formatting" if impulse.tool_hint == "publish" else None,
+            )
+            self.memory_manager.engine.add_memory(
+                category="inner_thought",
+                title=f"Voluntad propia ({impulse.tool_hint})",
+                content=texto,
+                tags=f"autonomia,{impulse.tool_hint}",
+                importance=1.2,
+            )
+            result = {"status": "completed", "type": impulse.tool_hint, "content": texto}
+        else:
+            result = {"status": "contemplated", "type": impulse.tool_hint, "content": impulse.desire}
+
         self.agency_loop.record_action(impulse, result)
         # Persist updated state
         self.vital_state.will_queue = self.will_queue.to_list()

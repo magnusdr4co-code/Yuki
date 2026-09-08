@@ -10,11 +10,23 @@ from pathlib import Path
 MODEL_IDS = {
     "google/gemini-3.6-flash", "google/gemini-3.7-flash", "google/gemini-3.8-flash",
 }
+# El carácter del albedrío también se afina en caliente: es lo que el Productor
+# querrá tocar a menudo —«hoy más espontánea», «esta semana menos iniciativa»—,
+# y obligarle a un despliegue para eso convertiría un dial en una ceremonia.
+AGENCY_UNIT_FIELDS = {
+    "agency.spontaneity", "agency.audacity", "agency.constancy",
+    "agency.min_intensity", "agency.min_energy", "agency.spontaneous_threshold",
+}
+AGENCY_FIELDS = AGENCY_UNIT_FIELDS | {"agency.enabled", "agency.max_actions_per_day"}
+
 PRODUCER_FIELDS = {
     "agent.model.temperature", "agent.model.max_tokens",
     "vertex_ai.temperature", "vertex_ai.max_tokens",
     "vertex_ai.primary_model", "vertex_ai.fallback_model",
-}
+} | AGENCY_FIELDS
+
+# La evolución autónoma no se toca a sí misma: puede ajustar su creatividad,
+# nunca cuánta iniciativa se permite ni cuántas acciones puede emprender.
 EVOLUTION_FIELDS = {"agent.model.temperature", "vertex_ai.temperature"}
 
 
@@ -66,6 +78,19 @@ class RuntimeConfigStore:
             if value not in MODEL_IDS:
                 raise ValueError("Modelo fuera de la lista permitida de Vertex")
             return value
+        if path in AGENCY_UNIT_FIELDS:
+            if isinstance(value, bool) or not isinstance(value, (int, float)) or not 0.0 <= value <= 1.0:
+                raise ValueError(f"{path.split('.')[-1]} debe estar entre 0 y 1")
+            return float(value)
+        if path == "agency.max_actions_per_day":
+            # Un techo alto no es libertad: es una factura y un canal saturado.
+            if isinstance(value, bool) or not isinstance(value, int) or not 0 <= value <= 24:
+                raise ValueError("max_actions_per_day debe ser un entero entre 0 y 24")
+            return value
+        if path == "agency.enabled":
+            if not isinstance(value, bool):
+                raise ValueError("enabled debe ser booleano")
+            return value
         raise ValueError("Ajuste no reconocido")
 
     @staticmethod
@@ -112,7 +137,12 @@ class RuntimeConfigStore:
         values = {}
         for path in PRODUCER_FIELDS:
             cursor = effective
-            for part in path.split("."):
-                cursor = cursor[part]
+            try:
+                for part in path.split("."):
+                    cursor = cursor[part]
+            except (KeyError, TypeError):
+                # Una sección ausente en config.yaml no debe romper la consulta:
+                # el módulo que la use aplicará su valor por defecto.
+                continue
             values[path] = cursor
         return {"values": values, "history": self._load()["history"][-20:]}

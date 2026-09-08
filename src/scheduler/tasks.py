@@ -198,12 +198,16 @@ class AutonomousTasks:
         return response
 
     async def agency_loop_tick(self):
-        """Cada 15-30 min - Evalúa impulsos y decide actuar."""
+        """
+        Cada 20 min: ¿hay algo que Yuki quiera hacer ahora, por su cuenta?
+
+        Las fases de silencio ya no están incrustadas aquí —la política decide
+        cuáles son— y la evaluación es la del arnés de agencia: umbral rebajado
+        por aburrimiento, elección con refuerzo y una parte de azar. Si no hay
+        impulsos y la tensión ha subido bastante, nace uno.
+        """
         phase = self.agent.circadian.current_phase()
-        if phase in ['kage']:
-            return None
-            
-        action_decision = self.agent.agency_loop.evaluate()
+        action_decision = self.agent.agency_loop.evaluate(phase=phase)
         if action_decision:
             return await self.agent.execute_autonomous_will(action_decision)
         return None

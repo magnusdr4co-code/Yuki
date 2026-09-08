@@ -46,14 +46,14 @@ def test_will_queue_max_size_enforced():
 
 def test_will_queue_fulfill():
     queue = WillQueue()
-    imp = Impulse("s1", "d1", "h1", 0.9, time.time(), 2.0)
+    imp = Impulse("s1", "d1", "write", 0.9, time.time(), 2.0)
     queue.add(imp)
     queue.fulfill(imp)
     assert queue.get_strongest() is None
 
 def test_will_queue_serialization():
     queue = WillQueue()
-    queue.add(Impulse("s1", "d1", "h1", 0.9, time.time(), 2.0))
+    queue.add(Impulse("s1", "d1", "write", 0.9, time.time(), 2.0))
     data = queue.to_list()
     queue2 = WillQueue.from_list(data)
     assert queue2.active_count() == 1
@@ -79,7 +79,7 @@ def test_echo_ritual_extract_impulses_default():
 
 def test_agency_loop_evaluate_returns_impulse():
     queue = WillQueue()
-    imp = Impulse("s1", "d1", "h1", 0.9, time.time(), 2.0)
+    imp = Impulse("s1", "d1", "write", 0.9, time.time(), 2.0)
     queue.add(imp)
     state = MagicMock()
     state.has_energy_for.return_value = True
@@ -88,7 +88,7 @@ def test_agency_loop_evaluate_returns_impulse():
 
 def test_agency_loop_evaluate_no_energy():
     queue = WillQueue()
-    imp = Impulse("s1", "d1", "h1", 0.9, time.time(), 2.0)
+    imp = Impulse("s1", "d1", "write", 0.9, time.time(), 2.0)
     queue.add(imp)
     state = MagicMock()
     state.has_energy_for.return_value = False
@@ -97,7 +97,7 @@ def test_agency_loop_evaluate_no_energy():
 
 def test_agency_loop_record_action():
     queue = WillQueue()
-    imp = Impulse("s1", "d1", "h1", 0.9, time.time(), 2.0)
+    imp = Impulse("s1", "d1", "write", 0.9, time.time(), 2.0)
     queue.add(imp)
     state = MagicMock()
     loop = AgencyLoop(queue, state)
