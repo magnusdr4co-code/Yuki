@@ -119,7 +119,12 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
 6. Una prueba nueva sobre algo que importa: **rómpelo a propósito y comprueba
    que la prueba falla**. Dos de las de esta semana pasaban con el fallo dentro
    —y una lo hacía porque el parche de mutación ni siquiera encajaba—.
-7. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
+7. Y que la prueba recorra **el camino del producto**, no la clase suelta. Una
+   comprobaba que `VitalState` resolvía bien su ruta mientras el agente le
+   pasaba la fija a mano y anulaba el arreglo entero; otra daba por probada
+   `execute_autonomous_will` cuando en toda la suite sólo aparecía sustituida
+   por un doble.
+8. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
    nadie escribe es peor que no tenerlo: `last_sleep_cycle` estuvo declarado y
    serializado durante meses sin un solo escritor.
 

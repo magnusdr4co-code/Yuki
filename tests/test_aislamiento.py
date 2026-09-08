@@ -159,15 +159,19 @@ def test_quien_escribe_y_quien_copia_miran_el_mismo_sitio(monkeypatch, tmp_path)
     entraba en ninguna copia**: el manifiesto los listaba como ausentes, que es
     donde nadie mira hasta el día de restaurar.
     """
-    from src.core.vital_state import VitalState
+    from src.core.agent import YukiAgent
     from src.tools.backup import BackupManager
 
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "datos" / "memoria.db"))
     monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "salida"))
 
     gestor = BackupManager.from_config({})
+    # Por el camino que recorre el producto, no construyendo `VitalState` suelto:
+    # la primera versión de esta prueba pasaba mientras el agente seguía pasándole
+    # la ruta fija a mano, que anulaba el arreglo entero.
+    agente = YukiAgent()
 
-    assert VitalState().state_path == str(gestor.data_dir / "vital_state.json")
+    assert agente.vital_state.state_path == str(gestor.data_dir / "vital_state.json")
     assert str(gestor.output_dir) == str(tmp_path / "salida")
     assert str(gestor.db_path) == str(tmp_path / "datos" / "memoria.db")
 

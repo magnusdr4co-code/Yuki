@@ -15,6 +15,8 @@ import json
 import time
 import logging
 from typing import Dict, Any, List, Optional
+
+from .rutas import datos, salida
 from datetime import datetime
 
 logger = logging.getLogger("Yuki.SelfCharacterization")
@@ -100,14 +102,17 @@ class SelfCharacterization:
     def __init__(
         self,
         soul_path: str = "SOUL.md",
-        manifest_path: str = "data/identity_manifest.json",
-        output_base: str = "output/identity",
+        manifest_path: Optional[str] = None,
+        output_base: Optional[str] = None,
         nous_portal=None,
         memory_manager=None
     ):
         self.soul_path = soul_path
-        self.manifest_path = manifest_path
-        self.output_base = output_base
+        # Resueltos al construir: los valores por defecto de los argumentos se
+        # evalúan al importar, antes de que nadie pueda reubicar nada.
+        self.manifest_path = manifest_path or str(datos("identity_manifest.json"))
+        self.output_base = output_base or str(salida("identity"))
+        output_base = self.output_base
         self.nous_portal = nous_portal
         self.memory_manager = memory_manager
 

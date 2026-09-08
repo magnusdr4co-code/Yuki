@@ -54,7 +54,8 @@ class YukiAgent:
     def __init__(self, config_path: str = "config.yaml"):
         self.config_path = config_path
         base_config = self._load_config(config_path)
-        override_path = os.getenv("YUKI_RUNTIME_CONFIG_PATH", "data/runtime_overrides.json")
+        override_path = (os.getenv("YUKI_RUNTIME_CONFIG_PATH", "").strip()
+                         or str(base_de_datos().parent / "runtime_overrides.json"))
         self.runtime_config = RuntimeConfigStore(base_config, override_path)
         self.config = self.runtime_config.effective_config()
 
@@ -102,7 +103,11 @@ class YukiAgent:
         tz = self.config.get("scheduler", {}).get("timezone", "Europe/Madrid")
 
         # 6. Kokoro Engine (Motor de Vida Interior)
-        self.vital_state = VitalState(state_path="data/vital_state.json")
+        # Sin argumento: `VitalState` lo resuelve con `rutas.datos()`. Pasarle
+        # aquí la ruta fija anulaba ese arreglo por completo —el valor por
+        # defecto no se alcanzaba nunca— y el estado vital seguía escribiéndose
+        # donde la copia de seguridad no lo busca.
+        self.vital_state = VitalState()
         self.circadian = CircadianClock(tz_name=tz)
 
         # 7. La Chispa (The Spark)
