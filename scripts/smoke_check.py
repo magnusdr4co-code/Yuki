@@ -26,9 +26,9 @@ import argparse
 import json
 import sqlite3
 import sys
-from contextlib import closing
 import urllib.error
 import urllib.request
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Callable, Dict, List, Tuple
 
@@ -36,11 +36,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 import yaml  # noqa: E402
 
-VERDE = "\033[92m"
-ROJO = "\033[91m"
-AMARILLO = "\033[93m"
-TENUE = "\033[2m"
-FIN = "\033[0m"
+from scripts._consola import ROJO, FIN, ejecutar, filtrar, informar  # noqa: E402
 
 
 def _config() -> Dict[str, Any]:
@@ -199,39 +195,18 @@ def main() -> int:
         pruebas.append(("salon", lambda: comprobar_salon(argumentos.url)))
 
     if argumentos.solo:
-        pedidas = {nombre.strip() for nombre in argumentos.solo.split(",") if nombre.strip()}
-        desconocidas = pedidas - {nombre for nombre, _ in pruebas}
+        pruebas, desconocidas = filtrar(pruebas, argumentos.solo)
         if desconocidas:
-            print(f"{ROJO}Comprobaciones desconocidas: {', '.join(sorted(desconocidas))}{FIN}")
+            print(f"{ROJO}Comprobaciones desconocidas: {', '.join(desconocidas)}{FIN}")
             return 2
-        pruebas = [(nombre, prueba) for nombre, prueba in pruebas if nombre in pedidas]
 
-    resultados = []
-    for nombre, prueba in pruebas:
-        try:
-            correcto, detalle = prueba()
-        except Exception as exc:  # una comprobación rota es un fallo, no un silencio
-            correcto, detalle = False, f"la comprobación falló: {type(exc).__name__}: {exc}"
-        resultados.append({"prueba": nombre, "ok": correcto, "detalle": detalle})
+    resultados = ejecutar(pruebas)
+    codigo = informar(resultados, titulo="Comprobación de humo — instancia de Yuki",
+                      bien="Instancia sana.", como_json=argumentos.json)
 
-    fallidas = [r for r in resultados if not r["ok"]]
-
-    if argumentos.json:
-        print(json.dumps({"ok": not fallidas, "resultados": resultados},
-                         ensure_ascii=False, indent=2))
-    else:
-        print(f"\n{TENUE}Comprobación de humo — instancia de Yuki{FIN}\n")
-        for resultado in resultados:
-            marca = f"{VERDE}✓{FIN}" if resultado["ok"] else f"{ROJO}✗{FIN}"
-            print(f"  {marca} {resultado['prueba']:<22} {TENUE}{resultado['detalle']}{FIN}")
-        if fallidas:
-            print(f"\n{ROJO}{len(fallidas)} comprobación(es) fallida(s).{FIN}")
-        else:
-            print(f"\n{VERDE}Instancia sana.{FIN}")
-
-    if fallidas and not argumentos.permisivo:
-        return 1
-    return 0
+    # `--permisivo` informa igual y devuelve 0: sirve para mirar una instancia a
+    # medio configurar sin que el guion la declare enferma.
+    return 0 if argumentos.permisivo else codigo
 
 
 if __name__ == "__main__":

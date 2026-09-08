@@ -52,7 +52,9 @@ src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 media_jobs, web_search
 src/adapters/   Discord (el que importa), Telegram (aún simulado)
 src/web/        Salón + /metrics
-scripts/        smoke_check, chaos_drill, restore_drill, virtualize_instance
+scripts/        smoke_check, chaos_drill, restore_drill, simulate_day,
+                virtualize_instance; `_consola.py` es el armazón común
+                (paleta, fila de informe, sobre --json, código de salida)
 docs/           una guía por subsistema; empieza por OPERACION.md
 ```
 
@@ -65,6 +67,10 @@ docs/           una guía por subsistema; empieza por OPERACION.md
   pública de clases en inglés cuando ya lo estaba.
 - Los módulos nuevos empiezan con un docstring que explica **qué problema real
   resuelve**, no qué hace.
+- **La ruta de la memoria sale de `DATABASE_PATH` antes que de `config.yaml`**,
+  igual en el que escribe que en los que leen. Cuando el agente no lo respetaba,
+  la copia y la sonda vigilaban una base que nadie usaba —y la suite escribía
+  recuerdos de verdad en la de la instancia: 887 llegó a acumular—.
 - **`with sqlite3.connect(...)` no cierra la conexión**: sólo confirma o deshace
   la transacción. Usa `contextlib.closing`. Costó una copia nocturna que moría
   con `FileNotFoundError` una vez de cada treinta y tantas —los `-wal`/`-shm`

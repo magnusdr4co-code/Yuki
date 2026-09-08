@@ -41,12 +41,7 @@ from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-VERDE = "\033[92m"
-ROJO = "\033[91m"
-AMARILLO = "\033[93m"
-TENUE = "\033[2m"
-NEGRITA = "\033[1m"
-FIN = "\033[0m"
+from scripts._consola import ROJO, TENUE, FIN, informar  # noqa: E402
 
 
 def ultima_copia(directorio: str) -> Optional[Path]:
@@ -283,27 +278,20 @@ def main() -> int:
 
             shutil.rmtree(destino, ignore_errors=True)
 
-    fallidas = [r for r in resultados if not r["ok"]]
+    # En modo `--ciclo` la copia vive dentro del temporal que ya se borró.
+    sello = (f"{copia} · {copia.stat().st_size / 1024:.1f} KiB"
+             if copia is not None and copia.is_file() else "")
 
-    if argumentos.json:
-        print(json.dumps({"ok": not fallidas, "copia": str(copia) if copia else None,
-                          "resultados": resultados}, ensure_ascii=False, indent=2))
-    else:
-        print(f"\n{NEGRITA}Ensayo de restauración"
-              f"{' — circuito completo' if argumentos.ciclo else ''}{FIN}")
-        if copia is not None and copia.is_file():
-            print(f"{TENUE}{copia} · {copia.stat().st_size / 1024:.1f} KiB{FIN}\n")
-        else:
-            print()
-        for resultado in resultados:
-            marca = f"{VERDE}✓{FIN}" if resultado["ok"] else f"{ROJO}✗{FIN}"
-            print(f"  {marca} {resultado['prueba']:<18} {TENUE}{resultado['detalle']}{FIN}")
-        if fallidas:
-            print(f"\n{ROJO}La copia NO sirve para restaurar: {len(fallidas)} fallo(s).{FIN}")
-        else:
-            print(f"\n{VERDE}La copia restaura correctamente.{FIN}")
-
-    return 1 if fallidas else 0
+    return informar(
+        resultados,
+        titulo="Ensayo de restauración" + (" — circuito completo" if argumentos.ciclo else ""),
+        subtitulo=sello,
+        bien="La copia restaura correctamente.",
+        mal="La copia NO sirve para restaurar: {n} fallo(s).",
+        como_json=argumentos.json,
+        extra={"copia": str(copia) if copia else None},
+        ancho=18,
+    )
 
 
 if __name__ == "__main__":

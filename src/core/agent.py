@@ -58,7 +58,18 @@ class YukiAgent:
         self.config = self.runtime_config.effective_config()
 
         # 1. Memoria rápida FTS5
-        db_path = self.config.get("memory", {}).get("database_path", "data/yuki_memory.db")
+        #
+        # `DATABASE_PATH` manda sobre la configuración, como en el resto del
+        # proyecto. Aquí no lo hacía, y era el único sitio que **escribe**: la
+        # copia de seguridad, la sonda de signos vitales y la comprobación de
+        # humo sí lo respetaban, así que una instancia con esa variable puesta
+        # habría estado escribiendo en un sitio y respaldando y vigilando otro.
+        # Una copia impecable de una base que nadie usa.
+        #
+        # De paso deja de contaminar: la suite construye el agente entero, y sin
+        # esto escribía recuerdos de verdad en la base de la instancia.
+        db_path = (os.getenv("DATABASE_PATH", "").strip()
+                   or self.config.get("memory", {}).get("database_path", "data/yuki_memory.db"))
         memory_md = self.config.get("memory", {}).get("memory_md_path", "MEMORY.md")
         self.memory_manager = MemoryManager(db_path=db_path, memory_md_path=memory_md)
 

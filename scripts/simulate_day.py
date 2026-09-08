@@ -39,12 +39,9 @@ from typing import Any, Dict, List
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
-VERDE = "\033[92m"
-ROJO = "\033[91m"
-AMARILLO = "\033[93m"
-TENUE = "\033[2m"
-NEGRITA = "\033[1m"
-FIN = "\033[0m"
+from scripts._consola import (  # noqa: E402
+    AMARILLO, FIN, NEGRITA, ROJO, TENUE, VERDE,
+)
 
 CICLO_MINUTOS = 20
 
