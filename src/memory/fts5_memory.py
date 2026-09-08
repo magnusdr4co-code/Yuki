@@ -73,6 +73,8 @@ class FTS5MemoryEngine:
                 )
             """)
 
+            self._migrar_columnas_de_sueno(cursor)
+
             # Triggers de sincronización automática entre 'memories' y 'memories_fts'
             cursor.execute("""
                 CREATE TRIGGER IF NOT EXISTS memories_ai AFTER INSERT ON memories BEGIN
@@ -96,6 +98,65 @@ class FTS5MemoryEngine:
             """)
             conn.commit()
 
+    # ------------------------------------------------------------------
+    # Ciclo de sueño: vector de importancia y huellas de recuperación
+    # ------------------------------------------------------------------
+
+    # Columnas que añade el ciclo de sueño. Se aplican con ALTER TABLE sobre la
+    # base que ya existe en la instancia: migrar en caliente es obligatorio
+    # porque la memoria de Yuki es lo único irremplazable del proyecto y no se
+    # puede recrear vacía para estrenar un esquema.
+    COLUMNAS_DE_SUENO = {
+        # Vector de importancia en cuatro dimensiones. La literatura de 2026
+        # sobre consolidación en reposo usa un vector así en lugar de un único
+        # escalar porque las razones para retener un recuerdo no son la misma
+        # cosa: que conmueva, que vuelva, que ate a alguien y que sirva.
+        "salience": "REAL DEFAULT 0.0",     # carga afectiva en el momento de grabarlo
+        "recurrence": "REAL DEFAULT 0.0",   # cuánto ha vuelto por sí solo
+        "bond": "REAL DEFAULT 0.0",         # cuánto ata a una persona concreta
+        "utility": "REAL DEFAULT 0.0",      # si condujo a obra o a acción
+        # Huellas de uso: un recuerdo que se recupera es un recuerdo que importa,
+        # y esa señal se estaba tirando en cada búsqueda.
+        "recall_count": "INTEGER DEFAULT 0",
+        "last_recalled": "REAL",
+        # Tipo de memoria. `episodico` es lo vivido; `esquema`, lo destilado en
+        # la consolidación; `sueno`, lo que NO ocurrió.
+        "kind": "TEXT DEFAULT 'episodico'",
+        # Fijado: nunca se poda, pase lo que pase (canon, alma, acuerdos).
+        "pinned": "INTEGER DEFAULT 0",
+        # Si se fusionó dentro de otro recuerdo durante la consolidación.
+        "merged_into": "INTEGER",
+    }
+
+    def _migrar_columnas_de_sueno(self, cursor) -> None:
+        """Añade lo que falte, sin tocar lo que ya hay. Segura de repetir."""
+        existentes = {fila[1] for fila in cursor.execute("PRAGMA table_info(memories)").fetchall()}
+        for columna, definicion in self.COLUMNAS_DE_SUENO.items():
+            if columna not in existentes:
+                cursor.execute(f"ALTER TABLE memories ADD COLUMN {columna} {definicion}")
+
+    def note_recall(self, memory_ids: List[int]) -> None:
+        """
+        Deja constancia de que estos recuerdos volvieron a la conciencia.
+
+        Es la señal de recurrencia del vector de importancia: barata de escribir
+        y la única forma de distinguir un recuerdo vivo de uno que sólo ocupa
+        sitio. Un fallo aquí no puede tumbar una respuesta, así que se traga.
+        """
+        if not memory_ids:
+            return
+        marcas = ",".join("?" for _ in memory_ids)
+        try:
+            with self._get_connection() as conn:
+                conn.execute(
+                    f"UPDATE memories SET recall_count = COALESCE(recall_count, 0) + 1, "
+                    f"last_recalled = ? WHERE id IN ({marcas})",
+                    [time.time(), *memory_ids],
+                )
+                conn.commit()
+        except sqlite3.Error:
+            pass
+
     def add_memory(
         self,
         category: str,
@@ -103,16 +164,21 @@ class FTS5MemoryEngine:
         content: str,
         tags: str = "",
         user_id: str = "general",
-        importance: float = 1.0
+        importance: float = 1.0,
+        salience: float = 0.0,
+        kind: str = "episodico",
+        pinned: bool = False
     ) -> int:
         """Inserta un nuevo recuerdo en la memoria relacional e indexa en FTS5."""
         now = time.time()
         with self._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT INTO memories (category, title, content, tags, user_id, importance, created_at, updated_at)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (category, title, content, tags, user_id, importance, now, now))
+                INSERT INTO memories (category, title, content, tags, user_id, importance,
+                                      created_at, updated_at, salience, kind, pinned)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (category, title, content, tags, user_id, importance, now, now,
+                  salience, kind, 1 if pinned else 0))
             conn.commit()
             return cursor.lastrowid
 
@@ -122,7 +188,9 @@ class FTS5MemoryEngine:
         user_id: Optional[str] = None,
         category: Optional[str] = None,
         limit: int = 5,
-        half_life_days: float = 30.0
+        half_life_days: float = 30.0,
+        include_dreams: bool = False,
+        note_recall: bool = True
     ) -> List[Dict[str, Any]]:
         """
         Búsqueda de alta velocidad con ranking híbrido:
@@ -148,6 +216,15 @@ class FTS5MemoryEngine:
             conditions.append("m.category = ?")
             params.append(category)
 
+        # Los sueños quedan fuera de la recuperación normal. Es la regla que
+        # impide que lo soñado se cite como vivido: para leerlos hay que
+        # pedirlos, y entonces vienen marcados como lo que son.
+        if not include_dreams:
+            conditions.append("(m.kind IS NULL OR m.kind != 'sueno')")
+
+        # Un recuerdo fusionado durante la consolidación ya vive dentro de otro.
+        conditions.append("m.merged_into IS NULL")
+
         where_clause = " AND ".join(conditions)
 
         sql = f"""
@@ -160,6 +237,7 @@ class FTS5MemoryEngine:
                 m.user_id,
                 m.importance,
                 m.created_at,
+                m.kind,
                 bm25(memories_fts, 5.0, 2.0, 3.0, 1.0) AS bm25_rank,
                 snippet(memories_fts, 1, '<b>', '</b>', '...', 15) AS snippet_content
             FROM memories_fts fts
@@ -181,9 +259,11 @@ class FTS5MemoryEngine:
                 # Fallback simple si la sintaxis FTS contiene caracteres anómalos
                 cursor.execute("""
                     SELECT m.id, m.category, m.title, m.content, m.tags, m.user_id, m.importance, m.created_at,
-                           1.0 as bm25_rank, m.content as snippet_content
+                           m.kind, 1.0 as bm25_rank, m.content as snippet_content
                     FROM memories m
-                    WHERE m.content LIKE ? OR m.title LIKE ?
+                    WHERE (m.content LIKE ? OR m.title LIKE ?)
+                      AND m.merged_into IS NULL
+                      AND (m.kind IS NULL OR m.kind != 'sueno')
                     LIMIT ?
                 """, (f"%{query}%", f"%{query}%", limit))
                 rows = cursor.fetchall()
@@ -207,6 +287,7 @@ class FTS5MemoryEngine:
                     "tags": row["tags"],
                     "user_id": row["user_id"],
                     "importance": row["importance"],
+                    "kind": row["kind"] or "episodico",
                     "created_at": datetime.fromtimestamp(row["created_at"], timezone.utc).isoformat(),
                     "score": round(final_score, 4),
                     "snippet": row["snippet_content"]
@@ -218,6 +299,11 @@ class FTS5MemoryEngine:
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         for item in top_results:
             item["search_latency_ms"] = round(elapsed_ms, 2)
+
+        # La huella se escribe después de medir: la recurrencia es señal para el
+        # sueño, no debe contaminar la latencia que este motor promete.
+        if note_recall:
+            self.note_recall([item["id"] for item in top_results])
 
         return top_results
 

@@ -474,6 +474,49 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_sleep(fase="noche", seco=False, as_json=False):
+    """Ejecuta una fase del ciclo de sueño sobre la memoria real."""
+    import asyncio
+
+    import yaml
+
+    from src.memory.fts5_memory import FTS5MemoryEngine
+    from src.memory.sleep_cycle import SleepCycle, SleepPolicy
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    ruta = os.getenv("DATABASE_PATH") or config.get("memory", {}).get(
+        "database_path", "data/yuki_memory.db")
+    ciclo = SleepCycle(FTS5MemoryEngine(db_path=ruta), SleepPolicy.from_config(config))
+
+    # Sin agente no hay narrador: las fases corren deterministas y no se llama a
+    # ningún proveedor desde la terminal.
+    if fase == "nrem":
+        resultado = asyncio.run(ciclo.nrem(dry_run=seco))
+    elif fase == "rem":
+        resultado = asyncio.run(ciclo.dream(dry_run=seco))
+    elif fase == "olvido":
+        resultado = ciclo.prune(dry_run=seco)
+    else:
+        resultado = asyncio.run(ciclo.full_night(dry_run=seco, with_prune=True))
+
+    if as_json:
+        print(json.dumps(resultado, ensure_ascii=False, indent=2))
+        return resultado
+
+    print_banner()
+    marca = f"{YELLOW}[ENSAYO EN SECO]{RESET} " if seco else ""
+    print(f"{MAGENTA}{BOLD}🌙 Ciclo de sueño — {fase}{RESET} {marca}\n")
+    print(json.dumps(resultado, ensure_ascii=False, indent=2))
+    if fase in ("rem", "noche"):
+        sueno = resultado if fase == "rem" else resultado.get("rem", {})
+        if sueno.get("sonado"):
+            print(f"\n{DIM}El sueño queda fuera de la recuperación normal: "
+                  f"para leerlo hay que pedirlo.{RESET}")
+    return resultado
+
+
 def cmd_state(exportar=None, olvidar=None, motivo="", as_json=False):
     """Inventario del estado durable, y los derechos de acceso y supresión."""
     from src.core.state_registry import StateRegistry
@@ -851,6 +894,14 @@ def main():
     estado.add_argument("--motivo", default="", help="Motivo del olvido, para la auditoría")
     estado.add_argument("--json", action="store_true", help="Emite JSON")
 
+    sueno = subparsers.add_parser(
+        "sueno", help="Ciclo de sueño: consolidar (nrem), soñar (rem), olvidar, o la noche entera",
+    )
+    sueno.add_argument("--fase", choices=["nrem", "rem", "olvido", "noche"], default="noche")
+    sueno.add_argument("--seco", action="store_true",
+                       help="Ensayo en seco: calcula y muestra, sin tocar la memoria")
+    sueno.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -893,6 +944,8 @@ def main():
         cmd_transparency(marcar=args.marcar, as_json=args.json)
     elif args.command == "persona":
         cmd_persona(as_json=args.json)
+    elif args.command == "sueno":
+        cmd_sleep(fase=args.fase, seco=args.seco, as_json=args.json)
     elif args.command == "estado":
         cmd_state(exportar=args.exportar, olvidar=args.olvidar,
                   motivo=args.motivo, as_json=args.json)

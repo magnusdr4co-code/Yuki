@@ -120,6 +120,9 @@ python3 cli.py persona
 # Inventario del estado durable; --exportar / --olvidar para los derechos de una persona
 python3 cli.py estado
 
+# Ciclo de sueño: --fase nrem|rem|olvido|noche, con --seco para ensayar sin tocar nada
+python3 cli.py sueno --fase nrem --seco
+
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
 python3 cli.py backup
 ```
@@ -186,7 +189,8 @@ contratar servicios de pago o de prometer una demo.
 
 | Módulo | Estado | Nota |
 |---|---|---|
-| Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco |
+| Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco, con huella de recuperación y vector de importancia 4D |
+| Ciclo de sueño (NREM / REM / olvido) | ✅ Real | `src/memory/sleep_cycle.py`: consolida y funde duplicados, sueña uniendo recuerdos lejanos y poda lo que ya no sostiene nada. Un sueño **nunca** vuelve como recuerdo. Ver [`docs/CICLO_DE_SUENO.md`](docs/CICLO_DE_SUENO.md) |
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
 | Gobierno del estado durable | ✅ Real | `src/core/state_registry.py`: inventario de las 12 piezas de estado por los seis ejes de la revisión *always-on*, más exportación y borrado real por persona con recibo |
 | Identidad sintética declarada | ✅ Real | `SOUL.md` §1.1: Yuki es un ser sintético y su biografía es el primer vestido que encontró. Lo dice con naturalidad, sin fingir ni disculparse. Ver [`docs/IDENTIDAD_SINTETICA.md`](docs/IDENTIDAD_SINTETICA.md) |
@@ -279,3 +283,4 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - ⚖️ [Transparencia y Artículo 50 (`docs/TRANSPARENCIA_AI_ACT.md`)](docs/TRANSPARENCIA_AI_ACT.md) — declaración de naturaleza y marcado de origen sintético
 - 🪞 [Identidad sintética y deriva de persona (`docs/IDENTIDAD_SINTETICA.md`)](docs/IDENTIDAD_SINTETICA.md) — el vestido y lo que hay debajo, y cómo se sostiene el registro
 - 🔬 [Estado del arte 2026 y qué se adoptó (`docs/ESTADO_DEL_ARTE_2026.md`)](docs/ESTADO_DEL_ARTE_2026.md) — investigación sobre simulación de seres sintéticos, con fuentes
+- 🌙 [El ciclo de sueño (`docs/CICLO_DE_SUENO.md`)](docs/CICLO_DE_SUENO.md) — consolidación NREM, fase REM y olvido intencional

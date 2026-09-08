@@ -375,6 +375,16 @@ class DiscordAdapter:
         if content.startswith("!olvidar"):
             return self._handle_forget_command(content, author_name)
 
+        if content.startswith("!sueno") or content.startswith("!sueños") or content.startswith("!suenos"):
+            recientes = self.agent.memory_manager.engine.search(
+                query="sueño imagen noche", limit=3, include_dreams=True, note_recall=False)
+            sonados = [r for r in recientes if r.get("kind") == "sueno"]
+            if not sonados:
+                return "🌙 Todavía no he soñado nada que merezca contarse."
+            piezas = "\n\n".join(f"**{r['title']}**\n{r['content'][:600]}" for r in sonados)
+            return ("🌙 **Lo que he soñado**\n_Ninguno de estos ocurrió; no vuelven en mis "
+                    "recuerdos salvo que los pidas._\n\n" + piezas)
+
         if content.startswith("!deriva") or content.startswith("!persona"):
             informe = self.agent.persona.report()
             if not informe["muestras"]:

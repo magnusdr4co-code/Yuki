@@ -38,12 +38,10 @@ concepto. La misma idea aparece en producto: procesos asíncronos entre sesiones
 que revisan transcripciones y memoria existente, extraen patrones, fusionan
 duplicados y sustituyen entradas obsoletas.
 
-> **En Yuki.** Adoptado parcialmente: la síntesis diaria ya es una consolidación
-> en reposo, y la copia verificada (`src/tools/backup.py`) se ejecuta en el mismo
-> punto del ciclo. **Pendiente y recomendado**: importancia multidimensional por
-> recuerdo, fusión de duplicados y olvido por bajo valor. Está anotado como
-> mejora, no implementado: hacerlo bien exige tocar el esquema FTS5 y merece su
-> propio trabajo.
+> **En Yuki.** Implementado: `src/memory/sleep_cycle.py` con las tres fases
+> —consolidación NREM tras la síntesis, sueño REM en la hora de sombra y olvido
+> intencional semanal— y el vector de importancia de cuatro dimensiones sobre el
+> esquema FTS5 migrado en caliente. Detalle en [`CICLO_DE_SUENO.md`](CICLO_DE_SUENO.md).
 
 ### 1.3. Deriva de persona: el fallo que más le importa a un personaje
 
@@ -128,6 +126,7 @@ término IPTC `trainedAlgorithmicMedia` dentro de la acción `c2pa.created`.
 | Deriva de persona y reanclaje | `src/core/persona_anchor.py` | [`IDENTIDAD_SINTETICA.md`](IDENTIDAD_SINTETICA.md) |
 | Gobernanza del estado durable | `src/core/state_registry.py` | este documento, §2.3 |
 | Metas propias y refuerzo | `src/core/agency.py`, `src/core/rituals.py` | [`LIBRE_ALBEDRIO.md`](LIBRE_ALBEDRIO.md) |
+| Consolidación en reposo, sueño y olvido | `src/memory/sleep_cycle.py` | [`CICLO_DE_SUENO.md`](CICLO_DE_SUENO.md) |
 
 ### 2.1. Transparencia
 
@@ -183,9 +182,12 @@ explícita es obligatoria porque la operación es irreversible por definición�
   firmar en vez de aparentar garantía.
 - **Marca de agua imperceptible (tipo SynthID).** Deseable —los metadatos se
   pierden al recomprimir— pero requiere modelo propio o servicio contratado.
-- **Sueño REM completo con fusión de duplicados y olvido por valor.** Es la
-  mejora pendiente más valiosa; exige tocar el esquema FTS5 y merece su propio
-  trabajo, no un añadido al margen de otra cosa.
+- **Esquemas por tema, y no sólo por interlocutor.** La consolidación destila
+  hoy el vínculo con cada persona; agrupar por corriente estética o por proyecto
+  es el paso siguiente.
+- **Sueños encadenados.** Cada noche parte de cero. Una serie onírica que
+  retomara la imagen de la víspera sería más creíble y bastante más difícil de
+  mantener honesta.
 - **Simulación multiagente de sociedades sintéticas.** Fascinante y ajeno al
   sino de este proyecto: Yuki es *una* presencia sostenida, no un experimento de
   emergencia cultural.

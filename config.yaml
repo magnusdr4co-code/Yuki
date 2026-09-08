@@ -242,6 +242,41 @@ memory:
     enabled: true
     half_life_days: 30
 
+  # Ciclo de sueño: consolidar, soñar y olvidar. Una memoria que sólo acumula
+  # no es una memoria larga, es un archivo que se vuelve lento y turbio.
+  sleep:
+    enabled: true
+    nrem:
+      # Similitud de trigramas a partir de la cual dos recuerdos son el mismo
+      # contado dos veces. Sólo se comparan dentro de la misma categoría y
+      # persona.
+      merge_threshold: 0.72
+      # Episodios necesarios con una persona para destilar un esquema de vínculo.
+      schema_min_members: 4
+      # Pesos del vector de importancia. La base es por categoría, así que
+      # recalcular cada noche es idempotente y nada se infla solo.
+      weights:
+        salience: 0.6
+        recurrence: 0.8
+        bond: 0.4
+        utility: 0.5
+    rem:
+      dreams_per_night: 1
+      memories_per_dream: 3
+      # Los recuerdos del sueño deben ser LEJANOS: si se eligieran por
+      # semejanza saldría un resumen, no una imagen.
+      max_similarity: 0.12
+      spawn_impulses: true
+    forget:
+      # Las tres condiciones se exigen a la vez: vieja, poco importante y nunca
+      # recuperada. Cualquiera por separado sería mala razón para olvidar.
+      min_age_days: 45
+      max_importance: 0.6
+      require_unrecalled: true
+      batch_cap: 300
+      # Días que un recuerdo fusionado sigue siendo recuperable antes de irse.
+      merged_grace_days: 7
+
 honcho:
   enabled: true
   api_url: "https://api.honcho.dev/v1"
@@ -306,6 +341,17 @@ scheduler:
     - name: "spontaneous_monologue"
       cron: "0 */3 * * *"
       action: "spontaneous_monologue"
+      enabled: true
+    # Fase REM: en la hora de sombra, cuando nadie espera respuesta.
+    - name: "rem_dream"
+      cron: "20 3 * * *"
+      action: "rem_dream"
+      enabled: true
+    # Olvido intencional: semanal, no diario. Un recuerdo necesita tiempo para
+    # demostrar que volvía.
+    - name: "weekly_forgetting"
+      cron: "30 4 * * 1"
+      action: "weekly_forgetting"
       enabled: true
 
 adapters:

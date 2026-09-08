@@ -20,7 +20,9 @@ from ..tools.nous_portal import NousPortalClient
 from ..tools.media_creator import MediaCreatorTool
 from ..scheduler.cron_engine import CronEngine, CronParseError
 from ..scheduler.tasks import AutonomousTasks
+from ..memory.sleep_cycle import SleepCycle, SleepPolicy
 from .persona_anchor import PersonaAnchor, PersonaPolicy
+from .state_registry import StateRegistry
 from .prompt_builder import PromptBuilder
 from .vital_state import VitalState
 from .circadian import CircadianClock
@@ -97,6 +99,16 @@ class YukiAgent:
         if self.vital_state.will_queue:
             self.will_queue = WillQueue.from_list(self.vital_state.will_queue)
         self.growth_journal = GrowthJournal(memory_engine=self.memory_manager.engine)
+
+        # Ciclo de sueño: consolidar, soñar y olvidar. El narrador es su propia
+        # cadena de pasarelas, así que dormir no depende de otro proveedor; sin
+        # ninguno disponible, las fases siguen corriendo de forma determinista.
+        self.sleep = SleepCycle(
+            engine=self.memory_manager.engine,
+            policy=SleepPolicy.from_config(self.config),
+            narrator=self._narrar_dormida,
+            audit=lambda operacion, detalle: StateRegistry().record(operacion, detalle),
+        )
         self.echo_ritual = EchoRitual(
             memory_manager=self.memory_manager,
             growth_journal=self.growth_journal
@@ -210,7 +222,9 @@ class YukiAgent:
                 "synthesize_daily_memory": self.tasks.daily_memory_synthesis,
                 "echo_ritual": self.tasks.echo_ritual,
                 "agency_loop_tick": self.tasks.agency_loop_tick,
-                "spontaneous_monologue": self.tasks.spontaneous_monologue
+                "spontaneous_monologue": self.tasks.spontaneous_monologue,
+                "rem_dream": self.tasks.rem_dream,
+                "weekly_forgetting": self.tasks.weekly_forgetting,
             }
 
             if action not in func_map:
@@ -282,6 +296,29 @@ class YukiAgent:
             return None
         logger.info("Yuki propone un ritmo: %s", propuesta.name)
         return propuesta.to_dict()
+
+    async def _narrar_dormida(self, instruccion: str, material: str) -> str:
+        """
+        Voz para las fases del sueño, fuera del ciclo de conversación.
+
+        Va por la ruta de síntesis dialéctica —lo que se destila de noche pesa
+        más que un resumen de feed— y pasa por Model Armor como cualquier otra
+        generación. No toca el estado vital ni la memoria episódica: dormir no
+        es una interacción, y contarla como tal falsearía sus contadores.
+        """
+        decision = await asyncio.to_thread(self.model_armor.sanitize_user_prompt, material)
+        if not decision.allowed:
+            return ""
+        texto = await asyncio.to_thread(
+            self._call_llm_inference,
+            f"Eres Yuki dormida. {instruccion}",
+            decision.text,
+            "dialectic_synthesis",
+        )
+        salida = await asyncio.to_thread(
+            self.model_armor.sanitize_model_response, texto, user_prompt=decision.text
+        )
+        return salida.text if salida.allowed else ""
 
     def disclosure_for(self, user_id: str, channel_type: str) -> Optional[str]:
         """

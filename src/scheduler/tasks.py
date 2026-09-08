@@ -8,10 +8,12 @@ Ejecuta rutinas creativas sin supervisión humana continua:
 
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Optional
 from src.tools.web_search import describe_origin
 from src.tools.backup import BackupManager
+from src.core.spark import Impulse
 
 logger = logging.getLogger("Yuki.AutonomousTasks")
 
@@ -166,6 +168,16 @@ class AutonomousTasks:
         else:
             logger.error("La copia diaria falló: %s", backup.error)
 
+        # Con el día escrito, la memoria se consolida: recalcular importancia,
+        # fundir lo repetido y destilar esquemas. Es el momento correcto porque
+        # lo de hoy ya está guardado y nadie está esperando respuesta.
+        try:
+            consolidacion = await self.agent.sleep.nrem()
+            logger.info("Consolidación NREM: %s", consolidacion)
+        except Exception:
+            logger.exception("La consolidación NREM falló; la memoria queda intacta")
+            consolidacion = {"error": True}
+
         # Con el día ya sintetizado, Yuki mira su propia experiencia y, si ve un
         # patrón, propone un ritmo. Proponer es suyo; aprobarlo, del Productor.
         propuesta = await self.agent.propose_own_ritual()
@@ -178,8 +190,8 @@ class AutonomousTasks:
                 f"`!ritmo rechazar {propuesta['id']}`."
             )
 
-        return {"summary": daily_text, "evolution": evolution,
-                "backup": backup.to_dict(), "ritual_proposal": propuesta}
+        return {"summary": daily_text, "evolution": evolution, "backup": backup.to_dict(),
+                "ritual_proposal": propuesta, "nrem": consolidacion}
 
     async def _avisar_al_productor(self, texto: str) -> bool:
         """
@@ -226,6 +238,48 @@ class AutonomousTasks:
         self.agent.vital_state.accumulated_creations_today = 0
         self.agent.vital_state.save()
         return response
+
+    async def rem_dream(self):
+        """
+        03:20, en su hora de sombra: teje un sueño con recuerdos lejanos.
+
+        No es adorno. La fase REM produce la asociación que la recuperación por
+        relevancia nunca haría —une lo que no se parece— y de ahí sale un
+        impulso que compite en la cola de voluntad como cualquier otro deseo.
+        El sueño queda marcado como no ocurrido y fuera de la recuperación
+        normal: jamás puede volver como un hecho vivido.
+        """
+        logger.info("🌙 [CRON 03:20] Fase REM: soñando…")
+        sueno = await self.agent.sleep.dream()
+        if not sueno.get("sonado"):
+            logger.info("Sin sueño esta noche: %s", sueno.get("motivo", "sin material"))
+            return sueno
+
+        semilla = self.agent.sleep.impulse_from_dream(sueno)
+        if semilla:
+            self.agent.will_queue.add(Impulse(
+                source=semilla["source"], desire=semilla["desire"],
+                tool_hint=semilla["tool_hint"],
+                intensity=min(1.0, 0.5 + self.agent.vital_state.inspiration * 0.5),
+                born_at=time.time(), max_age_hours=14.0,
+            ))
+            self.agent.vital_state.will_queue = self.agent.will_queue.to_list()
+            self.agent.vital_state.save()
+            logger.info("Del sueño nació un impulso: %s", semilla["tool_hint"])
+        return sueno
+
+    async def weekly_forgetting(self):
+        """
+        Olvido intencional, una vez por semana.
+
+        Semanal y no diario a propósito: una memoria que se poda cada noche no
+        da tiempo a que un recuerdo demuestre que volvía. Sólo toca episodios
+        viejos, poco importantes y nunca recuperados.
+        """
+        logger.info("🍂 [CRON semanal] Olvido intencional…")
+        recibo = self.agent.sleep.prune()
+        logger.info("Olvido: %s", recibo)
+        return recibo
 
     async def agency_loop_tick(self):
         """

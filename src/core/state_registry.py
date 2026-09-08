@@ -353,6 +353,16 @@ class StateRegistry:
         with open(self.audit_path, "a", encoding="utf-8") as registro:
             registro.write(linea + "\n")
 
+    def record(self, operacion: str, detalle: Dict[str, Any]) -> None:
+        """
+        Registro público de operaciones que destruyen o transforman estado.
+
+        Lo usan el ciclo de sueño —fusiones y olvidos— y cualquier otra pieza
+        que altere memoria de forma irreversible. Sin este punto común, cada
+        módulo inventaría su propio rastro y no habría dónde mirar.
+        """
+        self._registrar_auditoria(operacion, detalle)
+
     def audit_log(self, limite: int = 20) -> List[Dict[str, Any]]:
         if not self.audit_path.is_file():
             return []
