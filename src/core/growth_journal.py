@@ -17,17 +17,17 @@ class GrowthJournal:
         """Construye un prompt para que el LLM analice la evolución reciente."""
         time_limit = datetime.now() - timedelta(days=days_back)
         timestamp_limit = time_limit.timestamp()
-        
+
         with self.engine._get_connection() as conn:
             cursor = conn.cursor()
             cursor.execute('''
-                SELECT content, category, created_at 
-                FROM memories 
+                SELECT content, category, created_at
+                FROM memories
                 WHERE created_at >= ? AND category IN ('visitor', 'inner_thought', 'daily_synthesis')
                 ORDER BY created_at ASC
             ''', (timestamp_limit,))
             rows = cursor.fetchall()
-            
+
         history_parts = []
         for row in rows:
             dt = datetime.fromtimestamp(row["created_at"]).strftime("%Y-%m-%d %H:%M")
@@ -35,7 +35,7 @@ class GrowthJournal:
         # El diario es evidencia, no un contexto infinito: se conserva el tramo
         # más reciente para que la revisión diaria no agote el modelo.
         history = "".join(history_parts)[-max_history_chars:]
-            
+
         prompt = f"""
 Analiza las interacciones, pensamientos internos y síntesis de la última semana de Yuki:
 
@@ -74,7 +74,7 @@ Solo incluye desplazamientos genuinos.
         events = self.engine.get_recent_growth(limit=limit)
         if not events:
             return "No hay evolución reciente registrada."
-            
+
         context = "Evolución reciente de Yuki:\n"
         for ev in events:
             domain_es = {
@@ -83,25 +83,25 @@ Solo incluye desplazamientos genuinos.
                 "philosophy": "Filosofía",
                 "relationships": "Vínculos"
             }.get(ev["domain"], ev["domain"])
-            
+
             context += f"- [{domain_es}] Antes: \"{ev['from_position']}\" → Ahora: \"{ev['to_position']}\" (confianza: {ev['confidence']})\n"
-            
+
         return context
 
     def parse_llm_growth_response(self, llm_response: str) -> List[Dict[str, Any]]:
         """Parsea la salida estructurada del LLM y la convierte en una lista de diccionarios."""
         events = []
         blocks = re.split(r'DOMAIN:\s*', llm_response)
-        
+
         for block in blocks:
             if not block.strip():
                 continue
-            
+
             domain_match = re.match(r'([^\n]+)', block)
             from_match = re.search(r'FROM:\s*([^\n]+)', block)
             to_match = re.search(r'TO:\s*([^\n]+)', block)
             conf_match = re.search(r'CONFIDENCE:\s*([0-9.]+)', block)
-            
+
             if domain_match and from_match and to_match and conf_match:
                 try:
                     conf = float(conf_match.group(1))
@@ -113,5 +113,5 @@ Solo incluye desplazamientos genuinos.
                     })
                 except ValueError:
                     pass
-                    
+
         return events

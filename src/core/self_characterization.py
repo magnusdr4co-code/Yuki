@@ -402,8 +402,9 @@ class SelfCharacterization:
 
         results = {}
         for variant_name, spec in avatar_specs.items():
-            filename = f"yuki_avatar_{variant_name}_{int(time.time())}.png"
-            filepath = os.path.join(self.avatars_dir, filename)
+            # La ruta la decide el portal (`result["local_path"]`): calcularla
+            # aquí era un resto de un diseño anterior y podía hacer creer que el
+            # fichero se escribe donde no se escribe.
 
             # Generar a través de Nous Portal si disponible
             if self.nous_portal:

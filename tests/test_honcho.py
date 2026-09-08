@@ -16,7 +16,7 @@ class TestHonchoDialectic(unittest.TestCase):
     def test_dialectic_exchange_update(self):
         client = HonchoDialecticClient(app_id="test-diva")
         sync = HonchoProfileSync(client)
-        
+
         result = client.process_dialectic_exchange(
             user_message="Hagamos la siguiente portada más minimalista y con tonos oscuros",
             agent_response="Entiendo tu propuesta. El contraste entre la sombra y la línea simple dará fuerza al trabajo.",

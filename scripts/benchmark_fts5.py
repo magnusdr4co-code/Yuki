@@ -6,7 +6,6 @@ Benchmark automatizado de latencia y precisión para SQLite FTS5.
 import time
 import os
 import sys
-import sqlite3
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
@@ -50,14 +49,14 @@ def run_performance_test(num_records: int = 5000):
     for _ in range(50):
         for q in queries:
             t_search = time.perf_counter()
-            res = engine.search(q, limit=5)
+            engine.search(q, limit=5)  # se mide la llamada, no su resultado
             dt_ms = (time.perf_counter() - t_search) * 1000.0
             latencies.append(dt_ms)
 
     avg_lat = sum(latencies) / len(latencies)
     p95_lat = sorted(latencies)[int(len(latencies) * 0.95)]
 
-    print(f"\n📊 Resultados de Rendimiento en Consulta:")
+    print("\n📊 Resultados de Rendimiento en Consulta:")
     print(f"  • Latencia media de búsqueda: {avg_lat:.2f} ms")
     print(f"  • Latencia P95:                {p95_lat:.2f} ms")
     print(f"  • Cumplimiento SLA (<113ms):   {'✅ CUMPLIDO' if p95_lat < 113.0 else '❌ NO CUMPLIDO'}")

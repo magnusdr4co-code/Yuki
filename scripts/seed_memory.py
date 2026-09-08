@@ -7,7 +7,6 @@ Indexa los textos biográficos y recursos históricos de 'recursos extra/' en la
 import os
 import sys
 import json
-import re
 
 # Asegurar que la raíz del proyecto está en sys.path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
@@ -53,7 +52,7 @@ def seed_database(db_path: str = "data/yuki_memory.db"):
     if os.path.exists(personality_json):
         with open(personality_json, "r", encoding="utf-8") as f:
             data = json.load(f)
-            
+
         system_tmpl = data.get("system_prompt_template", {})
         for key, body in system_tmpl.items():
             if isinstance(body, list):

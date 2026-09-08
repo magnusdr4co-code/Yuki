@@ -67,7 +67,7 @@ def test_save_and_load(tmp_path):
     vs1 = VitalState(state_path=str(state_path))
     vs1.energy = 0.88
     vs1.save()
-    
+
     vs2 = VitalState(state_path=str(state_path))
     assert vs2.energy == 0.88
 

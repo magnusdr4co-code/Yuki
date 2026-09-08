@@ -7,7 +7,7 @@ y metodologías de trabajo mediante la interacción dialéctica con su mánager/
 import os
 import json
 import time
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 
 class HonchoDialecticClient:
     def __init__(
@@ -30,7 +30,7 @@ class HonchoDialecticClient:
                     return json.load(f)
             except Exception:
                 pass
-        
+
         # Perfil base predeterminado
         return {
             "producer_id": "producer_manager",
@@ -97,7 +97,7 @@ class HonchoDialecticClient:
         # Detección heurística de ajustes estéticos o temáticos
         updated = False
         lower_msg = user_message.lower()
-        
+
         if "más rápido" in lower_msg or "ritmo alegre" in lower_msg:
             if "tempo medio" not in self._local_profile["aesthetic_preferences"]["sound_palette"]:
                 self._local_profile["aesthetic_preferences"]["sound_palette"].append("tempo medio dinámico")

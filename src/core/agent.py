@@ -12,7 +12,7 @@ import time
 import os
 import yaml
 import logging
-from typing import Dict, Any, Optional, List
+from typing import Dict, Any, Optional
 
 from ..memory.memory_manager import MemoryManager
 from ..honcho.dialectic import HonchoDialecticClient
@@ -56,12 +56,12 @@ class YukiAgent:
         override_path = os.getenv("YUKI_RUNTIME_CONFIG_PATH", "data/runtime_overrides.json")
         self.runtime_config = RuntimeConfigStore(base_config, override_path)
         self.config = self.runtime_config.effective_config()
-        
+
         # 1. Memoria rápida FTS5
         db_path = self.config.get("memory", {}).get("database_path", "data/yuki_memory.db")
         memory_md = self.config.get("memory", {}).get("memory_md_path", "MEMORY.md")
         self.memory_manager = MemoryManager(db_path=db_path, memory_md_path=memory_md)
-        
+
         # 2. Modelado dialéctico Honcho
         honcho_cfg = self.config.get("honcho", {})
         # Quién es el productor. Lo declara `honcho.user_id` en config.yaml y es
@@ -89,7 +89,7 @@ class YukiAgent:
 
         # 5. Programador Cron Autónomo
         tz = self.config.get("scheduler", {}).get("timezone", "Europe/Madrid")
-        
+
         # 6. Kokoro Engine (Motor de Vida Interior)
         self.vital_state = VitalState(state_path="data/vital_state.json")
         self.circadian = CircadianClock(tz_name=tz)
@@ -369,7 +369,7 @@ class YukiAgent:
         4. Actualización no bloqueante de memoria
         """
         start_time = time.perf_counter()
-        
+
         if hasattr(self, 'presence_controller'):
             # `is_producer` hay que pasarlo: `PresenceController.should_respond`
             # reserva una excepción para que el productor pueda alcanzar a Yuki
@@ -492,7 +492,7 @@ class YukiAgent:
             # hablar al vacío de ser escuchada.
             if user_id not in ("autonomous_cron", "yuki_internal"):
                 self.agency_loop.note_external_signal()
-            
+
         phase = self.circadian.current_phase()
         self.vital_state.update_tick(phase, 0)
         self.vital_state.will_queue = self.will_queue.to_list()
@@ -527,7 +527,7 @@ class YukiAgent:
             )
 
         return response.text
-        
+
     async def execute_autonomous_will(self, impulse) -> Dict[str, Any]:
         """
         Ejecuta un impulso de la Cola de Voluntad por iniciativa propia.

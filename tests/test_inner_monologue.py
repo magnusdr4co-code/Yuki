@@ -35,7 +35,7 @@ def test_generate_thought_prompt_contains_season(mock_season, monologue):
     monologue.vital_state.curiosity = 0.5
     monologue.vital_state.energy = 0.5
     monologue.memory_manager.engine.get_recent_inner_thoughts.return_value = []
-    
+
     prompt = monologue.generate_thought_prompt()
     assert "Winter cold" in prompt
 

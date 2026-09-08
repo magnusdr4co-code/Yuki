@@ -89,9 +89,9 @@ def comprobar_limitadores(config: Dict[str, Any]) -> Tuple[bool, str]:
 
     instancia = VirtualInstance(config)
     resumen = instancia.summary()
-    bloqueantes = [l for l in instancia.limiters if l.severity == "bloqueante"]
+    bloqueantes = [lim for lim in instancia.limiters if lim.severity == "bloqueante"]
     if bloqueantes:
-        return False, "bloqueante: " + "; ".join(f"{l.id} {l.title}" for l in bloqueantes)
+        return False, "bloqueante: " + "; ".join(f"{lim.id} {lim.title}" for lim in bloqueantes)
     return True, (f"{resumen['limitadores_abiertos']} limitador(es) abiertos, "
                   "ninguno bloqueante")
 

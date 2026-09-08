@@ -43,6 +43,13 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements-dev.txt
 
+      - name: Linter
+        # Se ganó el sitio el primer día: encontró dos NameError vivos, uno en la
+        # ruta de la reflexión nocturna, que ninguna prueba tocaba.
+        run: |
+          pip install ruff
+          ruff check .
+
       - name: Suite completa
         run: python -m pytest tests -q
 

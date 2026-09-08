@@ -12,7 +12,6 @@ import json
 import os
 import sys
 
-import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -120,3 +119,23 @@ def test_la_fachada_del_agente_sigue_siendo_asincrona():
 
     assert all(r["simulated"] for r in resultados)
     assert "NO vienen" in herramienta.describe_origin(resultados)
+
+
+def test_la_busqueda_del_portal_no_muere_por_un_import_ausente():
+    """
+    Regresión de un NameError vivo que encontró el linter, no la suite.
+
+    Al subir los imports al módulo se quitó un `import asyncio` local de
+    `nous_portal` sin añadirlo arriba: `search_trends_firecrawl` levantaba
+    NameError en cuanto alguien la llamaba. Las pruebas no lo vieron porque
+    todas inyectan un doble del portal, y la ruta real era la reflexión
+    nocturna de las 03:00 — que falla a solas, de noche y sin nadie mirando.
+    """
+    import asyncio as _asyncio
+
+    from src.tools.nous_portal import NousPortalClient
+
+    portal = NousPortalClient()
+    resultados = _asyncio.run(portal.search_trends_firecrawl("tendencias", limit=2))
+
+    assert resultados and all(r["simulated"] for r in resultados)

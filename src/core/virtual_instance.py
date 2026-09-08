@@ -140,7 +140,7 @@ class VirtualInstance:
         self._build_presencia()
         self._build_mente()
         self._build_limitadores()
-        self.limiters.sort(key=lambda l: (_ORDEN_GRAVEDAD.get(l.severity, 9), l.id))
+        self.limiters.sort(key=lambda lim: (_ORDEN_GRAVEDAD.get(lim.severity, 9), lim.id))
 
     def _build_texto(self) -> None:
         vertex = bool(self.vertex_project) and (self.config.get("vertex_ai", {}) or {}).get("enabled", True)
@@ -394,7 +394,7 @@ class VirtualInstance:
             id="L8", title="Vídeo facturado por segundo sin techo de gasto",
             severity=GRAVE, status=MITIGADO if presupuesto.enabled else ABIERTO,
             evidence=(
-                f"Veo cuesta ≈0,10 USD/s y el encargo estándar son cuatro clips de 8 s por orden. "
+                "Veo cuesta ≈0,10 USD/s y el encargo estándar son cuatro clips de 8 s por orden. "
                 + (f"El presupuesto diario ({presupuesto.limits}) se comprueba antes de llamar al "
                    f"proveedor; hoy: {presupuesto.describe()}"
                    if presupuesto.enabled else
@@ -463,7 +463,7 @@ class VirtualInstance:
                 "directorio_datos": str(self.data_dir),
             },
             "capacidades": [asdict(c) for c in self.capabilities],
-            "limitadores": [asdict(l) for l in self.limiters],
+            "limitadores": [asdict(lim) for lim in self.limiters],
             "resumen": self.summary(),
         }
 
@@ -472,8 +472,8 @@ class VirtualInstance:
             "capacidades_reales": sum(1 for c in self.capabilities if c.state == REAL),
             "capacidades_simuladas": sum(1 for c in self.capabilities if c.state == SIMULADO),
             "capacidades_inactivas": sum(1 for c in self.capabilities if c.state == INACTIVO),
-            "limitadores_abiertos": sum(1 for l in self.limiters if l.status == ABIERTO),
-            "limitadores_bloqueantes": sum(1 for l in self.limiters if l.severity == BLOQUEANTE),
+            "limitadores_abiertos": sum(1 for lim in self.limiters if lim.status == ABIERTO),
+            "limitadores_bloqueantes": sum(1 for lim in self.limiters if lim.severity == BLOQUEANTE),
         }
 
     def render_markdown(self) -> str:

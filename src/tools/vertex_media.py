@@ -479,6 +479,13 @@ class VertexMediaClient:
                 entrada = prompt
                 tarea = "text_to_video"
 
+            # La rama de vídeo que no es Veo usa el módulo `interactions` del SDK,
+            # que hasta ahora no se importaba en ninguna parte: cualquier modelo
+            # distinto de `veo-*` moría con NameError en vez de con un error de
+            # proveedor. Se importa aquí, junto a su uso, como el resto del SDK
+            # en este fichero.
+            from google.genai import interactions
+
             interaccion = cliente.interactions.create(
                 model=model,
                 input=entrada,

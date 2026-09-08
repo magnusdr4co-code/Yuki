@@ -4,13 +4,12 @@ Permite ejecutar a la Diva Digital sin costes fijos de servidor (Zero Idle Cost)
 Despierta instantáneamente ante webhooks de Telegram o Discord.
 """
 
-import os
 
 # Configuración condicional para ejecución local o en entorno Modal
 try:
     import modal
     app = modal.App("yuki-digital-diva")
-    
+
     # Imagen de ejecución optimizada con dependencias
     image = (
         modal.Image.debian_slim(python_version="3.11")
@@ -40,7 +39,7 @@ try:
     async def telegram_webhook(payload: dict):
         """Punto de entrada serverless para webhooks de Telegram."""
         from ..core.agent import YukiAgent
-        
+
         agent = YukiAgent()
         message = payload.get("message", {})
         text = message.get("text", "")
@@ -54,7 +53,7 @@ try:
             message=text,
             channel_type="telegram_webhook"
         )
-        
+
         return {"status": "ok", "reply": response}
 
     @app.function(

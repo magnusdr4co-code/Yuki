@@ -9,3 +9,7 @@ pytest>=8.2.0
 # El adaptador de Discord se importa de verdad en varias pruebas; sin esto se
 # saltan justo las que cubren la entrega multimedia y el marcado en la salida.
 discord.py>=2.3.2
+
+# El linter no es cosmética aquí: encontró dos NameError vivos que ninguna
+# prueba tocaba, uno de ellos en la ruta que corre a las tres de la mañana.
+ruff>=0.6

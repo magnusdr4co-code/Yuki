@@ -139,7 +139,7 @@ def proveedor_caido(raiz: Path) -> Tuple[bool, str]:
 
 def estado_corrupto(raiz: Path) -> Tuple[bool, str]:
     """Todos los ficheros de estado quedan ilegibles (corte de energía, disco lleno)."""
-    from src.core.agency import AgencyLedger, AgencyPolicy
+    from src.core.agency import AgencyLedger
     from src.core.blackbox import BlackBox
     from src.core.persona_anchor import PersonaAnchor, PersonaPolicy
     from src.core.rituals import RitualStore

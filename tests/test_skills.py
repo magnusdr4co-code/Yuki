@@ -23,7 +23,7 @@ class TestSkillsCatalog(unittest.TestCase):
         for skill_name in expected_skills:
             skill_dir = os.path.join("skills", skill_name)
             skill_file = os.path.join(skill_dir, "SKILL.md")
-            
+
             self.assertTrue(os.path.exists(skill_dir), f"Directorio skills/{skill_name} no existe")
             self.assertTrue(os.path.exists(skill_file), f"Archivo SKILL.md no existe en {skill_name}")
 

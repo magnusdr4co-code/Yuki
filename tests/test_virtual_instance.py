@@ -49,7 +49,7 @@ def _cap(instancia, cap_id):
 
 
 def _lim(instancia, lim_id):
-    return next((l for l in instancia.limiters if l.id == lim_id), None)
+    return next((lim for lim in instancia.limiters if lim.id == lim_id), None)
 
 
 def test_sin_proyecto_vertex_los_medios_son_marcadores_y_es_bloqueante():
@@ -141,9 +141,10 @@ def test_serializacion_json_estable():
 
     assert set(datos) == {"instancia_produccion", "entorno", "capacidades", "limitadores", "resumen"}
     assert all({"id", "pillar", "state", "detail"} == set(c) for c in datos["capacidades"])
-    assert all(l["severity"] in {"bloqueante", "grave", "moderado"} for l in datos["limitadores"])
+    assert all(lim["severity"] in {"bloqueante", "grave", "moderado"}
+               for lim in datos["limitadores"])
     # Los limitadores salen ordenados por gravedad: lo que bloquea, primero.
-    gravedades = [l["severity"] for l in datos["limitadores"]]
+    gravedades = [lim["severity"] for lim in datos["limitadores"]]
     assert gravedades == sorted(gravedades, key=lambda g: {"bloqueante": 0, "grave": 1, "moderado": 2}[g])
 
 

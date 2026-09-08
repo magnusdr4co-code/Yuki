@@ -62,7 +62,7 @@ class MIDITrackBuilder:
         # End of Track
         data.extend(var_length(0))
         data.extend(b"\xFF\x2F\x00")
-        
+
         chunk = b"MTrk" + struct.pack(">I", len(data)) + bytes(data)
         return chunk
 
@@ -88,7 +88,7 @@ class YukiMIDIGenerator:
         """
         os.makedirs(output_dir, exist_ok=True)
         scale_intervals = JAPANESE_SCALES.get(scale_name.lower(), JAPANESE_SCALES["insen"])
-        
+
         # 1. Pista 0: Tempo y Time Signature
         track0 = MIDITrackBuilder("Conductor")
         us_per_beat = int(60_000_000 / bpm)
@@ -137,7 +137,7 @@ class YukiMIDIGenerator:
         # Ensamblado del archivo MIDI Type 1
         tracks = [track0, track_shamisen, track_koto, track_bass]
         header = b"MThd" + struct.pack(">IHHH", 6, 1, len(tracks), self.ticks_per_beat)
-        
+
         midi_data = bytearray(header)
         for t in tracks:
             midi_data.extend(t.build_chunk())

@@ -1,7 +1,6 @@
 import sys
 import os
 import pytest
-from unittest.mock import MagicMock
 import sqlite3
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '..'))
@@ -19,13 +18,13 @@ class MockMemoryEngine:
     def __init__(self):
         self.conn = sqlite3.connect(":memory:")
         self.conn.row_factory = sqlite3.Row
-        self.conn.execute('''CREATE TABLE memories 
+        self.conn.execute('''CREATE TABLE memories
                             (id INTEGER PRIMARY KEY, content TEXT, category TEXT, created_at REAL)''')
         self.events = []
-    
+
     def _get_connection(self):
         return MockConnectionContext(self.conn)
-        
+
     def add_growth_event(self, **kwargs):
         # Map kwargs to match real SQLite column names
         event = {
@@ -37,7 +36,7 @@ class MockMemoryEngine:
             "trigger_memory_ids": kwargs.get("trigger_ids", "[]"),
         }
         self.events.append(event)
-        
+
     def get_recent_growth(self, limit):
         return self.events[-limit:] if self.events else []
 
@@ -65,7 +64,7 @@ def test_parse_llm_growth_response_multiple(journal):
     FROM: a
     TO: b
     CONFIDENCE: 0.8
-    
+
     DOMAIN: aesthetics
     FROM: c
     TO: d
@@ -88,7 +87,7 @@ def test_record_and_retrieve_growth_event(journal):
     events = journal.engine.get_recent_growth(3)
     assert len(events) == 1
     assert events[0]["domain"] == "music"
-    
+
     context = journal.get_evolution_context()
     assert "old" in context
     assert "new" in context

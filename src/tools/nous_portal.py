@@ -19,9 +19,9 @@ El endpoint de Nous Portal sigue sin existir; cuando exista, se añade aquí com
 una tercera ruta por delante de Vertex.
 """
 
+import asyncio
 import os
 import time
-import json
 import logging
 from pathlib import Path
 from typing import Dict, Any, List, Optional

@@ -23,7 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.memory.fts5_memory import FTS5MemoryEngine  # noqa: E402
 from src.memory.sleep_cycle import (  # noqa: E402
-    BASE_POR_CATEGORIA, MARCA_DE_SUENO, SleepCycle, SleepPolicy, similitud, trigramas,
+    MARCA_DE_SUENO, SleepCycle, SleepPolicy, similitud, trigramas,
     trigramas_de_plantilla,
 )
 

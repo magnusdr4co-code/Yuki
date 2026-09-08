@@ -115,7 +115,7 @@ def cmd_skill(skill_name: str, extra_args: dict):
             concept = extra_args.get("concept", "lluvia sobre metal y pan de oro")
             scale = extra_args.get("scale", "insen")
             bpm = int(extra_args.get("bpm", 82))
-            
+
             result = await agent.media_creator.execute_single_release_pipeline(
                 title=title, concept=concept, scale=scale, bpm=bpm
             )
@@ -255,7 +255,7 @@ def cmd_cron_task(name: str):
     async def _run_task():
         agent = YukiAgent()
         print(f"{CYAN}{BOLD}⚡ Disparando tarea autónoma: {name}...{RESET}")
-        
+
         task_map = {
             "nocturnal_trend_reflection": agent.tasks.nocturnal_trend_reflection,
             "morning_inspiration_drop": agent.tasks.morning_inspiration_drop,
@@ -287,7 +287,7 @@ def cmd_benchmark():
         os.remove(test_db)
 
     engine = FTS5MemoryEngine(db_path=test_db)
-    
+
     print(f"{DIM}Poblando base de datos con 1,000 recuerdos históricos...{RESET}")
     for i in range(1000):
         engine.add_memory(
@@ -300,11 +300,11 @@ def cmd_benchmark():
         )
 
     queries = ["shamisen acuerdos", "lluvia sencillo", "tiempo y musica"]
-    
+
     fts5_times = []
     for q in queries:
         t0 = time.perf_counter()
-        results = engine.search(q, limit=5)
+        engine.search(q, limit=5)  # se mide la llamada, no su resultado
         dt = (time.perf_counter() - t0) * 1000.0
         fts5_times.append(dt)
 
@@ -340,7 +340,7 @@ def cmd_vertex_check():
     """Comprueba de extremo a extremo la ruta de Vertex y estima el gasto."""
     import yaml
     from src.core.llm_router import (
-        LLMRouter, VertexProvider, ai_studio_key_in_use,
+        LLMRouter, ai_studio_key_in_use,
         gce_service_account_scopes, gce_scopes_permiten_vertex,
     )
 
@@ -452,7 +452,7 @@ def cmd_daemon():
         print_banner()
         print(f"{GREEN}{BOLD}✨ Yuki Daemon Activo (24/7 Presencia Autónoma){RESET}")
         print(f"{DIM}Cron programado, adaptadores sociales preparados, memoria FTS5 en caliente.{RESET}\n")
-        
+
         tasks = [asyncio.create_task(agent.cron.start())]
         discord_adapter = None
         if os.getenv("DISCORD_BOT_TOKEN"):
@@ -899,7 +899,7 @@ def main():
 
     subparsers.add_parser("chat", help="Conversación interactiva en terminal")
     subparsers.add_parser("list-skills", help="Listar habilidades estándar en skills/")
-    
+
     web_p = subparsers.add_parser("web", help="Iniciar Salón Web Dashboard & Canvas API")
     web_p.add_argument("--port", default=None, type=int,
                        help="Puerto HTTP (por defecto: variable de entorno PORT, o 8080)")

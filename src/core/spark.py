@@ -7,7 +7,7 @@ import random
 import time
 import logging
 from dataclasses import dataclass
-from typing import Any, Dict, List, Optional, Sequence
+from typing import Any, Dict, List, Optional
 
 from .agency import ACCIONES as ACCIONES_CONOCIDAS, AgencyLedger, AgencyPolicy, ReinforcementModel
 
@@ -43,11 +43,11 @@ class Impulse:
     born_at: float        # timestamp time.time()
     max_age_hours: float  # los impulsos se desvanecen y mueren si no se cumplen
     fulfilled: bool = False
-    
+
     @property
     def is_expired(self) -> bool:
         return (time.time() - self.born_at) / 3600.0 > self.max_age_hours
-    
+
     @property
     def current_intensity(self) -> float:
         """La intensidad decae con el tiempo como un deseo que se desvanece."""
@@ -55,7 +55,7 @@ class Impulse:
             return 0.0
         age_ratio = min(1.0, (time.time() - self.born_at) / (self.max_age_hours * 3600.0))
         return self.intensity * (1.0 - age_ratio ** 2)  # Decaimiento cuadrático
-    
+
     def to_dict(self) -> Dict[str, Any]:
         return {
             "source": self.source,
@@ -66,7 +66,7 @@ class Impulse:
             "max_age_hours": self.max_age_hours,
             "fulfilled": self.fulfilled
         }
-        
+
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'Impulse':
         return cls(
@@ -84,7 +84,7 @@ class WillQueue:
     def __init__(self, max_size: int = 10):
         self.impulses: List[Impulse] = []
         self.max_size = max_size
-    
+
     def add(self, impulse: Impulse):
         self.prune_expired()
         self.impulses.append(impulse)
@@ -92,7 +92,7 @@ class WillQueue:
             # Eliminar los menos intensos (considerando decaimiento temporal)
             self.impulses.sort(key=lambda x: x.current_intensity, reverse=True)
             self.impulses = self.impulses[:self.max_size]
-            
+
     def get_strongest(self) -> Optional[Impulse]:
         self.prune_expired()
         active = [i for i in self.impulses if not i.fulfilled]
@@ -100,24 +100,24 @@ class WillQueue:
             return None
         strongest = max(active, key=lambda x: x.current_intensity)
         return strongest
-        
+
     def fulfill(self, impulse: Impulse):
         for i in self.impulses:
             if i is impulse:
                 i.fulfilled = True
                 break
-                
+
     def prune_expired(self) -> int:
         initial_count = len(self.impulses)
         self.impulses = [i for i in self.impulses if not i.is_expired and not i.fulfilled]
         return initial_count - len(self.impulses)
-        
+
     def active_count(self) -> int:
         return len([i for i in self.impulses if not i.is_expired and not i.fulfilled])
-        
+
     def to_list(self) -> List[Dict[str, Any]]:
         return [i.to_dict() for i in self.impulses]
-        
+
     @classmethod
     def from_list(cls, data: List[Dict[str, Any]]) -> 'WillQueue':
         queue = cls()
@@ -126,13 +126,13 @@ class WillQueue:
 
 class EchoRitual:
     """Cada mañana, Yuki se relee a sí misma y elige seguir existiendo."""
-    
+
     def __init__(self, memory_manager: Any, growth_journal: Any):
         self.memory_manager = memory_manager
         self.growth_journal = growth_journal
         self.last_echo: Optional[str] = None
         self.last_echo_at: Optional[float] = None
-    
+
     def generate_echo_prompt(self, vital_state: Any, season_context: dict) -> str:
         """Construye el prompt para el ritual diario del Eco."""
         prompt = (
@@ -145,14 +145,14 @@ class EchoRitual:
             "Escribe en primera persona, máximo 4-5 frases. Mantén la voz poética y contemplativa."
         )
         return prompt
-    
+
     def extract_impulses_from_echo(self, echo_text: str, vital_state: Any) -> List[Impulse]:
         """Analiza el texto del eco para generar impulsos para la Cola de Voluntad."""
         impulses = []
         text_lower = echo_text.lower()
-        
+
         intensity = (vital_state.inspiration + vital_state.energy) / 2.0
-        
+
         if any(word in text_lower for word in ["música", "componer", "melodía", "shamisen", "sonido"]):
             impulses.append(Impulse("echo_ritual", "Deseo componer una nueva melodía.", "compose", intensity, time.time(), 12.0))
         if any(word in text_lower for word in ["pintar", "imagen", "color", "luz", "trazo", "dibujo"]):
@@ -165,12 +165,12 @@ class EchoRitual:
             impulses.append(Impulse("echo_ritual", "Deseo compartir algo con los demás.", "publish", intensity, time.time(), 12.0))
         if "@" in text_lower:
             impulses.append(Impulse("echo_ritual", "Siento la necesidad de contactar a alguien.", "reach_out", intensity, time.time(), 12.0))
-            
+
         if not impulses:
             impulses.append(Impulse("echo_ritual", "Quiero contemplar en silencio.", "contemplate", intensity, time.time(), 12.0))
-            
+
         return impulses[:3]
-    
+
     def record_echo(self, echo_text: str):
         """Guarda el eco como el impulso de continuidad de hoy."""
         self.last_echo = echo_text
@@ -179,7 +179,7 @@ class EchoRitual:
 
 class AgencyLoop:
     """El bucle que evalúa impulsos y decide actuar por iniciativa propia."""
-    
+
     ACTION_COSTS = {
         'compose': 0.25,
         'paint': 0.20,
@@ -189,7 +189,7 @@ class AgencyLoop:
         'contemplate': 0.05,
         'reach_out': 0.10,
     }
-    
+
     def __init__(self, will_queue: WillQueue, vital_state_ref: Any,
                  policy: Optional[AgencyPolicy] = None,
                  ledger: Optional[AgencyLedger] = None,
@@ -373,7 +373,7 @@ class AgencyLoop:
             "pesos_por_accion": pesos,
             "esperando_eco": len(datos.get("pendientes", [])),
         }
-    
+
     def get_autonomy_ratio(self) -> float:
         """Ratio de acciones autónomas vs total. Mide cuánta 'vida' tiene Yuki."""
         if not self.actions_log:

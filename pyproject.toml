@@ -16,6 +16,30 @@ classifiers = [
     "Operating System :: OS Independent",
 ]
 
+[tool.ruff]
+line-length = 110
+target-version = "py311"
+exclude = ["output", "recursos extra", ".venv"]
+
+[tool.ruff.lint]
+# Conjunto deliberadamente corto. Este proyecto tiene una voz propia en el
+# código —comentarios largos en castellano que explican el porqué, nombres en
+# castellano— y un linter que pelee con eso acaba desactivado. Se conservan las
+# reglas que encuentran fallos de verdad (F: pyflakes) y la higiene básica.
+#
+# El linter ya se ganó el sitio: encontró dos NameError vivos, uno de ellos en
+# la ruta de la reflexión nocturna, que ninguna prueba tocaba.
+select = ["E4", "E7", "E9", "F", "W"]
+ignore = [
+    # Líneas largas: los comentarios explicativos de este proyecto las tienen y
+    # partirlas empeora la lectura.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# Los módulos de prueba importan cosas que sólo usan para forzar un fallo.
+"tests/*" = ["F841"]
+
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]

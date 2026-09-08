@@ -72,7 +72,7 @@ class DiscordAdapter:
         self.token = token or os.getenv("DISCORD_BOT_TOKEN")
         self.allowed_guild_ids = _parse_id_set(os.getenv("DISCORD_ALLOWED_GUILD_ID", ""))
         self.allowed_channel_ids = _parse_id_set(os.getenv("DISCORD_ALLOWED_CHANNEL_ID", ""))
-        
+
         # ID del Productor emparejado (Dextrure por defecto)
         paired_env = os.getenv("DISCORD_PAIRED_PRODUCER_ID", "").strip()
         self.paired_producer_ids = _parse_id_set(paired_env) if paired_env else {DEFAULT_PAIRED_PRODUCER_ID}

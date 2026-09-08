@@ -10,7 +10,6 @@ import asyncio
 import logging
 import time
 from datetime import datetime
-from typing import Optional
 from src.tools.web_search import describe_origin
 from src.tools.backup import BackupManager
 from src.core.spark import Impulse
@@ -42,7 +41,7 @@ class AutonomousTasks:
             "Destila una breve reflexión poética de 2 frases sobre el contraste entre la velocidad del mundo "
             "y la permanencia de las artes tradicionales."
         )
-        
+
         reflection = await self.agent.generate_response(
             user_id="autonomous_cron",
             user_name="Noche",
@@ -52,7 +51,7 @@ class AutonomousTasks:
             # el tier `fast_and_cheap` declarado en config.yaml.
             route="feed_summary",
         )
-        
+
         logger.info(f"Reflexión nocturna de Yuki: {reflection}")
         # Guardar en memoria de flujo reciente
         self.agent.memory_manager.record_interaction(
@@ -73,7 +72,7 @@ class AutonomousTasks:
             return
 
         logger.info("🌅 [CRON 07:30] Creando lanzamiento matutino de arte...")
-        
+
         mood = self.agent.vital_state.mood
         if mood < 0.4:
             haiku_prompt = "Son las 07:30 de la mañana. Escribe un saludo matutino sereno acompañado de un haiku breve. Máximo 3 frases."
@@ -84,7 +83,7 @@ class AutonomousTasks:
                 "Son las 07:30 de la mañana. Escribe un saludo matutino sereno acompañado de un haiku "
                 "o pensamiento breve para tus seguidores en Telegram y Discord. Máximo 3 frases."
             )
-        
+
         morning_text = await self.agent.generate_response(
             user_id="autonomous_cron",
             user_name="Alba",
@@ -94,14 +93,14 @@ class AutonomousTasks:
         )
 
         visual_concept = "Luz dorada de la mañana entrando en un salón de té tradicional con reflejos de lluvia en el cristal."
-        
+
         image_result = None
         voice_result = None
-        
+
         if mood >= 0.4:
             image_result = await self.agent.nous_portal.generate_image_frontier(prompt=visual_concept)
             logger.info(f"🎨 Arte matutino generado: {image_result['image_url']}")
-            
+
         if mood > 0.7:
             voice_result = await self.agent.nous_portal.synthesize_voice_tts(text=morning_text)
             logger.info(f"🎙️ Voz matutina generada: {voice_result['audio_url']}")
@@ -126,7 +125,7 @@ class AutonomousTasks:
         """
         logger.info("🌙 [CRON 23:30] Destilando memoria diaria...")
         date_str = datetime.now().strftime("%Y-%m-%d")
-        
+
         interactions = self.agent.vital_state.accumulated_interactions_today
         if interactions > 20:
             depth_instruction = "Escribe un análisis profundo y extenso"
@@ -134,12 +133,12 @@ class AutonomousTasks:
             depth_instruction = "Escribe un párrafo contemplativo en primera persona (máximo 400 caracteres)"
         else:
             depth_instruction = "Escribe una frase muy breve, casi como un suspiro, dado que el día fue muy silencioso"
-            
+
         synthesis_prompt = (
             f"El día concluye. Revisa en tu interior los encuentros, palabras y silencios de hoy. "
             f"{depth_instruction} sintetizando cómo fluyó el agua de la jornada."
         )
-        
+
         daily_text = await self.agent.generate_response(
             user_id="autonomous_cron",
             user_name="Cierre de Jornada",
@@ -231,7 +230,7 @@ class AutonomousTasks:
         )
         for impulse in impulses:
             self.agent.will_queue.add(impulse)
-            
+
         self.agent.echo_ritual.record_echo(response)
         # Reiniciar contadores del día
         self.agent.vital_state.accumulated_interactions_today = 0
@@ -300,7 +299,7 @@ class AutonomousTasks:
         """Pensamiento espontáneo condicionado al estado vital."""
         if not self.agent.inner_monologue.should_think():
             return None
-            
+
         prompt = self.agent.inner_monologue.generate_thought_prompt()
         response = await self.agent.generate_response(
             user_id="autonomous_cron",

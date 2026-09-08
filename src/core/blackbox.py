@@ -134,7 +134,7 @@ class BlackBox:
         return iter(self.path.read_text(encoding="utf-8").splitlines())
 
     def entries(self, limite: Optional[int] = None) -> List[Entrada]:
-        entradas = [e for e in (Entrada.from_line(l) for l in self._lineas() if l.strip())
+        entradas = [e for e in (Entrada.from_line(linea) for linea in self._lineas() if linea.strip())
                     if e is not None]
         return entradas[-limite:] if limite else entradas
 
@@ -230,7 +230,7 @@ class BlackBox:
                 problemas.append({"seq": seal.get("seq"), "fallo": "cadena truncada",
                                   "detalle": "hay menos anotaciones que en el precinto"})
 
-        ilegibles = sum(1 for l in self._lineas() if l.strip() and Entrada.from_line(l) is None)
+        ilegibles = sum(1 for linea in self._lineas() if linea.strip() and Entrada.from_line(linea) is None)
         if ilegibles:
             problemas.append({"seq": None, "fallo": "líneas ilegibles",
                               "detalle": f"{ilegibles} línea(s) no son anotaciones válidas"})

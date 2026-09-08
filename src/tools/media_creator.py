@@ -52,7 +52,7 @@ class MediaCreatorTool:
         """Orquesta la herramienta apropiada a partir de un impulso de la Cola de Voluntad."""
         from ..core.seasons import get_current_micro_season
         season = get_current_micro_season()
-        
+
         if impulse.tool_hint == 'compose':
             mood_params = self._mood_to_music_params(vital_state)
             return await self.compose_beat_structure(
@@ -163,7 +163,7 @@ class MediaCreatorTool:
         """
         music_dir = "output/music"
         os.makedirs(music_dir, exist_ok=True)
-        
+
         # 1. Generar archivo MIDI binario real
         midi_result = self.midi_gen.generate_track(
             title=title,
@@ -175,7 +175,7 @@ class MediaCreatorTool:
 
         season = get_current_micro_season()
         prompt = f"Atmospheric organic lofi track '{title}', authentic Japanese shamisen lead, subtle koto arpeggio, 808 deep sub-bass, mood: {mood}, season: {season['seasonal_kigo']}"
-        
+
         # 2. Generar síntesis de audio de frontera (Flow Audio / Suno)
         audio_result = await self.portal.generate_music_flow(
             title=title,
@@ -264,7 +264,7 @@ class MediaCreatorTool:
         music_res = await self.compose_beat_structure(
             title=title, bpm=bpm, scale=scale, mood=concept, engine=music_engine
         )
-        
+
         # Paso 2: Portada con Gemini Image / Seedream
         art_res = await self.create_single_cover(
             track_title=title, visual_concept=concept, provider=image_provider, lighting="urushi"

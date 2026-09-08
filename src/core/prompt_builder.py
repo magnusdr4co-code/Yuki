@@ -8,7 +8,7 @@ Ensambla el prompt del sistema inyectando selectivamente:
 """
 
 import os
-from typing import Dict, Any, Optional
+from typing import Optional
 
 class PromptBuilder:
     def __init__(self, soul_path: str = "SOUL.md"):
@@ -35,10 +35,10 @@ class PromptBuilder:
     ) -> str:
         """Ensambla el prompt completo para el modelo de lenguaje."""
         role_block = f"\n[ARTE ACTIVA EN ESTA SALA]: {active_role}" if active_role else ""
-        
+
         echo_impulse_section = f"\n[IMPULSO DEL DÍA (RITUAL DEL ECO)]:\n{echo_impulse}" if echo_impulse else ""
         evolution_section = f"\n[EVOLUCIÓN RECIENTE]:\n{evolution_context}" if evolution_context else ""
-        
+
         vital_state_str = ""
         if vital_state_block:
             vital_state_str = f"""

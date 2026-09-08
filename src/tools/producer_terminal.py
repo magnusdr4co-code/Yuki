@@ -31,18 +31,23 @@ class ProducerTerminal:
             raise ValueError("argv debe ser una lista corta de cadenas")
         command, args = argv[0], argv[1:]
         if command in {"pwd"}:
-            if args: raise ValueError("pwd no acepta argumentos")
+            if args:
+                raise ValueError("pwd no acepta argumentos")
         elif command == "git":
-            if not args or args[0] not in {"status", "diff", "log"}: raise ValueError("Sólo git status/diff/log")
+            if not args or args[0] not in {"status", "diff", "log"}:
+                raise ValueError("Sólo git status/diff/log")
         elif command in {"pytest", "python", "python3"}:
-            if command != "pytest" and args[:2] != ["-m", "pytest"]: raise ValueError("Python sólo puede ejecutar pytest")
+            if command != "pytest" and args[:2] != ["-m", "pytest"]:
+                raise ValueError("Python sólo puede ejecutar pytest")
             targets = args if command == "pytest" else args[2:]
             for item in targets:
-                if item.startswith("-"): continue
+                if item.startswith("-"):
+                    continue
                 self._safe_path(item)
         elif command in {"ls", "find", "rg", "sed"}:
             for item in args:
-                if item.startswith("-") or item.isdigit() or item in {"p", ""}: continue
+                if item.startswith("-") or item.isdigit() or item in {"p", ""}:
+                    continue
                 if "/" in item or item == "." or item in SAFE_ROOTS or item in FORBIDDEN:
                     self._safe_path(item)
         else:

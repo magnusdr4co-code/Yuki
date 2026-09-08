@@ -1,6 +1,6 @@
 """
 Controlador de Presencia para Yuki.
-Decide cuándo y cómo Yuki se manifiesta en sus canales, 
+Decide cuándo y cómo Yuki se manifiesta en sus canales,
 basado en su estado vital y el ciclo circadiano.
 """
 
@@ -53,7 +53,7 @@ class PresenceController:
         if vulnerability > 0.7 or phase in ['kage', 'consolidation']:
             if channel_type == 'telegram':
                 return False
-                
+
         return True
 
     def get_response_depth(self) -> str:
@@ -90,5 +90,5 @@ class PresenceController:
                 'tone': 'poetic, atmospheric'
             }
         }
-        
+
         return modifiers.get(channel_type, {'style': 'neutral', 'tone': 'balanced'})

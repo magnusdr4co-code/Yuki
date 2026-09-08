@@ -6,9 +6,8 @@ Organiza la memoria en 3 capas:
 3. Vínculos con Visitantes y Productor
 """
 
-import time
 import os
-from typing import Dict, Any, List, Optional
+from typing import Dict, Any, Optional
 from .fts5_memory import FTS5MemoryEngine
 
 class MemoryManager:
@@ -34,7 +33,7 @@ class MemoryManager:
         sin saturar la ventana de contexto (evita Context Rot).
         """
         memories = self.engine.search(query=query, user_id=user_id, limit=limit)
-        
+
         formatted_blocks = []
         for mem in memories:
             formatted_blocks.append(f"[{mem['category'].upper()} - {mem['title']}]\n{mem['content']}")

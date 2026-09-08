@@ -30,7 +30,7 @@ class FTS5MemoryEngine:
     def _init_db(self):
         with self._get_connection() as conn:
             cursor = conn.cursor()
-            
+
             # Tabla regular para almacenamiento relacional y metadatos
             cursor.execute("""
                 CREATE TABLE IF NOT EXISTS memories (
@@ -197,21 +197,21 @@ class FTS5MemoryEngine:
         Score = BM25_score * importance * temporal_decay
         """
         start_time = time.perf_counter()
-        
+
         # Limpiar y preparar query FTS5
         clean_terms = re.findall(r'\w+', query.lower())
         if not clean_terms:
             return []
-        
+
         fts_query = " OR ".join([f'"{term}"*' for term in clean_terms])
-        
+
         conditions = ["memories_fts MATCH ?"]
         params: List[Any] = [fts_query]
-        
+
         if user_id and user_id != "general":
             conditions.append("(m.user_id = ? OR m.user_id = 'general')")
             params.append(user_id)
-            
+
         if category:
             conditions.append("m.category = ?")
             params.append(category)
@@ -228,7 +228,7 @@ class FTS5MemoryEngine:
         where_clause = " AND ".join(conditions)
 
         sql = f"""
-            SELECT 
+            SELECT
                 m.id,
                 m.category,
                 m.title,
@@ -271,12 +271,12 @@ class FTS5MemoryEngine:
             for row in rows:
                 age_days = max(0.0, (now - row["created_at"]) / 86400.0)
                 decay = math.exp(-0.693 * (age_days / half_life_days))
-                
+
                 # En SQLite FTS5, bm25 retorna un valor negativo más bajo cuanto mejor coincidencia
                 # Transformamos a score positivo:
                 raw_bm25 = abs(float(row["bm25_rank"]))
                 bm25_score = 1.0 / (1.0 + raw_bm25)
-                
+
                 final_score = bm25_score * float(row["importance"]) * decay
 
                 results.append({
@@ -295,7 +295,7 @@ class FTS5MemoryEngine:
 
         results.sort(key=lambda x: x["score"], reverse=True)
         top_results = results[:limit]
-        
+
         elapsed_ms = (time.perf_counter() - start_time) * 1000.0
         for item in top_results:
             item["search_latency_ms"] = round(elapsed_ms, 2)
@@ -386,7 +386,7 @@ class FTS5MemoryEngine:
                 LIMIT ?
             """, (threshold, limit))
             rows = cursor.fetchall()
-            
+
             results = []
             for r in rows:
                 row_dict = dict(r)

@@ -2,7 +2,6 @@
 Sincronización y persistencia de perfiles dialécticos de Honcho.
 """
 
-from typing import Dict, Any
 from .dialectic import HonchoDialecticClient
 
 class HonchoProfileSync:
