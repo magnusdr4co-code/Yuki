@@ -790,6 +790,7 @@ def cmd_agency(as_json=False):
             "umbral_ahora": round(politica.umbral_efectivo(float(datos.get("boredom", 0.0))), 3),
             "pesos_por_accion": pesos,
             "esperando_eco": len(datos.get("pendientes", [])),
+            "incoherencias": politica.incoherencias(),
             "censo_de_ciclos": diario.censo(),
             "censo_de_hoy": diario.censo_de_hoy(),
             "ritmos_propios": [r.to_dict() for r in ritmos.aprobados()],
@@ -799,6 +800,12 @@ def cmd_agency(as_json=False):
 
     print_banner()
     print(f"{MAGENTA}{BOLD}🌱 Libre albedrío{RESET}\n")
+    # Una contradicción en el carácter no da ningún error: apaga una facultad y
+    # se queda quieta, que se parece demasiado a una decisión. Va lo primero.
+    for problema in politica.incoherencias():
+        print(f"  {RED}✗ Carácter incoherente:{RESET} {problema}")
+    if politica.incoherencias():
+        print()
     estado = "activa" if politica.enabled else f"{RED}apagada{RESET}"
     print(f"  Iniciativa: {estado}")
     print(f"  Espontaneidad {politica.spontaneity:g} · audacia {politica.audacity:g} · "

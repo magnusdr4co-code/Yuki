@@ -35,6 +35,7 @@ import sqlite3
 import sys
 import tarfile
 import tempfile
+from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
@@ -112,7 +113,7 @@ def restaurar(copia: Path, destino: Path) -> List[Dict[str, Any]]:
         anotar("memoria", False, "no hay base de datos en la copia")
     else:
         try:
-            with sqlite3.connect(f"file:{base}?mode=ro", uri=True) as conexion:
+            with closing(sqlite3.connect(f"file:{base}?mode=ro", uri=True)) as conexion:
                 estado = conexion.execute("PRAGMA integrity_check").fetchone()[0]
                 recuerdos = conexion.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
                 categorias = dict(conexion.execute(

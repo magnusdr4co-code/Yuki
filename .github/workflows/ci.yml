@@ -77,7 +77,7 @@ jobs:
       - name: Comprobación de humo (lo que no depende del entorno)
         # Las comprobaciones de Vertex y presupuesto dependen de credenciales
         # que una CI no tiene ni debe tener; se ejecutan en el despliegue real.
-        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso
+        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso,caracter
 
       - name: Gemelo virtual
         run: python scripts/virtualize_instance.py --json > /tmp/gemelo.json

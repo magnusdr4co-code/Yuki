@@ -286,3 +286,29 @@ def test_con_historia_pero_sin_latido_sigue_siendo_una_caida(tmp_path):
 
     assert lectura.estado == AUSENTE
     assert "no está escribiendo" in lectura.motivo
+
+
+def test_leer_el_pulso_no_deja_conexiones_abiertas(tmp_path):
+    """
+    La sonda se lee en cada raspado de métricas.
+
+    `with sqlite3.connect(...)` confirma la transacción pero **no cierra**: una
+    conexión filtrada por raspado es un descriptor menos cada minuto en una
+    máquina con 2 GB para todo. Se cuenta lo abierto antes y después.
+    """
+    import gc
+
+    datos = _instancia(tmp_path, latido=60, actos=HORA, albedrio=HORA, sueno=HORA,
+                       recuerdos=20)
+    sonda = Pulse({}, data_dir=str(datos))
+    sonda.read()
+    gc.collect()
+
+    abiertas = len([o for o in gc.get_objects() if isinstance(o, sqlite3.Connection)])
+    for _ in range(15):
+        sonda.read()
+
+    # Sin `gc.collect()` a propósito: lo que se comprueba es que se cierren
+    # solas, no que el recolector las barra después.
+    despues = len([o for o in gc.get_objects() if isinstance(o, sqlite3.Connection)])
+    assert despues <= abiertas, f"quedaron {despues - abiertas} conexión(es) por raspado"

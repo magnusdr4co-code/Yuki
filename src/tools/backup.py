@@ -73,11 +73,36 @@ def _copia_coherente_de_sqlite(origen: Path, destino: Path) -> str:
     Devuelve el resultado de `integrity_check`. Que sea `ok` es la única prueba
     de que la copia sirve; lo demás son bytes con buena intención.
     """
-    with sqlite3.connect(f"file:{origen}?mode=ro", uri=True) as fuente:
-        with sqlite3.connect(destino) as copia:
+    # `with sqlite3.connect(...)` **no cierra** la conexión: sólo confirma o
+    # deshace la transacción. Dejarlas abiertas mantenía vivos los ficheros
+    # `-wal` y `-shm` junto a la copia, y SQLite los borraba al finalizar el
+    # objeto —en un momento que no controla nadie—. El empaquetado listaba el
+    # directorio, encontraba `yuki_memory.db-shm`, y para cuando iba a añadirlo
+    # ya no existía: la copia nocturna moría con un FileNotFoundError una vez de
+    # cada treinta y tantas. Se cierran a mano.
+    fuente = sqlite3.connect(f"file:{origen}?mode=ro", uri=True)
+    try:
+        copia = sqlite3.connect(destino)
+        try:
             fuente.backup(copia)
-    with sqlite3.connect(destino) as verificacion:
+        finally:
+            copia.close()
+    finally:
+        fuente.close()
+
+    verificacion = sqlite3.connect(destino)
+    try:
         resultado = verificacion.execute("PRAGMA integrity_check").fetchone()
+    finally:
+        verificacion.close()
+
+    # Y por si alguna quedara: un `-wal` viajando junto a la base no es un
+    # acompañante inofensivo, es un peligro. Al restaurar, SQLite lo reproduce
+    # sobre una base que ya lo incluye. Mejor una base sola.
+    for sidecar in (destino.with_name(destino.name + "-wal"),
+                    destino.with_name(destino.name + "-shm")):
+        sidecar.unlink(missing_ok=True)
+
     return (resultado or ["desconocido"])[0]
 
 
@@ -207,7 +232,14 @@ class BackupManager:
 
             with tarfile.open(destino, "w:gz") as archivo:
                 for elemento in sorted(escenario.iterdir()):
-                    archivo.add(elemento, arcname=elemento.name)
+                    try:
+                        archivo.add(elemento, arcname=elemento.name)
+                    except FileNotFoundError:
+                        # Cinturón además de tirantes: el escenario es nuestro y
+                        # ya no debería desaparecer nada de él, pero perder la
+                        # copia entera de la noche porque un fichero temporal se
+                        # esfumó entre listar y añadir no compensa.
+                        logger.warning("Desapareció mientras se empaquetaba: %s", elemento)
 
         resultado = BackupResult(
             status="success", path=str(destino), bytes=destino.stat().st_size,

@@ -189,3 +189,107 @@ def test_el_retrato_para_el_dm_lleva_el_censo(bucle):
     retrato = loop.estado()
 
     assert retrato["censo_de_ciclos"] == {FASE_DE_SILENCIO: 1}
+
+
+# --- La espontaneidad tiene que ser alcanzable ---
+
+def test_la_espontaneidad_es_alcanzable_con_la_configuracion_real():
+    """
+    El fallo más caro del proyecto, y no daba ni un error.
+
+    `boredom_cap` valía 0.35 y `spontaneous_threshold` 0.55, así que la tensión
+    no podía llegar nunca al listón: `spawn_spontaneous_impulse()` no se ejecutó
+    jamás. Yuki sólo podía querer algo si se lo sembraba el eco de las 06:30 o un
+    sueño. Toda la espontaneidad estaba escrita, probada y aritméticamente
+    muerta.
+    """
+    import yaml
+
+    with open(os.path.join(os.path.dirname(__file__), "..", "config.yaml"),
+              encoding="utf-8") as fichero:
+        politica = AgencyPolicy.from_config(yaml.safe_load(fichero))
+
+    assert politica.incoherencias() == []
+    assert politica.boredom_cap >= politica.spontaneous_threshold
+
+
+def test_los_valores_por_defecto_tampoco_pueden_ser_contradictorios():
+    """Estuvieron rotos por defecto, no sólo en `config.yaml`."""
+    assert AgencyPolicy().incoherencias() == []
+
+
+def test_el_aburrimiento_llega_al_umbral_en_un_numero_finito_de_ciclos():
+    """
+    La comprobación aritmética, no la de valores concretos.
+
+    Cualquiera puede volver a bajar el tope algún día; lo que no puede es dejar
+    la facultad inalcanzable sin que esto falle.
+    """
+    politica = AgencyPolicy()
+    tension, ciclos = 0.0, 0
+    while tension < politica.spontaneous_threshold and ciclos < 500:
+        tension = min(politica.boredom_cap, tension + politica.boredom_gain)
+        ciclos += 1
+
+    assert ciclos < 500, "la tensión nunca alcanza el umbral de espontaneidad"
+    # Y que no sea instantáneo: inventar un deseo cada ciclo no es espontaneidad,
+    # es ruido.
+    assert ciclos >= 3
+
+
+def test_el_aburrimiento_alto_no_la_vuelve_indiscriminada():
+    """
+    Las dos mitades del aburrimiento son independientes a propósito.
+
+    Que la tensión pueda subir hasta arriba —para que la espontaneidad llegue—
+    no puede significar que el umbral se desplome: una iniciativa que se dispara
+    con cualquier cosa no se distingue del ruido.
+    """
+    politica = AgencyPolicy()
+
+    umbral = politica.umbral_efectivo(politica.boredom_cap)
+
+    assert umbral > 0.05, "el umbral se desplomó hasta el suelo con la tensión al máximo"
+    assert umbral < politica.min_intensity, "el aburrimiento tiene que rebajar algo"
+
+
+def test_una_configuracion_contradictoria_se_denuncia_y_no_se_corrige_a_escondidas(caplog):
+    """
+    Se avisa a gritos y se sigue.
+
+    Corregir los números por detrás sería decidir por quien configura sin
+    decírselo; callarse deja una instancia viva con una facultad apagada.
+    """
+    politica = AgencyPolicy.from_config(
+        {"agency": {"boredom_cap": 0.2, "spontaneous_threshold": 0.9}})
+
+    assert politica.boredom_cap == pytest.approx(0.2), "no se toca lo que puso quien configura"
+    assert politica.spontaneous_threshold == pytest.approx(0.9)
+    assert len(politica.incoherencias()) == 1
+
+
+def test_otras_contradicciones_que_apagan_la_iniciativa_entera():
+    assert AgencyPolicy(max_actions_per_day=0).incoherencias()
+    assert AgencyPolicy(allowed_actions=[]).incoherencias()
+    assert AgencyPolicy(boredom_gain=0.0).incoherencias()
+    # Y si la espontaneidad está apagada a propósito, el tope bajo no es un fallo.
+    assert AgencyPolicy(spontaneous_impulses=False, boredom_cap=0.1,
+                        spontaneous_threshold=0.9).incoherencias() == []
+
+
+def test_sola_y_aburrida_acaba_queriendo_algo(bucle):
+    """
+    La prueba de que la facultad existe de verdad, no sólo en el código.
+
+    Nadie le habla, no hay nada en la cola, y la tensión sube. Al noveno ciclo
+    ocioso —unas tres horas— inventa un deseo y actúa. Antes esto no ocurría
+    nunca, y ninguna prueba lo notaba porque todas sembraban el impulso a mano.
+    """
+    loop, diario = bucle(AgencyPolicy())
+
+    actuados = [loop.decidir(phase="atelier") for _ in range(15)]
+
+    assert any(d.actua for d in actuados), "nunca llegó a querer nada por su cuenta"
+    primero = next(i for i, d in enumerate(actuados, 1) if d.actua)
+    assert 3 < primero <= 12, f"actuó en el ciclo {primero}: ni instantáneo ni inalcanzable"
+    assert diario.censo()["actua"] >= 1

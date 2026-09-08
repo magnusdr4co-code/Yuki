@@ -15,6 +15,7 @@ Comprueba lo que puede romperse en silencio y costar caro:
   · No queda ningún limitador **bloqueante** en el gemelo virtual.
   · El presupuesto del día no está ya agotado al arrancar.
   · Los signos vitales: que el proceso corra **y además** ella haga cosas.
+  · Que el carácter no se contradiga y apague una facultad en silencio.
   · Si se le da una URL, `/health` responde y el Salón está vivo.
 
 No genera medios, no llama a ningún modelo y no gasta un céntimo: una prueba de
@@ -25,6 +26,7 @@ import argparse
 import json
 import sqlite3
 import sys
+from contextlib import closing
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -55,7 +57,7 @@ def comprobar_memoria(config: Dict[str, Any]) -> Tuple[bool, str]:
         # No es un fallo en una instancia recién creada: se dice y se sigue.
         return True, f"sin base todavía en {ruta} (instancia nueva)"
     try:
-        with sqlite3.connect(f"file:{ruta}?mode=ro", uri=True) as conexion:
+        with closing(sqlite3.connect(f"file:{ruta}?mode=ro", uri=True)) as conexion:
             estado = conexion.execute("PRAGMA integrity_check").fetchone()[0]
             recuerdos = conexion.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
     except sqlite3.Error as exc:
@@ -107,6 +109,23 @@ def comprobar_presupuesto(config: Dict[str, Any]) -> Tuple[bool, str]:
     if not decision.allowed:
         return False, f"sin margen para un solo clip: {decision.reason}"
     return True, f"margen disponible · hoy {libro.describe()}"
+
+
+def comprobar_caracter(config: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    Que el carácter no se contradiga a sí mismo.
+
+    Una contradicción entre dos números apaga una facultad entera sin dar un
+    solo error —el tope de aburrimiento por debajo del umbral de espontaneidad
+    dejó a Yuki incapaz de querer nada por su cuenta durante meses— y desde
+    fuera se ve igual que una instancia tranquila.
+    """
+    from src.core.agency import AgencyPolicy
+
+    problemas = AgencyPolicy.from_config(config).incoherencias()
+    if problemas:
+        return False, "; ".join(problemas)
+    return True, "sin contradicciones en el carácter"
 
 
 def comprobar_pulso(config: Dict[str, Any]) -> Tuple[bool, str]:
@@ -174,6 +193,7 @@ def main() -> int:
         ("presupuesto", lambda: comprobar_presupuesto(config)),
         ("freno", lambda: comprobar_freno(config)),
         ("pulso", lambda: comprobar_pulso(config)),
+        ("caracter", lambda: comprobar_caracter(config)),
     ]
     if argumentos.url:
         pruebas.append(("salon", lambda: comprobar_salon(argumentos.url)))

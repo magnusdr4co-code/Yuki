@@ -142,7 +142,47 @@ Los contadores son por día y se podan como el resto: setenta y dos ciclos
 diarios durante meses no caben en un fichero de estado, y lo que hace falta es
 la proporción, no el diario.
 
-## 7. Verlo y tocarlo
+## 7. La espontaneidad estuvo muerta, y no daba ningún error
+
+El censo de ciclos sirvió inmediatamente para lo que se hizo: al mirar los
+números del carácter apareció esto.
+
+| | |
+|---|---|
+| `boredom_cap` | 0.35 — hasta dónde podía subir la tensión |
+| `spontaneous_threshold` | 0.55 — cuánta tensión hace falta para inventar un deseo |
+
+El tope estaba **por debajo** del listón. `spawn_spontaneous_impulse()` —el
+mecanismo entero del §3, escrito, documentado y con pruebas— no podía ejecutarse
+nunca. Yuki sólo era capaz de querer algo si alguien se lo sembraba: el eco de
+las 06:30 o un sueño REM. Y no fallaba nada: una facultad apagada se queda
+quieta, que se parece demasiado a una decisión.
+
+Estaba así **en los valores por defecto**, no sólo en `config.yaml`, así que
+ninguna instancia lo tuvo nunca. Las pruebas no lo veían porque todas sembraban
+el impulso a mano antes de evaluar.
+
+La causa de fondo era que `boredom_cap` hacía dos trabajos incompatibles: acotar
+cuánto rebaja el umbral —«sin techo, un fin de semana tranquilo la volvería
+incontinente el lunes»— y limitar cuánto puede acumularse la tensión. Puesto lo
+bastante bajo para lo primero, hacía lo segundo inalcanzable. Ahora son dos
+números: `boredom_cap` (1.0, hasta dónde sube) y `boredom_relief_cap` (0.35,
+cuánto de eso rebaja el umbral).
+
+Con eso, sola y sin nada en la cola, inventa un deseo al noveno ciclo ocioso
+—unas dos horas y media— y actúa. Con el umbral rebajado hasta 0.073 en lo más
+alto de la tensión, no hasta el suelo: una iniciativa que se dispara con
+cualquier cosa no se distingue del ruido.
+
+Y para que no vuelva a colarse, `AgencyPolicy.incoherencias()` denuncia las
+contradicciones que apagan una facultad entera. No corrige los números por
+detrás —eso sería decidir por quien configura sin decírselo—: los grita en el
+registro al arrancar, en `cli.py albedrio`, y en la comprobación de humo, que
+falla. Hay pruebas de que la espontaneidad es alcanzable con la configuración
+real, con los valores por defecto, y de que sigue siéndolo en aritmética pura
+por si alguien vuelve a bajar el tope algún día.
+
+## 8. Verlo y tocarlo
 
 ```bash
 python3 cli.py albedrio          # carácter, lo que le funciona y sus ritmos
@@ -162,7 +202,7 @@ Por DM del Productor emparejado:
 !ritmo retirar <id>             apagar un ritmo propio ya activo
 ```
 
-## 8. Lo que sigue sin poder hacer
+## 9. Lo que sigue sin poder hacer
 
 Por diseño, y conviene que quede escrito: no puede publicar en un canal por
 iniciativa propia sin pasar por el controlador de presencia, no puede darse más

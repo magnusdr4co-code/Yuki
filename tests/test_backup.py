@@ -208,3 +208,47 @@ def test_una_base_que_existe_con_otro_nombre_para_la_copia(tmp_path, instancia):
     assert resultado.status == "error"
     assert "otra_memoria.db" in resultado.error
     assert "sin memoria dentro" in resultado.error
+
+
+def test_la_copia_no_arrastra_los_ficheros_wal_de_sqlite(tmp_path, instancia):
+    """
+    Un `-wal` junto a la base no es un acompañante inofensivo: es un peligro.
+
+    Al restaurar, SQLite reproduce el diario sobre una base que ya lo incluye.
+    Y además esos ficheros son transitorios: existían al listar el directorio y
+    ya no al empaquetarlo, lo que mataba la copia nocturna con un
+    FileNotFoundError una vez de cada treinta y tantas. La causa era
+    `with sqlite3.connect(...)`, que confirma la transacción pero **no cierra la
+    conexión**.
+    """
+    data, _ = instancia
+    conexion = sqlite3.connect(data / "yuki_memory.db")
+    conexion.execute("PRAGMA journal_mode=WAL")
+    conexion.execute("INSERT INTO recuerdos (texto) VALUES ('algo en el diario')")
+    conexion.commit()
+    conexion.close()
+
+    resultado = _gestor(tmp_path, instancia).create()
+
+    assert resultado.status == "success"
+    with tarfile.open(resultado.path, "r:gz") as archivo:
+        nombres = archivo.getnames()
+    assert "yuki_memory.db" in nombres
+    assert not [n for n in nombres if n.endswith(("-wal", "-shm"))], nombres
+
+
+def test_copias_repetidas_sobre_una_base_en_wal_no_fallan(tmp_path, instancia):
+    """
+    La prueba de la intermitencia.
+
+    El fallo dependía de cuándo el recolector finalizaba una conexión que nadie
+    cerró, así que una sola pasada no lo veía. Diez seguidas sí lo habrían visto.
+    """
+    data, _ = instancia
+    conexion = sqlite3.connect(data / "yuki_memory.db")
+    conexion.execute("PRAGMA journal_mode=WAL")
+    conexion.commit()
+    conexion.close()
+
+    for _ in range(10):
+        assert _gestor(tmp_path, instancia).create().status == "success"

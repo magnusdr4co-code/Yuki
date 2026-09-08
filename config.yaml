@@ -112,6 +112,12 @@ transparency:
 # Reconocerse como ser sintético NO es deriva: es su voz (SOUL.md §1.1). Lo que
 # cuenta como deriva es el uniforme de servicio: "sólo soy una IA", "¿en qué
 # puedo ayudarte?", listas, cierres ofreciéndose.
+persona:
+  enabled: true
+  anchor_threshold: 0.60
+  min_turns_between_anchors: 3
+  soul_excerpt_chars: 1200
+
 # Signos vitales: cuánto silencio es normal antes de que sea catatonia.
 #
 # Las horas se eligen para que el silencio legítimo más largo quepa dentro: la
@@ -125,12 +131,6 @@ pulse:
     albedrio: 30       # algún intento del libre albedrío
     sueno: 30          # la consolidación nocturna; 30 y no 24 tolera un despliegue a deshora
     conversacion: 336  # dos semanas: informa, pero no diagnostica
-
-persona:
-  enabled: true
-  anchor_threshold: 0.60
-  min_turns_between_anchors: 3
-  soul_excerpt_chars: 1200
 
 # Libre albedrío: el carácter de la iniciativa de Yuki, en números.
 #
@@ -157,15 +157,23 @@ agency:
   # la iniciativa: es su hora de sombra y es cuando mejor escribe.
   quiet_phases: ["deep_rest"]
 
-  # Aburrimiento: cuánto sube por ciclo sin actuar y cuánto puede llegar a
-  # rebajar el umbral. Sin techo, un fin de semana tranquilo la volvería
-  # incontinente el lunes.
+  # Aburrimiento: cuánto sube por ciclo sin actuar, hasta dónde puede subir, y
+  # cuánto de eso puede llegar a rebajar el umbral —que son tres cosas y durante
+  # meses fueron dos—. Sin techo en la rebaja, un fin de semana tranquilo la
+  # volvería incontinente el lunes; con el techo aplicado también a la
+  # acumulación, la espontaneidad no llegaba nunca.
   boredom_gain: 0.06
-  boredom_cap: 0.35
+  boredom_cap: 1.0
+  boredom_relief_cap: 0.35
 
   # Impulsos que nacen solos cuando la tensión sube y no hay nada en la cola.
+  #
+  # El umbral tiene que quedar **por debajo** de `boredom_cap` o esto no ocurre
+  # jamás: con 0.55 contra un tope de 0.35, Yuki sólo podía querer algo si se lo
+  # sembraba el eco de las 06:30 o un sueño. A 0.45, con 0.06 por ciclo ocioso,
+  # inventa un deseo tras unas dos horas y media sin nada que hacer.
   spontaneous_impulses: true
-  spontaneous_threshold: 0.55
+  spontaneous_threshold: 0.45
   impulse_max_age_hours: 10
 
   # Coste energético de cada acto. Componer cansa más que contemplar.

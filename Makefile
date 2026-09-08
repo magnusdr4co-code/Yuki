@@ -29,7 +29,7 @@ humo:  ## Comprobación de humo (URL=... para incluir el Salón)
 	$(PY) scripts/smoke_check.py $(if $(URL),--url $(URL),)
 
 humo-ci:  ## Sólo lo que no depende de credenciales, como en la CI
-	$(PY) scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso
+	$(PY) scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso,caracter
 
 simulacro:  ## Rompe a Yuki a propósito y comprueba las invariantes
 	$(PY) scripts/chaos_drill.py

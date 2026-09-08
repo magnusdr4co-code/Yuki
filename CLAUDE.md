@@ -65,6 +65,11 @@ docs/           una guía por subsistema; empieza por OPERACION.md
   pública de clases en inglés cuando ya lo estaba.
 - Los módulos nuevos empiezan con un docstring que explica **qué problema real
   resuelve**, no qué hace.
+- **`with sqlite3.connect(...)` no cierra la conexión**: sólo confirma o deshace
+  la transacción. Usa `contextlib.closing`. Costó una copia nocturna que moría
+  con `FileNotFoundError` una vez de cada treinta y tantas —los `-wal`/`-shm`
+  seguían vivos al listar el directorio y ya no al empaquetarlo— y una fuga de
+  descriptores en la sonda de métricas, que se lee cada minuto.
 - Cada estado durable nuevo: (1) se declara en `state_registry.build_registry`,
   (2) tiene variable de entorno para reubicarlo, (3) entra en `.gitignore` y
   `.dockerignore`, (4) se aísla en `tests/conftest.py`, (5) se añade a la copia
@@ -98,7 +103,10 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
 5. Si añadiste una métrica o una alerta: comprueba que la alerta nombra una
    métrica que existe. Una alerta rota no falla, **calla**, y eso tranquiliza.
    `tests/test_alertas.py` lo vigila.
-6. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
+6. Una prueba nueva sobre algo que importa: **rómpelo a propósito y comprueba
+   que la prueba falla**. Dos de las de esta semana pasaban con el fallo dentro
+   —y una lo hacía porque el parche de mutación ni siquiera encajaba—.
+7. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
    nadie escribe es peor que no tenerlo: `last_sleep_cycle` estuvo declarado y
    serializado durante meses sin un solo escritor.
 

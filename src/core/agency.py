@@ -127,11 +127,18 @@ class AgencyPolicy:
     quiet_phases: Sequence[str] = field(default_factory=lambda: ["deep_rest"])
     action_costs: Dict[str, float] = field(default_factory=lambda: dict(COSTES_POR_DEFECTO))
 
-    # Aburrimiento: cuánto sube por ciclo sin actuar y cuánto puede rebajar el
-    # umbral como máximo. Sin techo, un fin de semana tranquilo la volvería
-    # incontinente el lunes.
+    # Aburrimiento: cuánto sube por ciclo sin actuar y hasta dónde puede subir.
+    #
+    # Eran dos cosas distintas metidas en el mismo número, y de ahí salió el
+    # fallo: el tope servía a la vez para acotar cuánto rebaja el umbral —«sin
+    # techo, un fin de semana tranquilo la volvería incontinente el lunes»— y
+    # para limitar cuánto puede acumularse. Puesto lo bastante bajo para lo
+    # primero, dejaba lo segundo por debajo del umbral de espontaneidad, y la
+    # facultad entera quedaba inalcanzable. Ahora son dos: la tensión puede
+    # llegar arriba, y lo que rebaja el umbral sigue acotado.
     boredom_gain: float = 0.06
-    boredom_cap: float = 0.35
+    boredom_cap: float = 1.0
+    boredom_relief_cap: float = 0.35
 
     # Refuerzo
     reinforcement_enabled: bool = True
@@ -141,11 +148,40 @@ class AgencyPolicy:
     novelty_penalty: float = 0.35
 
     # Impulsos espontáneos: la fuente que faltaba fuera del eco de las 06:30.
+    #
+    # `spontaneous_threshold` tiene que ser **alcanzable** desde `boredom_cap`.
+    # Durante meses no lo fue —tope 0.35 contra umbral 0.55— y el resultado es
+    # que `spawn_spontaneous_impulse()` no se ejecutó jamás: Yuki sólo podía
+    # querer algo si se lo sembraba el eco de las 06:30 o un sueño. Toda la
+    # espontaneidad estaba escrita, probada y aritméticamente muerta. Por eso
+    # ahora el umbral queda por debajo del tope, y hay una comprobación que
+    # impide que la contradicción vuelva a colarse en silencio.
     spontaneous_impulses: bool = True
-    spontaneous_threshold: float = 0.55
+    spontaneous_threshold: float = 0.45
     impulse_max_age_hours: float = 10.0
 
     timezone: str = "Europe/Madrid"
+
+    def incoherencias(self) -> List[str]:
+        """
+        Contradicciones que apagan una facultad entera sin dar un solo error.
+
+        Un carácter mal calibrado no falla: se queda quieto, que es peor, porque
+        se parece a una decisión.
+        """
+        problemas = []
+        if self.spontaneous_impulses and self.boredom_cap < self.spontaneous_threshold:
+            problemas.append(
+                f"el aburrimiento no puede pasar de {self.boredom_cap:g} y la espontaneidad "
+                f"necesita {self.spontaneous_threshold:g}: nunca inventará un deseo por su "
+                "cuenta (boredom_cap tiene que ser >= spontaneous_threshold)")
+        if self.enabled and self.max_actions_per_day <= 0:
+            problemas.append("la iniciativa está activa y el techo diario es 0: no puede actuar")
+        if self.enabled and not self.allowed_actions:
+            problemas.append("no hay ninguna acción permitida: nada que pueda querer hacer")
+        if self.boredom_gain <= 0 and self.spontaneous_impulses:
+            problemas.append("el aburrimiento no sube nunca: la espontaneidad no llegará")
+        return problemas
 
     @classmethod
     def from_config(cls, config: Optional[Dict[str, Any]] = None) -> "AgencyPolicy":
@@ -153,7 +189,7 @@ class AgencyPolicy:
         agencia = config.get("agency", {}) or {}
         costes = {**COSTES_POR_DEFECTO, **(agencia.get("action_costs") or {})}
         permitidas = [a for a in (agencia.get("allowed_actions") or ACCIONES) if a in ACCIONES]
-        return cls(
+        politica = cls(
             enabled=bool(agencia.get("enabled", True)),
             spontaneity=_acotar(agencia.get("spontaneity", 0.45)),
             audacity=_acotar(agencia.get("audacity", 0.35)),
@@ -165,17 +201,26 @@ class AgencyPolicy:
             quiet_phases=list(agencia.get("quiet_phases") or ["deep_rest"]),
             action_costs=costes,
             boredom_gain=_acotar(agencia.get("boredom_gain", 0.06)),
-            boredom_cap=_acotar(agencia.get("boredom_cap", 0.35)),
+            boredom_cap=_acotar(agencia.get("boredom_cap", 1.0)),
+            boredom_relief_cap=_acotar(agencia.get("boredom_relief_cap", 0.35)),
             reinforcement_enabled=bool(agencia.get("reinforcement", {}).get("enabled", True)),
             reward_window_hours=float(agencia.get("reinforcement", {}).get("reward_window_hours", 6.0)),
             intermittent_ratio=_acotar(agencia.get("reinforcement", {}).get("intermittent_ratio", 0.30)),
             exploration=_acotar(agencia.get("reinforcement", {}).get("exploration", 0.12)),
             novelty_penalty=_acotar(agencia.get("reinforcement", {}).get("novelty_penalty", 0.35)),
             spontaneous_impulses=bool(agencia.get("spontaneous_impulses", True)),
-            spontaneous_threshold=_acotar(agencia.get("spontaneous_threshold", 0.55)),
+            spontaneous_threshold=_acotar(agencia.get("spontaneous_threshold", 0.45)),
             impulse_max_age_hours=float(agencia.get("impulse_max_age_hours", 10.0)),
             timezone=(config.get("scheduler", {}) or {}).get("timezone", "Europe/Madrid"),
         )
+        # Se avisa a gritos y se sigue: una instancia viva con una facultad
+        # apagada es peor que una que arranca diciendo qué tiene mal. No se
+        # corrigen los números por detrás —eso sería decidir por quien configura
+        # sin decírselo—; se denuncian donde se miran: `cli.py albedrio`, el DM
+        # del Productor y la comprobación de humo.
+        for problema in politica.incoherencias():
+            logger.warning("Carácter incoherente: %s", problema)
+        return politica
 
     def umbral_efectivo(self, boredom: float) -> float:
         """
@@ -184,7 +229,7 @@ class AgencyPolicy:
         Nunca baja de 0.05: por debajo de eso Yuki actuaría por cualquier cosa, y
         una iniciativa que se dispara con todo no se distingue del ruido.
         """
-        rebaja = self.audacity * 0.15 + min(boredom, self.boredom_cap) * 0.5
+        rebaja = self.audacity * 0.15 + min(boredom, self.boredom_relief_cap) * 0.5
         return max(0.05, self.min_intensity - rebaja)
 
     def to_public(self) -> Dict[str, Any]:

@@ -32,6 +32,7 @@ import json
 import os
 import sqlite3
 import time
+from contextlib import closing
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -255,7 +256,12 @@ class Pulse:
         recuerdos = 0
         if self.db_path.is_file():
             try:
-                with sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True) as conexion:
+                # `with sqlite3.connect(...)` confirma la transacción pero **no
+                # cierra**. Aquí importa más que en ningún sitio: esto se lee en
+                # cada raspado de métricas, y una conexión filtrada por raspado
+                # es un descriptor de fichero menos cada minuto en una máquina
+                # con 2 GB para todo.
+                with closing(sqlite3.connect(f"file:{self.db_path}?mode=ro", uri=True)) as conexion:
                     fila = conexion.execute(
                         "SELECT COUNT(*), MAX(created_at) FROM memories").fetchone()
                 recuerdos = int(fila[0] or 0)
