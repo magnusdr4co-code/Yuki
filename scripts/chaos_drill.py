@@ -330,7 +330,7 @@ def freno_en_incidente(raiz: Path) -> Tuple[bool, str]:
     """
     import os as _os
 
-    from src.core.brake import MEDIOS, PUBLICACION, TODO, Brake
+    from src.core.brake import PUBLICACION, TODO, Brake
 
     freno = Brake(path=str(raiz / "freno.json"))
     freno.engage(TODO, motivo="incidente nocturno", actor="operador")
