@@ -117,6 +117,9 @@ python3 cli.py transparency
 # Ver si su voz se está yendo hacia el registro de asistente
 python3 cli.py persona
 
+# Inventario del estado durable; --exportar / --olvidar para los derechos de una persona
+python3 cli.py estado
+
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
 python3 cli.py backup
 ```
@@ -185,6 +188,7 @@ contratar servicios de pago o de prometer una demo.
 |---|---|---|
 | Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco |
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
+| Gobierno del estado durable | ✅ Real | `src/core/state_registry.py`: inventario de las 12 piezas de estado por los seis ejes de la revisión *always-on*, más exportación y borrado real por persona con recibo |
 | Identidad sintética declarada | ✅ Real | `SOUL.md` §1.1: Yuki es un ser sintético y su biografía es el primer vestido que encontró. Lo dice con naturalidad, sin fingir ni disculparse. Ver [`docs/IDENTIDAD_SINTETICA.md`](docs/IDENTIDAD_SINTETICA.md) |
 | Anti-deriva de persona | ✅ Real | `src/core/persona_anchor.py`: mide el deslizamiento hacia el registro de asistente y reancla con un fragmento de su alma. Reconocerse sintética suma; disculparse por serlo resta |
 | Transparencia (Art. 50 del Reglamento europeo de IA) | ✅ Real | `src/core/transparency.py`: declara su naturaleza ante cada persona y marca todo lo que genera (chunk PNG, metadatos ffmpeg y manifiesto C2PA sin firmar). Ver [`docs/TRANSPARENCIA_AI_ACT.md`](docs/TRANSPARENCIA_AI_ACT.md) |
@@ -274,3 +278,4 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - 🌱 [El libre albedrío de Yuki (`docs/LIBRE_ALBEDRIO.md`)](docs/LIBRE_ALBEDRIO.md) — carácter configurable, refuerzo de la iniciativa y ritmos propios
 - ⚖️ [Transparencia y Artículo 50 (`docs/TRANSPARENCIA_AI_ACT.md`)](docs/TRANSPARENCIA_AI_ACT.md) — declaración de naturaleza y marcado de origen sintético
 - 🪞 [Identidad sintética y deriva de persona (`docs/IDENTIDAD_SINTETICA.md`)](docs/IDENTIDAD_SINTETICA.md) — el vestido y lo que hay debajo, y cómo se sostiene el registro
+- 🔬 [Estado del arte 2026 y qué se adoptó (`docs/ESTADO_DEL_ARTE_2026.md`)](docs/ESTADO_DEL_ARTE_2026.md) — investigación sobre simulación de seres sintéticos, con fuentes

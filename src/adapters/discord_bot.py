@@ -369,6 +369,12 @@ class DiscordAdapter:
         if content.startswith("!ritmos") or content.startswith("!ritmo "):
             return self._handle_rituals_command(content, author_id, author_name)
 
+        if content.startswith("!estado ") or content.strip() == "!estado":
+            return self._handle_state_command(content, author_name)
+
+        if content.startswith("!olvidar"):
+            return self._handle_forget_command(content, author_name)
+
         if content.startswith("!deriva") or content.startswith("!persona"):
             informe = self.agent.persona.report()
             if not informe["muestras"]:
@@ -404,6 +410,71 @@ class DiscordAdapter:
             active_role="producer",
             producer_tools=True,
         )
+
+    def _handle_state_command(self, content: str, author_name: str) -> str:
+        """Inventario del estado durable: qué guarda, quién lo escribe y qué acciona."""
+        from ..core.state_registry import StateRegistry
+
+        auditoria = StateRegistry().audit()
+        lineas = [
+            "🗄️ **Estado durable de Yuki**",
+            f"{auditoria['presentes']}/{len(auditoria['piezas'])} piezas presentes · "
+            f"{auditoria['bytes_totales'] / 1024:.1f} KiB",
+            "",
+        ]
+        for pieza in auditoria["piezas"]:
+            if not pieza["exists"]:
+                continue
+            etiquetas = []
+            if pieza["holds_personal_data"]:
+                etiquetas.append("datos personales")
+            if pieza["actionability"].startswith("ALTA"):
+                etiquetas.append("acciona sola")
+            sufijo = f" _({', '.join(etiquetas)})_" if etiquetas else ""
+            lineas.append(f"• `{pieza['id']}` — {pieza['bytes'] / 1024:.1f} KiB{sufijo}")
+        lineas += ["", "Derechos de una persona: `!olvidar <user_id> confirmar [motivo]`. "
+                       "Exportación completa desde la terminal: `python3 cli.py estado --exportar <id>`."]
+        return "\n".join(lineas)
+
+    def _handle_forget_command(self, content: str, author_name: str) -> str:
+        """
+        Ejercita el derecho de supresión sobre una persona concreta.
+
+        Pide confirmación explícita en el propio comando: es irreversible por
+        definición —un olvido que se pueda deshacer no es un olvido— y la
+        autenticación del DM no basta para un dedo que resbala.
+        """
+        from ..core.state_registry import StateRegistry
+
+        partes = content.split()
+        if len(partes) < 2:
+            return ("Uso: `!olvidar <user_id> confirmar [motivo]`. Sin `confirmar` sólo te "
+                    "digo qué se borraría.")
+
+        sujeto = partes[1]
+        registro = StateRegistry()
+
+        if "confirmar" not in [p.lower() for p in partes[2:]]:
+            try:
+                previo = registro.subject_export(sujeto)
+            except Exception as exc:
+                return f"❌ No pude consultar el estado de `{sujeto}`: {type(exc).__name__}"
+            return (f"🗑️ De `{sujeto}` guardo **{previo['recuerdos_total']} recuerdo(s)**"
+                    + (" y el registro de haberle declarado mi naturaleza"
+                       if previo["declaraciones_de_naturaleza"] else "")
+                    + ".\nEsto es irreversible. Para ejecutarlo: "
+                    f"`!olvidar {sujeto} confirmar [motivo]`.")
+
+        motivo = " ".join(p for p in partes[2:] if p.lower() != "confirmar")
+        try:
+            recibo = registro.subject_forget(sujeto, actor=author_name, reason=motivo)
+        except ValueError as exc:
+            return f"❌ {exc}"
+        except Exception as exc:
+            return f"❌ El olvido falló: {type(exc).__name__}. No doy por borrado lo que no consta."
+        return (f"🗑️ Olvidado `{sujeto}`: {recibo['recuerdos_borrados']} recuerdo(s) y "
+                f"{recibo['declaraciones_borradas']} declaración(es). "
+                "Queda constancia de la operación, no de lo borrado.")
 
     def _handle_rituals_command(self, content: str, author_id: str, author_name: str) -> str:
         """

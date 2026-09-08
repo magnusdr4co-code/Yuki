@@ -474,6 +474,54 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_state(exportar=None, olvidar=None, motivo="", as_json=False):
+    """Inventario del estado durable, y los derechos de acceso y supresión."""
+    from src.core.state_registry import StateRegistry
+
+    registro = StateRegistry()
+
+    if exportar:
+        datos = registro.subject_export(exportar)
+        print(json.dumps(datos, ensure_ascii=False, indent=2))
+        return datos
+
+    if olvidar:
+        try:
+            recibo = registro.subject_forget(olvidar, actor="cli", reason=motivo)
+        except ValueError as exc:
+            print(f"{RED}✗ {exc}{RESET}")
+            return None
+        print(f"{GREEN}✓ Olvido ejecutado{RESET}")
+        print(json.dumps(recibo, ensure_ascii=False, indent=2))
+        return recibo
+
+    auditoria = registro.audit()
+    if as_json:
+        print(json.dumps(auditoria, ensure_ascii=False, indent=2))
+        return auditoria
+
+    print_banner()
+    print(f"{CYAN}{BOLD}🗄️  Estado durable de Yuki{RESET}\n")
+    print(f"  {auditoria['presentes']}/{len(auditoria['piezas'])} piezas presentes · "
+          f"{auditoria['bytes_totales'] / 1024:.1f} KiB en total\n")
+    for pieza in auditoria["piezas"]:
+        marca = f"{GREEN}●{RESET}" if pieza["exists"] else f"{DIM}○{RESET}"
+        personal = f" {YELLOW}[datos personales]{RESET}" if pieza["holds_personal_data"] else ""
+        accionable = f" {RED}[acciona]{RESET}" if pieza["actionability"].startswith("ALTA") else ""
+        print(f"  {marca} {BOLD}{pieza['id']}{RESET}{personal}{accionable}")
+        print(f"     {DIM}{pieza['description']}{RESET}")
+        print(f"     {DIM}{pieza['path']} · {pieza['bytes'] / 1024:.1f} KiB · "
+              f"autoridad: {pieza['authority']} · recuperación: {pieza['recoverability']}{RESET}")
+    registros = registro.audit_log(5)
+    if registros:
+        print(f"\n{BOLD}Últimas operaciones destructivas{RESET}")
+        for entrada in registros:
+            print(f"  {DIM}{entrada.get('cuando', '')} · {entrada['op']} · "
+                  f"sujeto {entrada.get('sujeto', '?')} · "
+                  f"{entrada.get('recuerdos_borrados', 0)} recuerdo(s){RESET}")
+    return auditoria
+
+
 def cmd_persona(as_json=False):
     """Deriva de persona: cuánto se ha ido de su registro y cuántas veces se reancló."""
     import yaml
@@ -792,6 +840,17 @@ def main():
     )
     persona.add_argument("--json", action="store_true", help="Emite JSON")
 
+    estado = subparsers.add_parser(
+        "estado",
+        help="Inventario del estado durable, y derechos de acceso y supresión de una persona",
+    )
+    estado.add_argument("--exportar", metavar="USER_ID",
+                        help="Todo lo que Yuki guarda sobre esa persona, en JSON")
+    estado.add_argument("--olvidar", metavar="USER_ID",
+                        help="Borra de verdad lo que guarda sobre esa persona y emite recibo")
+    estado.add_argument("--motivo", default="", help="Motivo del olvido, para la auditoría")
+    estado.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -834,6 +893,9 @@ def main():
         cmd_transparency(marcar=args.marcar, as_json=args.json)
     elif args.command == "persona":
         cmd_persona(as_json=args.json)
+    elif args.command == "estado":
+        cmd_state(exportar=args.exportar, olvidar=args.olvidar,
+                  motivo=args.motivo, as_json=args.json)
     else:
         parser.print_help()
 
