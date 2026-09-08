@@ -314,3 +314,52 @@ def test_el_diario_corrupto_no_impide_actuar(tmp_path):
     bucle.will_queue.add(Impulse("s", "d", "write", 0.9, time.time(), 5.0))
 
     assert bucle.evaluate() is not None
+
+
+# --- Ritmos propios en el planificador ---
+
+def test_un_ritmo_aprobado_llega_al_planificador_y_se_cumple_como_impulso(tmp_path, monkeypatch):
+    """
+    El ciclo completo: Yuki propone, el Productor aprueba, el cron lo ejecuta.
+
+    Un ritmo aprobado que sólo existiera en memoria se perdería en el siguiente
+    despliegue, y Yuki habría ganado un permiso que nadie cumple.
+    """
+    import asyncio
+    import types
+
+    from src.core.rituals import RitualStore
+    from src.scheduler.cron_engine import CronEngine
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    propuesta = store.propose("versos_de_las_20", "0 20 * * *", "escribir",
+                              "a esa hora me responden")
+    store.approve(propuesta.id, actor="Productor")
+
+    ejecutados = []
+    agente = types.SimpleNamespace(
+        rituals=store,
+        cron=CronEngine(),
+        execute_autonomous_will=lambda impulso: _completar(ejecutados, impulso),
+        tasks=types.SimpleNamespace(spontaneous_monologue=None),
+    )
+    from src.core.agent import YukiAgent
+
+    agente.register_own_rituals = types.MethodType(YukiAgent.register_own_rituals, agente)
+    agente._make_ritual_runner = types.MethodType(YukiAgent._make_ritual_runner, agente)
+
+    registrados = agente.register_own_rituals()
+    assert registrados == 1
+    assert "propio_versos_de_las_20" in agente.cron.jobs
+    assert agente.cron.jobs["propio_versos_de_las_20"]["cron_expr"] == "0 20 * * *"
+
+    asyncio.run(agente.cron.jobs["propio_versos_de_las_20"]["func"]())
+
+    assert ejecutados and ejecutados[0].tool_hint == "write"
+    assert ejecutados[0].source.startswith("ritmo_propio:")
+    assert store.get(propuesta.id).runs == 1
+
+
+async def _completar(destino, impulso):
+    destino.append(impulso)
+    return {"status": "completed"}

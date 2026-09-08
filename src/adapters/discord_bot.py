@@ -300,6 +300,26 @@ class DiscordAdapter:
     async def close(self):
         await self.client.close()
 
+    async def notify_producer(self, texto: str) -> bool:
+        """
+        Abre el DM del Productor para decirle algo que Yuki ha decidido sola.
+
+        Es lo que permite que una propuesta de ritmo llegue sin que él pregunte:
+        una iniciativa que sólo se ve si alguien la busca no es iniciativa.
+        """
+        for producer_id in sorted(self.paired_producer_ids):
+            if not self._is_paired(producer_id):
+                continue
+            try:
+                usuario = (self.client.get_user(int(producer_id))
+                           or await self.client.fetch_user(int(producer_id)))
+                canal = usuario.dm_channel or await usuario.create_dm()
+                await self._send_long(canal, texto)
+                return True
+            except (ValueError, AttributeError, discord.HTTPException) as exc:
+                logger.warning("No pude avisar al Productor %s: %s", producer_id, type(exc).__name__)
+        return False
+
     async def handle_producer_dm(
         self,
         author_id: str,
@@ -345,6 +365,12 @@ class DiscordAdapter:
                 "• No hay shell ni auto-configuración general habilitados."
             )
 
+        if content.startswith("!ritmos") or content.startswith("!ritmo "):
+            return self._handle_rituals_command(content, author_id, author_name)
+
+        if content.startswith("!albedrio") or content.startswith("!albedrío"):
+            return self._handle_agency_command(content, author_id)
+
         if content.startswith("!cron "):
             task_name = content[6:].strip()
             if hasattr(self.agent, "cron") and task_name in self.agent.cron.jobs:
@@ -361,6 +387,109 @@ class DiscordAdapter:
             active_role="producer",
             producer_tools=True,
         )
+
+    def _handle_rituals_command(self, content: str, author_id: str, author_name: str) -> str:
+        """
+        Ritmos: los del proyecto, los propios de Yuki y lo que espera respuesta.
+
+        `!ritmos` los lista; `!ritmo aprobar|rechazar|retirar <id>` decide. La
+        decisión es siempre del Productor: Yuki propone y aquí se le contesta.
+        """
+        from ..core.rituals import RitualError
+
+        partes = content.split()
+        if partes[0] in ("!ritmos",) and len(partes) == 1:
+            lineas = ["🎏 **Ritmos de Yuki**", "", "**Del proyecto** (config.yaml):"]
+            for nombre, job in self.agent.cron.jobs.items():
+                if nombre.startswith("propio_"):
+                    continue
+                estado = "activo" if job["enabled"] else "en pausa"
+                lineas.append(f"• `{nombre}` — `{job['cron_expr']}` ({estado})")
+
+            propios = self.agent.rituals.aprobados()
+            lineas += ["", "**Propios** (propuestos por ella, aprobados por ti):"]
+            lineas += [f"• {r.describe()}   ·  {r.runs} ejecución(es)" for r in propios] or ["• Ninguno todavía."]
+
+            pendientes = self.agent.rituals.pendientes()
+            lineas += ["", "**Esperando tu respuesta:**"]
+            lineas += [p.describe() for p in pendientes] or ["• Nada pendiente."]
+            return "\n".join(lineas)
+
+        if len(partes) >= 3 and partes[0] == "!ritmo":
+            accion, ritual_id = partes[1].lower(), partes[2]
+            nota = " ".join(partes[3:])
+            try:
+                if accion in ("aprobar", "aprueba", "si", "sí"):
+                    ritmo = self.agent.rituals.approve(ritual_id, actor=author_name, nota=nota)
+                    registrados = self.agent.register_own_rituals()
+                    return (f"✅ Ritmo **{ritmo.name}** aprobado y en el planificador "
+                            f"(`{ritmo.cron}`). Ritmos propios activos: {registrados}.")
+                if accion in ("rechazar", "rechaza", "no"):
+                    ritmo = self.agent.rituals.reject(ritual_id, actor=author_name, nota=nota)
+                    return f"🚫 Ritmo **{ritmo.name}** rechazado. Queda constancia del motivo."
+                if accion in ("retirar", "retira", "pausar"):
+                    ritmo = self.agent.rituals.retire(ritual_id, actor=author_name, nota=nota)
+                    self.agent.cron.jobs.pop(f"propio_{ritmo.name}", None)
+                    return f"📴 Ritmo **{ritmo.name}** retirado del planificador."
+            except RitualError as exc:
+                return f"❌ {exc}"
+
+        return ("Uso: `!ritmos` para verlos · "
+                "`!ritmo aprobar|rechazar|retirar <id> [motivo]` para decidir.")
+
+    def _handle_agency_command(self, content: str, author_id: str) -> str:
+        """
+        Libre albedrío: verlo y afinarlo en caliente.
+
+        `!albedrio` muestra el carácter y lo aprendido; `!albedrio <clave>
+        <valor>` ajusta espontaneidad, audacia, constancia, umbral, energía
+        mínima o acciones por día sin desplegar nada.
+        """
+        partes = content.split()
+        if len(partes) == 1:
+            estado = self.agent.agency_loop.estado()
+            politica = estado["politica"]
+            pesos = " · ".join(f"{a}:{v}" for a, v in sorted(estado["pesos_por_accion"].items()))
+            return (
+                "🌱 **Libre albedrío de Yuki**\n"
+                f"• **Iniciativa:** {'activa' if politica['enabled'] else 'apagada'}\n"
+                f"• **Espontaneidad:** {politica['espontaneidad']} · "
+                f"**audacia:** {politica['audacia']} · **constancia:** {politica['constancia']}\n"
+                f"• **Umbral ahora:** {estado['umbral_ahora']} (base {politica['umbral_base']}, "
+                f"aburrimiento {estado['aburrimiento']})\n"
+                f"• **Acciones hoy:** {estado['acciones_hoy']}/{politica['acciones_por_dia']} · "
+                f"**impulsos vivos:** {estado['impulsos_vivos']} · "
+                f"**esperando eco:** {estado['esperando_eco']}\n"
+                f"• **Lo que le funciona:** {pesos}\n"
+                f"• **Fases en silencio:** {', '.join(politica['fases_en_silencio'])}\n"
+                "Ajusta con `!albedrio espontaneidad 0.7` · claves: espontaneidad, audacia, "
+                "constancia, umbral, energia_minima, acciones_por_dia."
+            )
+
+        claves = {
+            "espontaneidad": "agency.spontaneity",
+            "audacia": "agency.audacity",
+            "constancia": "agency.constancy",
+            "umbral": "agency.min_intensity",
+            "energia_minima": "agency.min_energy",
+            "acciones_por_dia": "agency.max_actions_per_day",
+        }
+        if len(partes) >= 3 and partes[1].lower() in claves:
+            ruta = claves[partes[1].lower()]
+            crudo = partes[2].replace(",", ".")
+            try:
+                valor = int(crudo) if ruta.endswith("max_actions_per_day") else float(crudo)
+                resultado = self.agent.reconfigure_runtime(
+                    ruta, valor, actor="producer",
+                    reason=" ".join(partes[3:])[:200] or "ajuste por DM",
+                )
+            except (ValueError, TypeError) as exc:
+                return f"❌ Valor no válido: {exc}"
+            return (f"🌱 `{partes[1].lower()}` → **{resultado['value']}**. "
+                    "Tiene efecto en el próximo ciclo de agencia, sin desplegar nada.")
+
+        return ("Uso: `!albedrio` para verlo · `!albedrio <clave> <valor>` para ajustarlo. "
+                f"Claves: {', '.join(sorted(claves))}.")
 
     async def handle_public_message(self, channel_id: str, author_id: str, author_name: str, content: str) -> str:
         """Procesa menciones en canales públicos autorizados."""

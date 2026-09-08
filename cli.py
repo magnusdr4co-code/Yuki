@@ -474,6 +474,66 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_agency(as_json=False):
+    """Estado del libre albedrío: carácter, aprendizaje y ritmos propios."""
+    import yaml
+    from src.core.agency import AgencyLedger, AgencyPolicy, ReinforcementModel
+    from src.core.rituals import RitualStore
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    politica = AgencyPolicy.from_config(config)
+    diario = AgencyLedger(timezone_name=politica.timezone)
+    modelo = ReinforcementModel(diario, politica)
+    ritmos = RitualStore()
+    datos = diario.snapshot()
+    pesos = {a: round(modelo.peso(a, datos), 3) for a in politica.allowed_actions}
+
+    if as_json:
+        print(json.dumps({
+            "politica": politica.to_public(),
+            "aburrimiento": round(float(datos.get("boredom", 0.0)), 3),
+            "acciones_hoy": diario.acciones_hoy(),
+            "umbral_ahora": round(politica.umbral_efectivo(float(datos.get("boredom", 0.0))), 3),
+            "pesos_por_accion": pesos,
+            "esperando_eco": len(datos.get("pendientes", [])),
+            "ritmos_propios": [r.to_dict() for r in ritmos.aprobados()],
+            "propuestas": [r.to_dict() for r in ritmos.pendientes()],
+        }, ensure_ascii=False, indent=2))
+        return
+
+    print_banner()
+    print(f"{MAGENTA}{BOLD}🌱 Libre albedrío{RESET}\n")
+    estado = "activa" if politica.enabled else f"{RED}apagada{RESET}"
+    print(f"  Iniciativa: {estado}")
+    print(f"  Espontaneidad {politica.spontaneity:g} · audacia {politica.audacity:g} · "
+          f"constancia {politica.constancy:g}")
+    print(f"  Umbral base {politica.min_intensity:g} → ahora "
+          f"{politica.umbral_efectivo(float(datos.get('boredom', 0.0))):.3f} "
+          f"{DIM}(aburrimiento {float(datos.get('boredom', 0.0)):.2f}){RESET}")
+    print(f"  Actos hoy: {diario.acciones_hoy()}/{politica.max_actions_per_day} · "
+          f"esperando eco: {len(datos.get('pendientes', []))}")
+    print(f"\n{BOLD}Lo que le funciona{RESET} {DIM}(tasa de eco suavizada){RESET}")
+    for accion, peso in sorted(pesos.items(), key=lambda par: -par[1]):
+        intentos = datos.get("acciones", {}).get(accion, {}).get("intentos", 0)
+        barra = "█" * max(1, int(peso * 20))
+        print(f"  {accion:<12} {peso:<6} {DIM}{barra} ({intentos} intento(s)){RESET}")
+
+    propios = ritmos.aprobados()
+    print(f"\n{BOLD}Ritmos propios{RESET}")
+    for ritmo in propios:
+        print(f"  ✅ {ritmo.name} — {ritmo.cron} · {ritmo.action} ({ritmo.runs} ejecuciones)")
+    if not propios:
+        print(f"  {DIM}Ninguno todavía.{RESET}")
+    pendientes = ritmos.pendientes()
+    if pendientes:
+        print(f"\n{YELLOW}Esperando tu respuesta:{RESET}")
+        for ritmo in pendientes:
+            print(f"  🕯️  {ritmo.id} · {ritmo.name} — {ritmo.cron} · {ritmo.action}")
+            print(f"      {DIM}{ritmo.reason}{RESET}")
+
+
 def cmd_backup(as_json=False):
     """Copia verificada de memoria, canon y estado; sube a Cloud Storage si hay bucket."""
     import yaml
@@ -630,6 +690,11 @@ def main():
     )
     copia.add_argument("--json", action="store_true", help="Emite JSON")
 
+    albedrio = subparsers.add_parser(
+        "albedrio", help="Estado del libre albedrío: carácter, refuerzo y ritmos propios",
+    )
+    albedrio.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -666,6 +731,8 @@ def main():
         cmd_spend(as_json=args.json)
     elif args.command == "backup":
         cmd_backup(as_json=args.json)
+    elif args.command == "albedrio":
+        cmd_agency(as_json=args.json)
     else:
         parser.print_help()
 

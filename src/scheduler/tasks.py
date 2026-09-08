@@ -166,7 +166,37 @@ class AutonomousTasks:
         else:
             logger.error("La copia diaria falló: %s", backup.error)
 
-        return {"summary": daily_text, "evolution": evolution, "backup": backup.to_dict()}
+        # Con el día ya sintetizado, Yuki mira su propia experiencia y, si ve un
+        # patrón, propone un ritmo. Proponer es suyo; aprobarlo, del Productor.
+        propuesta = await self.agent.propose_own_ritual()
+        if propuesta:
+            await self._avisar_al_productor(
+                f"🕯️ He propuesto un ritmo propio: **{propuesta['name']}** "
+                f"(`{propuesta['cron']}` · {propuesta['action']}).\n"
+                f"_{propuesta['reason']}_\n"
+                f"Apruébalo con `!ritmo aprobar {propuesta['id']}` o dilo con "
+                f"`!ritmo rechazar {propuesta['id']}`."
+            )
+
+        return {"summary": daily_text, "evolution": evolution,
+                "backup": backup.to_dict(), "ritual_proposal": propuesta}
+
+    async def _avisar_al_productor(self, texto: str) -> bool:
+        """
+        Deja un aviso en el DM del Productor si el adaptador está vivo.
+
+        Sin adaptador —CLI, pruebas, un arranque sin Discord— no es un error: la
+        propuesta queda registrada igual y aparecerá en `!ritmos`.
+        """
+        adaptador = getattr(self.agent, "discord_adapter", None)
+        if adaptador is None:
+            logger.info("Aviso al Productor no entregado (sin adaptador): %s", texto[:80])
+            return False
+        try:
+            return await adaptador.notify_producer(texto)
+        except Exception:
+            logger.exception("No se pudo avisar al Productor")
+            return False
 
     async def echo_ritual(self):
         """06:30 AM - Yuki se invoca a sí misma para comenzar el día."""

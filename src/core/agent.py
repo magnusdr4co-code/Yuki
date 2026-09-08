@@ -24,8 +24,9 @@ from .prompt_builder import PromptBuilder
 from .vital_state import VitalState
 from .circadian import CircadianClock
 from ..tools.web_search import describe_origin
-from .spark import WillQueue, EchoRitual, AgencyLoop
+from .spark import WillQueue, EchoRitual, AgencyLoop, Impulse
 from .agency import AgencyLedger, AgencyPolicy
+from .rituals import ACCIONES_DE_RITMO, RitualStore, proponer_desde_experiencia
 from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
@@ -133,7 +134,11 @@ class YukiAgent:
 
         self.cron = CronEngine(timezone=tz)
         self.tasks = AutonomousTasks(self)
+        # Ritmos propios: los que Yuki propuso y el Productor aprobó. Viven
+        # aparte de config.yaml, porque los del proyecto son del proyecto.
+        self.rituals = RitualStore()
         self._register_cron_jobs()
+        self.register_own_rituals()
 
         self.telegram_adapter = None
         self.discord_adapter = None
@@ -198,6 +203,65 @@ class YukiAgent:
                 # Una expresión mal escrita no debe impedir que Yuki despierte:
                 # se omite esa tarea y el resto sigue vivo.
                 logger.error(f"Expresión cron inválida en la tarea '{name}': {e}")
+
+    def register_own_rituals(self) -> int:
+        """
+        Devuelve al planificador los ritmos propios ya aprobados.
+
+        Se llama al arrancar y tras cada aprobación: un ritmo aceptado que sólo
+        existiera en memoria se perdería en el siguiente despliegue, y Yuki
+        habría ganado un permiso que nadie cumple.
+        """
+        registrados = 0
+        for ritmo in self.rituals.aprobados():
+            try:
+                self.cron.register_job(
+                    f"propio_{ritmo.name}",
+                    ritmo.cron,
+                    self._make_ritual_runner(ritmo.id, ritmo.action, ritmo.reason),
+                    enabled=True,
+                )
+                registrados += 1
+            except CronParseError as e:
+                logger.error("Ritmo propio '%s' con expresión inválida: %s", ritmo.name, e)
+        if registrados:
+            logger.info("Ritmos propios activos: %d", registrados)
+        return registrados
+
+    def _make_ritual_runner(self, ritual_id: str, action: str, reason: str):
+        """Un ritmo propio se cumple como impulso, no como orden externa."""
+        async def _ejecutar():
+            self.rituals.registrar_ejecucion(ritual_id)
+            if action == "monologo":
+                return await self.tasks.spontaneous_monologue()
+            impulso = Impulse(
+                source=f"ritmo_propio:{ritual_id}",
+                desire=reason,
+                tool_hint=ACCIONES_DE_RITMO[action],
+                intensity=0.75,
+                born_at=time.time(),
+                max_age_hours=2.0,
+            )
+            return await self.execute_autonomous_will(impulso)
+        return _ejecutar
+
+    async def propose_own_ritual(self) -> Optional[Dict[str, Any]]:
+        """
+        Yuki propone un ritmo fundado en su propia experiencia.
+
+        No inventa un horario: lo lee del diario de agencia, que sabe en qué
+        franja lo que hace obtiene respuesta. Devuelve `None` cuando aún no hay
+        datos suficientes, porque proponer sin experiencia sería adivinar.
+        """
+        try:
+            propuesta = proponer_desde_experiencia(self.agency_ledger, self.rituals)
+        except Exception as exc:
+            logger.warning("No se pudo formular la propuesta de ritmo: %s", exc)
+            return None
+        if propuesta is None:
+            return None
+        logger.info("Yuki propone un ritmo: %s", propuesta.name)
+        return propuesta.to_dict()
 
     def is_producer(self, user_id: str) -> bool:
         """Si quien habla es el productor. Decide qué puertas se le abren."""

@@ -14,3 +14,4 @@ import pytest
 def libro_de_gasto_aislado(tmp_path, monkeypatch):
     monkeypatch.setenv("YUKI_SPEND_LEDGER_PATH", str(tmp_path / "spend_ledger.json"))
     monkeypatch.setenv("YUKI_AGENCY_LEDGER_PATH", str(tmp_path / "agency_ledger.json"))
+    monkeypatch.setenv("YUKI_RITUALS_PATH", str(tmp_path / "runtime_rituals.json"))

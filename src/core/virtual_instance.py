@@ -23,6 +23,8 @@ from typing import Any, Dict, List, Optional
 from ..tools.backup import BackupManager
 from ..tools.media_jobs import MediaJobStore
 from ..tools.music_fallback import LocalMusicEngine
+from .agency import AgencyLedger, AgencyPolicy
+from .rituals import RitualStore
 from .llm_router import is_usable_key, build_routes
 from .spend_budget import SpendLedger
 
@@ -256,6 +258,22 @@ class VirtualInstance:
             (f"Copia diaria verificada a gs://{respaldo.bucket}; {len(copias)} local(es)"
              if respaldo.bucket else
              f"{len(copias)} copia(s) local(es), sin bucket: no salen del disco de la instancia"),
+        )
+
+        politica = AgencyPolicy.from_config(self.config)
+        diario = AgencyLedger(timezone_name=politica.timezone)
+        ritmos = RitualStore()
+        self._cap(
+            "mente.albedrio", "Mente", REAL if politica.enabled else INACTIVO,
+            (f"Iniciativa propia: espontaneidad {politica.spontaneity:g}, audacia "
+             f"{politica.audacity:g}, hasta {politica.max_actions_per_day} actos/día; "
+             f"hoy {diario.acciones_hoy()}, aburrimiento {diario.boredom():.2f}"
+             if politica.enabled else "Agencia desactivada: Yuki sólo responde, no propone"),
+        )
+        self._cap(
+            "mente.ritmos", "Mente", REAL,
+            f"{len(ritmos.aprobados())} ritmo(s) propio(s) activo(s), "
+            f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor",
         )
 
         biblioteca = self.root / "output" / "Biblioteca"

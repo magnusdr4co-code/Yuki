@@ -48,6 +48,24 @@ de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, 
 intento ni cerrar el encargo. Si Lyria no sirve la pista, el respaldo local entrega una
 maqueta instrumental declarada como tal: la entrega nunca llama canción a lo que no canta.
 
+## Ritmos y libre albedrío
+
+`!albedrio` muestra el carácter de la iniciativa —espontaneidad, audacia,
+constancia—, el umbral efectivo con el aburrimiento acumulado, los actos del día
+frente a su techo y qué tipo de acto le está obteniendo respuesta. `!albedrio
+<clave> <valor>` ajusta espontaneidad, audacia, constancia, umbral, energía
+mínima y acciones por día; pasa por el mismo overlay atómico que el resto y tiene
+efecto en el siguiente ciclo. La evolución autónoma no puede tocar nada de esto:
+nadie debería poder concederse más iniciativa a sí mismo.
+
+`!ritmos` lista los cron del proyecto, los ritmos propios que Yuki ganó y las
+propuestas que esperan respuesta. Ella propone tras la síntesis diaria, fundando
+el horario en su diario de agencia, y avisa por DM; `!ritmo aprobar|rechazar|
+retirar <id> [motivo]` decide. Ninguna propuesta llega al planificador sin esa
+aprobación, y las que llegan sólo pueden escribir, contemplar, explorar o
+monologar: componer y pintar gastan crédito y siguen exigiendo orden explícita.
+Detalle completo en `docs/LIBRE_ALBEDRIO.md`.
+
 ## Terminal y configuración
 
 `terminal_run` sólo acepta argv sin shell: `pwd`, `git status|diff|log`, `pytest` y
