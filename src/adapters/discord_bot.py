@@ -23,6 +23,7 @@ from .discord_intents import (
     looks_like_media_delivery_request as _looks_like_media_delivery_request,
 )
 from .discord_text import split_discord_text
+from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, describe_job as describe_media_job
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
@@ -554,8 +555,23 @@ class DiscordAdapter:
             await channel.send(chunk, allowed_mentions=discord.AllowedMentions.none())
 
     async def _send_file(self, channel, path: Optional[str], caption: str) -> bool:
+        """
+        Adjunta un fichero, con su origen sintético marcado y declarado.
+
+        La marca se pone al generarlo, pero esta es la puerta por la que el
+        material sale hacia una persona: comprobarla aquí es lo que impide que
+        un camino nuevo —o un fichero traído de la Biblioteca antes del marcado—
+        entregue una obra sin declarar lo que es.
+        """
         if not path or not Path(path).is_file():
             return False
+        # El marcador se toma del agente, pero si faltara se construye uno: la
+        # obligación de declarar el origen no puede depender de un cableado.
+        marcador = getattr(self.agent, "marker", None) or MediaMarker()
+        if not marcador.is_marked(path):
+            marca = await asyncio.to_thread(marcador.mark, path, "", "", "entrega")
+            logger.info("Fichero marcado en la entrega: %s (%s)", path, marca.get("marked"))
+        caption = f"{caption}\n-# 🤖 Contenido generado por IA"
         try:
             await channel.send(
                 caption,

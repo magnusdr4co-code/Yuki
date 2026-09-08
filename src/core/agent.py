@@ -27,6 +27,7 @@ from ..tools.web_search import describe_origin
 from .spark import WillQueue, EchoRitual, AgencyLoop, Impulse
 from .agency import AgencyLedger, AgencyPolicy
 from .rituals import ACCIONES_DE_RITMO, RitualStore, proponer_desde_experiencia
+from .transparency import DisclosureLedger, MediaMarker, TransparencyPolicy
 from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
 from .presence_controller import PresenceController
@@ -130,6 +131,16 @@ class YukiAgent:
         # texto sin conocer el proveedor; así quedan cubiertas Discord, web,
         # Telegram y las tareas autónomas con una sola puerta.
         self.model_armor = ModelArmorClient.from_config(self.config)
+
+        # Artículo 50 del Reglamento europeo de IA, aplicable desde el 2 de
+        # agosto de 2026: quien habla con Yuki tiene derecho a saber que habla
+        # con una IA. No vive en el overlay que el Productor ajusta por DM: no
+        # es un rasgo de carácter, y un personaje no debe poder decidir dejar de
+        # decir lo que es.
+        self.transparency = TransparencyPolicy.from_config(self.config)
+        self.disclosures = DisclosureLedger(reminder_days=self.transparency.reminder_days)
+        self.marker = MediaMarker(self.transparency)
+
         self.evolution = EvolutionHarness(self)
 
         self.cron = CronEngine(timezone=tz)
@@ -263,6 +274,23 @@ class YukiAgent:
         logger.info("Yuki propone un ritmo: %s", propuesta.name)
         return propuesta.to_dict()
 
+    def disclosure_for(self, user_id: str, channel_type: str) -> Optional[str]:
+        """
+        La declaración que toca ahora ante esta persona, o `None` si ya la tiene.
+
+        Se antepone a la respuesta —«antes o al principio de la interacción»— en
+        vez de ir en un pie de página que nadie lee. Los canales internos (cron,
+        voluntad propia) no son personas: ahí no hay a quién informar.
+        """
+        if not self.transparency.enabled:
+            return None
+        if user_id in ("autonomous_cron", "yuki_internal"):
+            return None
+        if not self.disclosures.needs_disclosure(user_id, channel_type):
+            return None
+        self.disclosures.record_disclosure(user_id, channel_type)
+        return self.transparency.disclosure_text
+
     def is_producer(self, user_id: str) -> bool:
         """Si quien habla es el productor. Decide qué puertas se le abren."""
         if user_id == self.producer_user_id:
@@ -374,6 +402,13 @@ class YukiAgent:
             response_text = "🔒 He retenido esta respuesta porque activa una protección de seguridad."
         else:
             response_text = response_decision.text
+
+        # La declaración va delante de la respuesta ya saneada: es lo primero
+        # que lee quien acaba de llegar, no una nota al pie.
+        if not is_internal_thought and response_text != "NADA_QUE_DECIR":
+            declaracion = self.disclosure_for(user_id, channel_type)
+            if declaracion:
+                response_text = f"{declaracion}\n\n{response_text}"
 
         total_latency_ms = (time.perf_counter() - start_time) * 1000.0
         logger.info(f"⚡ Respuesta generada en {total_latency_ms:.2f}ms (Memoria FTS5: {mem_data['latency_ms']}ms)")

@@ -66,6 +66,7 @@ data/media_jobs/
 data/spend_ledger.json
 data/agency_ledger.json
 data/runtime_rituals.json
+data/transparency.json
 data/*.lock
 data/backups/
 data/runtime_overrides.json

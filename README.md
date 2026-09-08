@@ -111,6 +111,9 @@ python3 cli.py spend
 # Ver su libre albedrío: carácter, lo que ha aprendido y sus ritmos propios
 python3 cli.py albedrio
 
+# Auditar el cumplimiento del Artículo 50: declaración y marcado del material
+python3 cli.py transparency
+
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
 python3 cli.py backup
 ```
@@ -179,6 +182,7 @@ contratar servicios de pago o de prometer una demo.
 |---|---|---|
 | Memoria SQLite FTS5 | ✅ Real | Búsqueda BM25 funcionando sobre disco |
 | Alma, prompts y estado vital | ✅ Real | `SOUL.md`, ritmo circadiano, Kokoro Engine |
+| Transparencia (Art. 50 del Reglamento europeo de IA) | ✅ Real | `src/core/transparency.py`: declara su naturaleza ante cada persona y marca todo lo que genera (chunk PNG, metadatos ffmpeg y manifiesto C2PA sin firmar). Ver [`docs/TRANSPARENCIA_AI_ACT.md`](docs/TRANSPARENCIA_AI_ACT.md) |
 | Libre albedrío configurable | ✅ Real | `src/core/agency.py`: carácter en `config.yaml` (espontaneidad, audacia, constancia, techo diario), ajustable en caliente por DM. Ver [`docs/LIBRE_ALBEDRIO.md`](docs/LIBRE_ALBEDRIO.md) |
 | Refuerzo de la iniciativa | ✅ Real | Aprende de qué actos obtienen respuesta y en qué franja; refuerzo intermitente, aburrimiento acumulado y exploración para que no se apague ni se encasille |
 | Ritmos propios propuestos por Yuki | ✅ Real | `src/core/rituals.py`: propone un cron fundado en sus datos; sólo entra en el planificador si el Productor lo aprueba por DM |
@@ -263,3 +267,4 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - 🛰️ [Runbook: aterrizar Yuki en un proyecto real de GCloud (`docs/RUNBOOK_GCLOUD.md`)](docs/RUNBOOK_GCLOUD.md) — encargo autocontenido para un agente con acceso a `gcloud`
 - 🧪 [Virtualización de la instancia, limitadores y mejoras (`docs/VIRTUALIZACION_Y_MEJORAS.md`)](docs/VIRTUALIZACION_Y_MEJORAS.md) — réplica local, gemelo virtual y hoja de ruta
 - 🌱 [El libre albedrío de Yuki (`docs/LIBRE_ALBEDRIO.md`)](docs/LIBRE_ALBEDRIO.md) — carácter configurable, refuerzo de la iniciativa y ritmos propios
+- ⚖️ [Transparencia y Artículo 50 (`docs/TRANSPARENCIA_AI_ACT.md`)](docs/TRANSPARENCIA_AI_ACT.md) — declaración de naturaleza y marcado de origen sintético

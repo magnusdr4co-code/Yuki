@@ -82,6 +82,27 @@ vertex_ai:
     voice: "Aoede"
     language_code: "es-es"
 
+# Transparencia — Artículo 50 del Reglamento europeo de IA, aplicable desde el
+# 2 de agosto de 2026. Yuki es su supuesto exacto: interactúa con personas
+# físicas y genera texto, imagen, audio y vídeo sintéticos.
+#
+# Dos obligaciones distintas: informar de que se habla con una IA (antes o al
+# principio de la interacción) y marcar las salidas de forma legible por
+# máquina. La excepción de "resulta obvio" no se invoca aquí: un personaje
+# construido para ser creíble es precisamente el que no puede ampararse en ella.
+#
+# Esto NO está en la lista que el Productor puede ajustar por DM ni al alcance
+# de la evolución autónoma: no es un rasgo de carácter.
+transparency:
+  enabled: true
+  # Cada cuánto se repite la declaración a la misma persona. Decirlo una vez en
+  # la vida no cumple con quien vuelve seis meses después.
+  reminder_days: 30
+  mark_media: true
+  creator: "Yuki (雪) — artista digital autónoma"
+  # Vacío = se usa la declaración por defecto de src/core/transparency.py.
+  disclosure_text: ""
+
 # Libre albedrío: el carácter de la iniciativa de Yuki, en números.
 #
 # Antes todo esto vivía incrustado en el código y no había forma de afinarlo.

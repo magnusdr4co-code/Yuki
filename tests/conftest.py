@@ -15,3 +15,6 @@ def libro_de_gasto_aislado(tmp_path, monkeypatch):
     monkeypatch.setenv("YUKI_SPEND_LEDGER_PATH", str(tmp_path / "spend_ledger.json"))
     monkeypatch.setenv("YUKI_AGENCY_LEDGER_PATH", str(tmp_path / "agency_ledger.json"))
     monkeypatch.setenv("YUKI_RITUALS_PATH", str(tmp_path / "runtime_rituals.json"))
+    monkeypatch.setenv("YUKI_TRANSPARENCY_PATH", str(tmp_path / "transparency.json"))
+    # Y que la obra falsa de las pruebas no acabe en el `output/` del repositorio.
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "output"))

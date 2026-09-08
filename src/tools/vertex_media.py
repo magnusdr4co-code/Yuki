@@ -33,6 +33,7 @@ from ..core.spend_budget import (
     IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, VIDEO_SEGUNDOS, VOZ_CARACTERES,
     SpendLedger,
 )
+from ..core.transparency import MediaMarker
 
 logger = logging.getLogger("Yuki.VertexMedia")
 
@@ -100,7 +101,8 @@ class VertexMediaClient:
                  music_dir: str = "output/music",
                  video_dir: str = "output/video",
                  client: Any = None, tts_client: Any = None,
-                 budget: Optional[SpendLedger] = None):
+                 budget: Optional[SpendLedger] = None,
+                 marker: Optional[MediaMarker] = None):
         self.project_id = (project_id or os.getenv("VERTEX_PROJECT_ID")
                            or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
         self.location = location or os.getenv("VERTEX_LOCATION") or "global"
@@ -122,6 +124,11 @@ class VertexMediaClient:
         # Presupuesto diario. Se comprueba antes de llamar al proveedor: el
         # vídeo se factura por segundo y avisar después no devuelve el crédito.
         self.budget = budget if budget is not None else SpendLedger()
+
+        # Marcado de origen sintético (Artículo 50). Se aplica al escribir el
+        # fichero, no al entregarlo: así ningún camino de salida —Discord, el
+        # Salón, la Biblioteca, una copia manual— puede sacar material sin marca.
+        self.marker = marker if marker is not None else MediaMarker()
 
         # Inyectables en pruebas; en producción se construyen perezosamente.
         self._client = client
@@ -295,7 +302,9 @@ class VertexMediaClient:
             f.write(datos)
 
         logger.info(f"🎨 Imagen real generada con {model}: {destino}")
+        marca = self.marker.mark(destino, model=model, prompt=prompt, kind="visual")
         return {
+            "marking": marca,
             "status": "success",
             "simulated": False,
             "provider": "vertex_ai",
@@ -362,7 +371,9 @@ class VertexMediaClient:
         # La pista ya está reservada; los segundos se anotan al confirmarse, y
         # dejan constancia del volumen aunque no haya precio que aplicarles.
         self.budget.record(MUSICA_SEGUNDOS, duration_seconds)
+        marca = self.marker.mark(destino, model=model, prompt=prompt, kind="sonora")
         return {
+            "marking": marca,
             "status": "success",
             "simulated": False,
             "provider": "vertex_ai",
@@ -506,6 +517,7 @@ class VertexMediaClient:
 
         # Ya está anotado por la reserva; aquí sólo se informa.
         coste = duration_seconds * PRECIO_VIDEO_POR_SEGUNDO
+        marca = self.marker.mark(destino, model=model, prompt=prompt, kind="audiovisual")
         logger.info(f"🎬 Vídeo real generado con {model}: {destino} (≈${coste:.2f}); "
                     f"presupuesto de hoy → {self.budget.describe()}")
         return {
@@ -513,6 +525,7 @@ class VertexMediaClient:
             "simulated": False,
             "provider": "vertex_ai",
             "model": model,
+            "marking": marca,
             "task": "image_to_video" if image_path else "text_to_video",
             "prompt_used": prompt,
             "local_path": destino,
@@ -590,12 +603,14 @@ class VertexMediaClient:
         with open(destino, "wb") as f:
             f.write(audio)
 
+        marca = self.marker.mark(destino, model=model, prompt=text[:200], kind="voz")
         logger.info(f"🎙️ Nota de voz real generada con {model}: {destino}")
         return {
             "status": "success",
             "simulated": False,
             "provider": "vertex_ai",
             "model": model,
+            "marking": marca,
             "voice": voice,
             "language_code": language_code,
             "style_prompt": style_prompt,

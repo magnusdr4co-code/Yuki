@@ -55,12 +55,15 @@ class NousPortalClient:
         self.api_key = api_key or os.getenv("NOUS_PORTAL_API_KEY") or os.getenv("FAL_KEY", "demo_portal_key")
         self.base_url = base_url
 
-        # Rutas nativas del workspace de Hermes
-        self.art_dir = "output/art"
-        self.voice_dir = "output/voice"
-        self.music_dir = "output/music"
-        self.video_dir = "output/video"
-        self.posts_dir = "output/posts"
+        # Rutas nativas del workspace de Hermes. `YUKI_OUTPUT_DIR` las reubica
+        # sin tocar código: en producción es el disco persistente de la VM, y en
+        # las pruebas evita que la suite escriba obra falsa en el repositorio.
+        raiz = os.getenv("YUKI_OUTPUT_DIR", "output").strip() or "output"
+        self.art_dir = os.path.join(raiz, "art")
+        self.voice_dir = os.path.join(raiz, "voice")
+        self.music_dir = os.path.join(raiz, "music")
+        self.video_dir = os.path.join(raiz, "video")
+        self.posts_dir = os.path.join(raiz, "posts")
 
         for d in [self.art_dir, self.voice_dir, self.music_dir, self.video_dir, self.posts_dir]:
             os.makedirs(d, exist_ok=True)

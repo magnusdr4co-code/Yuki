@@ -25,6 +25,7 @@ from ..tools.media_jobs import MediaJobStore
 from ..tools.music_fallback import LocalMusicEngine
 from .agency import AgencyLedger, AgencyPolicy
 from .rituals import RitualStore
+from .transparency import TransparencyPolicy, audit_directory
 from .llm_router import is_usable_key, build_routes
 from .spend_budget import SpendLedger
 
@@ -166,6 +167,17 @@ class VirtualInstance:
             "texto.tiers", "Lenguaje", REAL if rutas else INACTIVO,
             f"{len(rutas)} rutas por tarea aplicadas ({', '.join(sorted(rutas))})" if rutas
             else "provider_routing deshabilitado: toda petición usa agent.model",
+        )
+        transparencia = TransparencyPolicy.from_config(self.config)
+        auditoria = audit_directory(str(self.root / "output"))
+        self._cap(
+            "cumplimiento.transparencia", "Seguridad",
+            REAL if transparencia.enabled else INACTIVO,
+            (f"Artículo 50: declaración cada {transparencia.reminder_days} días y marcado "
+             f"de origen sintético; {len(auditoria['marcados'])} fichero(s) marcados, "
+             f"{len(auditoria['sin_marcar'])} sin marcar"
+             if transparencia.enabled else
+             "Transparencia DESACTIVADA: se incumple el Artículo 50, en vigor desde 2026-08-02"),
         )
         self._cap(
             "texto.model_armor", "Seguridad",
@@ -409,6 +421,25 @@ class VirtualInstance:
                        "queda además a la vista.",
                 proposals=["Declarar SALON_API_TOKEN en el entorno de la instancia.",
                            "Restringir el puerto 8080 en el cortafuegos a IAP o a la red autorizada."],
+            )
+
+        transparencia_cfg = TransparencyPolicy.from_config(self.config)
+        pendientes_marca = audit_directory(str(self.root / "output"))["sin_marcar"]
+        if not transparencia_cfg.enabled or pendientes_marca:
+            self._lim(
+                id="L11", title="Material sintético sin marcar o transparencia desactivada",
+                severity=BLOQUEANTE if not transparencia_cfg.enabled else GRAVE,
+                status=ABIERTO,
+                evidence=("La sección `transparency` está desactivada."
+                          if not transparencia_cfg.enabled else
+                          f"{len(pendientes_marca)} fichero(s) generados siguen sin marca de origen "
+                          "sintético en `output/`."),
+                impact=("El Artículo 50 del Reglamento europeo de IA es aplicable desde el "
+                        "2 de agosto de 2026 y exige declarar la naturaleza del sistema ante las "
+                        "personas y marcar las salidas de forma legible por máquina. Las sanciones "
+                        "llegan a 15 M€ o el 3% del volumen de negocio."),
+                proposals=["Marcar lo pendiente: `python3 cli.py transparency --marcar`.",
+                           "Mantener `transparency.enabled: true`; no es un rasgo de carácter."],
             )
 
         self._lim(

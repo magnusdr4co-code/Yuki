@@ -474,6 +474,53 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
+def cmd_transparency(marcar=False, as_json=False):
+    """Auditoría del Artículo 50: qué se ha declarado y qué material está marcado."""
+    import yaml
+    from src.core.transparency import (
+        DisclosureLedger, MediaMarker, TransparencyPolicy, audit_directory,
+    )
+
+    with open("config.yaml", "r", encoding="utf-8") as f:
+        config = yaml.safe_load(f)
+
+    politica = TransparencyPolicy.from_config(config)
+    registro = DisclosureLedger(reminder_days=politica.reminder_days)
+    auditoria = audit_directory("output")
+
+    if marcar and auditoria["sin_marcar"]:
+        marcador = MediaMarker(politica)
+        for ruta in list(auditoria["sin_marcar"]):
+            marcador.mark(ruta, model="retroactivo", kind="archivo")
+        auditoria = audit_directory("output")
+
+    if as_json:
+        print(json.dumps({
+            "politica": {"enabled": politica.enabled, "mark_media": politica.mark_media,
+                         "reminder_days": politica.reminder_days},
+            "declaraciones": registro.disclosures(),
+            "auditoria": auditoria,
+        }, ensure_ascii=False, indent=2))
+        return
+
+    print_banner()
+    print(f"{YELLOW}{BOLD}⚖️  Transparencia (Artículo 50, en vigor desde 2026-08-02){RESET}\n")
+    estado = f"{GREEN}activa{RESET}" if politica.enabled else f"{RED}DESACTIVADA{RESET}"
+    print(f"  Declaración de naturaleza: {estado} · se repite cada {politica.reminder_days} días")
+    print(f"  Personas ya informadas: {len(registro.disclosures())}")
+    print(f"\n  Material generado: {auditoria['total']} fichero(s)")
+    print(f"  {GREEN}Marcados: {len(auditoria['marcados'])}{RESET}")
+    if auditoria["sin_marcar"]:
+        print(f"  {RED}Sin marcar: {len(auditoria['sin_marcar'])}{RESET}")
+        for ruta in auditoria["sin_marcar"][:10]:
+            print(f"    • {ruta}")
+        if len(auditoria["sin_marcar"]) > 10:
+            print(f"    {DIM}… y {len(auditoria['sin_marcar']) - 10} más{RESET}")
+        print(f"\n  {DIM}Márcalos con: python3 cli.py transparency --marcar{RESET}")
+    else:
+        print(f"  {DIM}Nada pendiente de marcar.{RESET}")
+
+
 def cmd_agency(as_json=False):
     """Estado del libre albedrío: carácter, aprendizaje y ritmos propios."""
     import yaml
@@ -695,6 +742,14 @@ def main():
     )
     albedrio.add_argument("--json", action="store_true", help="Emite JSON")
 
+    transparencia = subparsers.add_parser(
+        "transparency",
+        help="Auditoría del Artículo 50: declaración de naturaleza y marcado del material",
+    )
+    transparencia.add_argument("--marcar", action="store_true",
+                               help="Marca retroactivamente el material que aún no lo esté")
+    transparencia.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -733,6 +788,8 @@ def main():
         cmd_backup(as_json=args.json)
     elif args.command == "albedrio":
         cmd_agency(as_json=args.json)
+    elif args.command == "transparency":
+        cmd_transparency(marcar=args.marcar, as_json=args.json)
     else:
         parser.print_help()
 

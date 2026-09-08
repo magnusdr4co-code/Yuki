@@ -30,6 +30,7 @@ import time
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..core.transparency import MediaMarker
 from .midi_generator import YukiMIDIGenerator
 
 logger = logging.getLogger("Yuki.MusicFallback")
@@ -66,12 +67,15 @@ class LocalMusicEngine:
     name = "local.fluidsynth"
 
     def __init__(self, soundfont: Optional[str] = None, music_dir: str = "output/music",
-                 runner: Any = None, midi_generator: Optional[YukiMIDIGenerator] = None):
+                 runner: Any = None, midi_generator: Optional[YukiMIDIGenerator] = None,
+                 marker: Optional[MediaMarker] = None):
         self.soundfont = soundfont or self._soundfont_disponible()
         self.music_dir = music_dir
         # Inyectable en pruebas: la suite no invoca binarios del sistema.
         self._runner = runner or subprocess.run
         self.midi = midi_generator or YukiMIDIGenerator()
+        # Una maqueta local es tan sintética como una de Lyria: se marca igual.
+        self.marker = marker or MediaMarker()
 
     @staticmethod
     def _soundfont_disponible() -> Optional[str]:
@@ -170,7 +174,9 @@ class LocalMusicEngine:
                     "error": "ffmpeg no produjo el MP3 final"}
 
         recitada = bool(voice_path and Path(voice_path).is_file())
+        marca = self.marker.mark(destino, model=self.name, prompt=title, kind="sonora")
         return {
+            "marking": marca,
             "status": "success",
             # No es un marcador: hay audio real, sintetizado aquí.
             "simulated": False,
