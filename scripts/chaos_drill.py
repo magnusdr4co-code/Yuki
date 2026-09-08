@@ -318,6 +318,49 @@ def reloj_hacia_atras(raiz: Path) -> Tuple[bool, str]:
     return True, "el gasto del día no se contamina; el eco tolera marcas adelantadas"
 
 
+def freno_en_incidente(raiz: Path) -> Tuple[bool, str]:
+    """
+    Alguien tira del freno a las tres de la madrugada.
+
+    Lo que se comprueba no es que pare —eso lo prueban los tests— sino las dos
+    cosas que decidirían si el freno sirve en un incidente real: que **no la
+    enmudezca**, porque quien frena quiere seguir pudiendo preguntarle qué pasó,
+    y que la palanca del operador no pueda quedar por debajo de lo que alguien
+    dejó puesto en el fichero.
+    """
+    import os as _os
+
+    from src.core.brake import MEDIOS, PUBLICACION, TODO, Brake
+
+    freno = Brake(path=str(raiz / "freno.json"))
+    freno.engage(TODO, motivo="incidente nocturno", actor="operador")
+
+    if any(freno.permits(a) for a in ("publicar", "medios", "iniciativa")):
+        return False, "el freno al máximo deja pasar algo"
+    if not freno.permits("conversar"):
+        return False, "frenarla la dejó muda: no se le puede preguntar qué pasó"
+
+    freno.engage(PUBLICACION, actor="productor")
+    previo = _os.environ.get("YUKI_FRENO")
+    _os.environ["YUKI_FRENO"] = "todo"
+    try:
+        if freno.state().nivel != TODO:
+            return False, "la palanca del operador quedó por debajo del fichero"
+        freno.release(actor="productor")
+        if not freno.state().activo:
+            return False, "un comando de DM soltó el freno del operador"
+    finally:
+        if previo is None:
+            _os.environ.pop("YUKI_FRENO", None)
+        else:
+            _os.environ["YUKI_FRENO"] = previo
+
+    freno.path.write_text("{ corrupto", encoding="utf-8")
+    if freno.state().nivel != TODO:
+        return False, "un fichero de freno corrupto lo soltó en vez de mantenerlo"
+    return True, "para todo sin enmudecerla; el operador manda; corrupto ⇒ frenado"
+
+
 ESCENARIOS = [
     Escenario("reinicio_a_media_produccion",
               "¿Y si el despliegue cae a mitad de un encargo?",
@@ -351,6 +394,10 @@ ESCENARIOS = [
               "¿Y si el olvido corre sobre una memoria antigua entera?",
               "canon, síntesis, crecimiento y lo fijado sobreviven",
               olvido_respeta_lo_intocable),
+    Escenario("freno_en_incidente",
+              "¿Y si alguien tira del freno a las tres de la madrugada?",
+              "para todo sin enmudecerla, y el operador manda sobre el DM",
+              freno_en_incidente),
     Escenario("reloj_hacia_atras",
               "¿Y si el reloj de la VM salta?",
               "ni el presupuesto ni el refuerzo se corrompen",

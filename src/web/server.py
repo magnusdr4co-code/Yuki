@@ -135,6 +135,7 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
 
         from ..core.agency import AgencyLedger, AgencyPolicy
         from ..core.blackbox import BlackBox
+        from ..core.brake import NIVELES, Brake
         from ..core.persona_anchor import PersonaAnchor, PersonaPolicy
         from ..core.rituals import RitualStore
         from ..core.spend_budget import (
@@ -213,6 +214,17 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         ritmos = RitualStore()
         metrica("ritmos_propios", "Ritmos propios activos", len(ritmos.aprobados()))
         metrica("ritmos_propuestos", "Propuestas esperando al Productor", len(ritmos.pendientes()))
+        # El freno como número: un panel tiene que poder enseñar que Yuki está
+        # parada a propósito, o media hora de silencio parece una avería.
+        freno = Brake()
+        estado_freno = freno.state()
+        metrica("freno_nivel",
+                "Freno de mano (0 ninguno, 1 publicación, 2 medios, 3 todo)",
+                NIVELES.get(estado_freno.nivel, 0))
+        for accion in ("publicar", "medios", "iniciativa"):
+            metrica("freno_permite", "1 si el freno deja pasar ese tipo de acto",
+                    1 if freno.permits(accion) else 0, etiquetas=f'accion="{accion}"')
+
         cadena = BlackBox().verify()
         metrica("bitacora_entradas", "Anotaciones en la bitácora encadenada",
                 cadena["entradas"], tipo="counter")

@@ -7,7 +7,7 @@
 .DEFAULT_GOAL := ayuda
 PY ?= python3
 
-.PHONY: ayuda instalar pruebas linter humo simulacro estado albedrio sueno bitacora todo imagen replica limpiar
+.PHONY: ayuda instalar pruebas linter humo simulacro estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
 
 ayuda:  ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -41,6 +41,15 @@ sueno:  ## Ciclo de sueño en seco (FASE=nrem|rem|olvido|noche)
 
 bitacora:  ## Verifica que nadie tocó el registro de sus actos
 	$(PY) cli.py bitacora --verificar
+
+freno:  ## Estado del freno de mano
+	$(PY) cli.py freno
+
+parar:  ## Freno al máximo (MOTIVO="..." para dejar constancia)
+	$(PY) cli.py freno --nivel todo --motivo "$(or $(MOTIVO),parada manual)"
+
+soltar:  ## Suelta el freno
+	$(PY) cli.py freno --soltar
 
 imagen:  ## Construye la imagen de producción
 	docker build -t yuki-agent:local .

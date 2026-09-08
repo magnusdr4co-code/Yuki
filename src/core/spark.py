@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
 from .agency import ACCIONES as ACCIONES_CONOCIDAS, AgencyLedger, AgencyPolicy, ReinforcementModel
+from .brake import Brake
 
 logger = logging.getLogger("Yuki.Spark")
 
@@ -194,7 +195,8 @@ class AgencyLoop:
                  policy: Optional[AgencyPolicy] = None,
                  ledger: Optional[AgencyLedger] = None,
                  model: Optional[ReinforcementModel] = None,
-                 rng: Optional[random.Random] = None):
+                 rng: Optional[random.Random] = None,
+                 brake: Optional[Brake] = None):
         self.will_queue = will_queue
         self.vital_state = vital_state_ref
         self.actions_log: List[dict] = []
@@ -204,6 +206,9 @@ class AgencyLoop:
         self.ledger = ledger or AgencyLedger(timezone_name=self.policy.timezone)
         self.rng = rng or random.Random()
         self.model = model or ReinforcementModel(self.ledger, self.policy, self.rng)
+        # El freno de mano es de quien opera la instancia, no del carácter: por
+        # eso no vive en la política de agencia y se consulta aparte.
+        self.brake = brake or Brake()
 
     def _coste(self, tool_hint: str) -> float:
         return self.policy.action_costs.get(tool_hint, self.ACTION_COSTS.get(tool_hint, 0.10))
@@ -280,6 +285,11 @@ class AgencyLoop:
         exploración pura. Mismo estado, dos ciclos, decisiones distintas.
         """
         if not self.policy.enabled:
+            return None
+
+        frenada = self.brake.blocked_reason("iniciativa")
+        if frenada:
+            logger.info("Sin iniciativa: %s", frenada)
             return None
 
         if phase is not None and phase in set(self.policy.quiet_phases):

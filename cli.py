@@ -539,6 +539,45 @@ def cmd_sleep(fase="noche", seco=False, as_json=False, deshacer=None):
     return resultado
 
 
+def cmd_brake(nivel=None, soltar=False, minutos=None, motivo="", as_json=False):
+    """Freno de mano: pararla sin matarla."""
+    from src.core.brake import NIVELES, Brake
+
+    freno = Brake()
+
+    if soltar:
+        estado = freno.release(actor="cli", motivo=motivo)
+        print(f"{GREEN}✓ Freno soltado.{RESET} {freno.describe()}")
+        if estado.activo:
+            print(f"{YELLOW}⚠ Sigue frenada desde {estado.origen}: eso no lo suelta el CLI.{RESET}")
+        return estado
+
+    if nivel:
+        try:
+            estado = freno.engage(nivel, motivo=motivo, actor="cli", minutos=minutos)
+        except ValueError as exc:
+            print(f"{RED}✗ {exc}{RESET}")
+            return None
+        print(f"{YELLOW}🛑 {freno.describe()}{RESET}")
+        return estado
+
+    estado = freno.state()
+    if as_json:
+        print(json.dumps(estado.to_dict(), ensure_ascii=False, indent=2))
+        return estado
+
+    print_banner()
+    color = RED if estado.activo else GREEN
+    print(f"{color}{BOLD}🛑 {freno.describe()}{RESET}\n")
+    for accion in ("publicar", "medios", "iniciativa"):
+        permitido = freno.permits(accion)
+        marca = f"{GREEN}✓{RESET}" if permitido else f"{RED}✗{RESET}"
+        print(f"  {marca} {accion}")
+    print(f"\n{DIM}Niveles: {', '.join(n for n in NIVELES if n != 'ninguno')}. "
+          f"La variable de entorno YUKI_FRENO manda sobre el fichero.{RESET}")
+    return estado
+
+
 def cmd_blackbox(verificar=False, precinto=None, limite=10, as_json=False):
     """Bitácora encadenada: leerla, verificarla y sellarla."""
     from src.core.blackbox import BlackBox
@@ -994,6 +1033,16 @@ def main():
     bitacora.add_argument("--limite", type=int, default=10)
     bitacora.add_argument("--json", action="store_true", help="Emite JSON")
 
+    freno = subparsers.add_parser(
+        "freno", help="Freno de mano: parar la iniciativa, los medios o la publicación",
+    )
+    freno.add_argument("--nivel", choices=["publicacion", "medios", "todo"],
+                       help="Pone el freno en ese nivel")
+    freno.add_argument("--soltar", action="store_true", help="Suelta el freno del fichero")
+    freno.add_argument("--minutos", type=float, help="Caducidad: se suelta solo pasado ese rato")
+    freno.add_argument("--motivo", default="", help="Por qué; queda en la bitácora")
+    freno.add_argument("--json", action="store_true", help="Emite JSON")
+
     args = parser.parse_args()
 
     if args.command == "chat":
@@ -1038,6 +1087,9 @@ def main():
         cmd_persona(as_json=args.json)
     elif args.command == "sueno":
         cmd_sleep(fase=args.fase, seco=args.seco, as_json=args.json, deshacer=args.deshacer)
+    elif args.command == "freno":
+        cmd_brake(nivel=args.nivel, soltar=args.soltar, minutos=args.minutos,
+                  motivo=args.motivo, as_json=args.json)
     elif args.command == "bitacora":
         cmd_blackbox(verificar=args.verificar, precinto=args.precinto,
                      limite=args.limite, as_json=args.json)

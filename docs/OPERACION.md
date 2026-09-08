@@ -113,7 +113,56 @@ Y **no es una cadena de bloques**: no hay consenso, ni red, ni prueba de
 trabajo. Es un fichero append-only con hashes encadenados, y decirlo así es más
 honesto que adornarlo.
 
-## 5. El simulacro
+## 5. El freno de mano
+
+Hasta ahora, si algo iba mal, la única forma de detener a Yuki era **parar el
+contenedor**. Funciona, y es pésimo: se lleva el Salón por delante, corta los
+trabajos multimedia a mitad y deja a quien lo hizo sin saber si al arrancar se
+repetirá.
+
+`src/core/brake.py` da una palanca graduada, y cada nivel contiene al anterior:
+
+| Nivel | Qué para |
+|---|---|
+| `publicacion` | Sigue pensando y creando, pero no publica hacia fuera |
+| `medios` | Además, no gasta en imagen, vídeo, música ni voz |
+| `todo` | Además, no emprende nada por su cuenta |
+
+**Frenar no es enmudecer.** En ningún nivel se le impide responder a quien le
+hable: quien tira del freno en un incidente quiere seguir pudiendo preguntarle
+qué pasó. Enmudecerla no es frenarla, es romperla.
+
+```bash
+python3 cli.py freno                                   # ¿está frenada, y de qué?
+python3 cli.py freno --nivel medios --minutos 120 --motivo "factura disparada"
+python3 cli.py freno --soltar
+```
+
+Por DM: `!freno`, `!freno medios 120 factura disparada`, `!freno soltar`.
+
+Y la palanca del operador, que es la más rápida y la que manda:
+
+```bash
+docker run -e YUKI_FRENO=todo …     # o en el env de la VM, y reiniciar
+```
+
+Tres decisiones que se notan justo cuando hacen falta:
+
+- **El entorno gana al fichero**, y si ambos están puestos manda el más
+  restrictivo: en un incidente nadie quiere descubrir que su palanca quedó por
+  debajo de la que alguien dejó en el fichero. Soltar desde el DM no suelta la
+  del operador, y Yuki lo dice cuando ocurre.
+- **Un freno ilegible se asume puesto.** Ante la duda se frena; soltarlo por un
+  fichero corrupto sería exactamente el fallo que no se puede permitir.
+- **No caduca solo salvo que se le diga.** Admite `--minutos`, pero sin eso se
+  queda puesto: un freno que se olvida enseña a confiar en él.
+
+El freno aparece en `/metrics` (`yuki_freno_nivel`, `yuki_freno_permite`) porque
+media hora de silencio deliberado parece una avería si el panel no lo enseña, y
+en la comprobación de humo, porque desplegar sobre una instancia frenada sin
+recordarlo cuesta media hora de gente preguntándose qué pasa.
+
+## 6. El simulacro
 
 ```bash
 python3 scripts/chaos_drill.py           # nueve modos de fallo, código de salida
@@ -141,7 +190,7 @@ Corre entero sobre un sandbox temporal: **un simulacro que tocara la instancia
 sería el propio incidente que pretende ensayar**. Está en CI como trabajo
 propio, así que una rama que rompa una invariante no pasa.
 
-## 6. Alertas
+## 7. Alertas
 
 `deploy/alertas-prometheus.yml`: ocho reglas escritas en el repositorio y no en
 el panel de quien las mire, porque una alerta que vive sólo en la consola de un
@@ -155,7 +204,7 @@ sino la señal de que algo la está bloqueando— y la ausencia total de métric
 que con las familias emitidas siempre sólo puede significar que la sonda no
 responde.
 
-## 7. Qué mirar cuando algo va mal
+## 8. Qué mirar cuando algo va mal
 
 | Síntoma | Primer sitio donde mirar |
 |---|---|
@@ -163,5 +212,6 @@ responde.
 | Se acabó el crédito antes de tiempo | `cli.py spend`, y `yuki_gasto_hoy` en el panel |
 | No hace nada por su cuenta | `cli.py albedrio` — techo diario, umbral, aburrimiento |
 | Un encargo multimedia no llegó | `!status` en el DM, y `data/media_jobs/` |
+| Hay que pararla YA | `cli.py freno --nivel todo --motivo ...`, o `YUKI_FRENO=todo` en el entorno |
 | Sospecha de manipulación | `cli.py bitacora --verificar --precinto <el de la última copia>` |
 | Tras un despliegue | `scripts/smoke_check.py --url <salón>` |

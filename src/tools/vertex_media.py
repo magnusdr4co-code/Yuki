@@ -33,6 +33,7 @@ from ..core.spend_budget import (
     IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, VIDEO_SEGUNDOS, VOZ_CARACTERES,
     SpendLedger,
 )
+from ..core.brake import Brake
 from ..core.transparency import MediaMarker
 
 logger = logging.getLogger("Yuki.VertexMedia")
@@ -102,7 +103,8 @@ class VertexMediaClient:
                  video_dir: str = "output/video",
                  client: Any = None, tts_client: Any = None,
                  budget: Optional[SpendLedger] = None,
-                 marker: Optional[MediaMarker] = None):
+                 marker: Optional[MediaMarker] = None,
+                 brake: Optional[Brake] = None):
         self.project_id = (project_id or os.getenv("VERTEX_PROJECT_ID")
                            or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
         self.location = location or os.getenv("VERTEX_LOCATION") or "global"
@@ -129,6 +131,11 @@ class VertexMediaClient:
         # fichero, no al entregarlo: así ningún camino de salida —Discord, el
         # Salón, la Biblioteca, una copia manual— puede sacar material sin marca.
         self.marker = marker if marker is not None else MediaMarker()
+
+        # Freno de mano. Se consulta antes que el presupuesto porque responde a
+        # otra pregunta: el presupuesto dice «hoy ya no»; el freno dice «ahora
+        # no, y lo ha decidido una persona».
+        self.brake = brake if brake is not None else Brake()
 
         # Inyectables en pruebas; en producción se construyen perezosamente.
         self._client = client
@@ -241,6 +248,11 @@ class VertexMediaClient:
 
         model = model or self.image_model
 
+        frenado = self.brake.blocked_reason("medios")
+        if frenado:
+            logger.warning("Generación de imagen detenida por el freno: %s", frenado)
+            return _resultado_error(f"detenido por el {frenado}", braked=True)
+
         permiso = self.budget.reserve(IMAGENES, 1)
         if not permiso.allowed:
             logger.warning("Imagen rechazada por presupuesto: %s", permiso.reason)
@@ -336,6 +348,11 @@ class VertexMediaClient:
                 f"Duración musical fuera de rango: {duration_seconds}s; máximo {max_duration}s."
             )
 
+        frenado = self.brake.blocked_reason("medios")
+        if frenado:
+            logger.warning("Generación de musica detenida por el freno: %s", frenado)
+            return _resultado_error(f"detenido por el {frenado}", braked=True)
+
         permiso = self.budget.reserve(MUSICA_PISTAS, 1)
         if not permiso.allowed:
             logger.warning("Música rechazada por presupuesto: %s", permiso.reason)
@@ -424,6 +441,11 @@ class VertexMediaClient:
         # el segundo de vídeo ya está facturado. Reservar —en vez de comprobar y
         # anotar después— cierra el hueco en el que dos encargos simultáneos
         # superarían ambos el mismo límite. Si Veo falla, se devuelve.
+        frenado = self.brake.blocked_reason("medios")
+        if frenado:
+            logger.warning("Generación de video detenida por el freno: %s", frenado)
+            return _resultado_error(f"detenido por el {frenado}", braked=True)
+
         permiso = self.budget.reserve(VIDEO_SEGUNDOS, duration_seconds)
         if not permiso.allowed:
             logger.warning("Vídeo rechazado por presupuesto: %s", permiso.reason)
@@ -574,6 +596,11 @@ class VertexMediaClient:
             "Habla con calidez contenida y pausas deliberadas, como quien elige "
             "cada palabra antes de decirla. Ritmo sereno, nunca apresurado."
         )
+
+        frenado = self.brake.blocked_reason("medios")
+        if frenado:
+            logger.warning("Generación de voz detenida por el freno: %s", frenado)
+            return _resultado_error(f"detenido por el {frenado}", braked=True)
 
         permiso = self.budget.reserve(VOZ_CARACTERES, len(text))
         if not permiso.allowed:

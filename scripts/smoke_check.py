@@ -108,6 +108,22 @@ def comprobar_presupuesto(config: Dict[str, Any]) -> Tuple[bool, str]:
     return True, f"margen disponible · hoy {libro.describe()}"
 
 
+def comprobar_freno(_: Dict[str, Any]) -> Tuple[bool, str]:
+    """
+    El freno puesto no es un fallo: es una decisión. Pero tiene que verse.
+
+    Un despliegue sobre una instancia frenada y nadie recordándolo es media hora
+    de gente preguntándose por qué Yuki no hace nada.
+    """
+    from src.core.brake import Brake
+
+    freno = Brake()
+    estado = freno.state()
+    if estado.activo:
+        return True, f"⚠ {freno.describe()}"
+    return True, "sin freno"
+
+
 def comprobar_salon(url: str) -> Tuple[bool, str]:
     try:
         with urllib.request.urlopen(f"{url.rstrip('/')}/health", timeout=10) as respuesta:
@@ -138,6 +154,7 @@ def main() -> int:
         ("marcado_articulo_50", lambda: comprobar_marcado(config)),
         ("limitadores", lambda: comprobar_limitadores(config)),
         ("presupuesto", lambda: comprobar_presupuesto(config)),
+        ("freno", lambda: comprobar_freno(config)),
     ]
     if argumentos.url:
         pruebas.append(("salon", lambda: comprobar_salon(argumentos.url)))

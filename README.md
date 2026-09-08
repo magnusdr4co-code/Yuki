@@ -126,6 +126,9 @@ python3 cli.py sueno --fase nrem --seco
 # ¿Alguien ha tocado el registro de lo que hizo?
 python3 cli.py bitacora --verificar
 
+# Freno de mano: pararla sin matarla (publicacion | medios | todo)
+python3 cli.py freno --nivel medios --minutos 120 --motivo "factura disparada" 
+
 # Comprobación de humo tras un despliegue (código de salida ≠ 0 si algo falla)
 python3 scripts/smoke_check.py --url https://<salon>
 
@@ -209,6 +212,7 @@ contratar servicios de pago o de prometer una demo.
 | Refuerzo de la iniciativa | ✅ Real | Aprende de qué actos obtienen respuesta y en qué franja; refuerzo intermitente, aburrimiento acumulado y exploración para que no se apague ni se encasille |
 | Ritmos propios propuestos por Yuki | ✅ Real | `src/core/rituals.py`: propone un cron fundado en sus datos; sólo entra en el planificador si el Productor lo aprueba por DM |
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
+| Freno de mano graduado | ✅ Real | `src/core/brake.py`: parar publicación, medios o toda la iniciativa sin matar el contenedor. `YUKI_FRENO` manda sobre el DM. **Frenar no la enmudece**: sigue respondiendo a quien le hable |
 | Bitácora encadenada de actos | ✅ Real | `src/core/blackbox.py`: cada anotación lleva el hash de la anterior, así que editar el pasado deja marca. El precinto sale con la copia diaria y detecta también el corte por detrás |
 | Simulacro de fallos | ✅ Real | `scripts/chaos_drill.py`: nueve modos de fallo reales —reinicio a mitad de encargo, proveedor caído, estado corrupto, bitácora manipulada, reloj que salta— sobre un sandbox temporal, en CI |
 | Métricas y humo operables | ✅ Real | `GET /metrics` (Prometheus, tras credencial) y `scripts/smoke_check.py` con código de salida. CI en `.github/workflows/ci.yml`. Ver [`docs/OPERACION.md`](docs/OPERACION.md) |

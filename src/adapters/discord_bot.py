@@ -23,6 +23,7 @@ from .discord_intents import (
     looks_like_media_delivery_request as _looks_like_media_delivery_request,
 )
 from .discord_text import split_discord_text
+from ..core.brake import Brake
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, describe_job as describe_media_job
 
@@ -87,6 +88,10 @@ class DiscordAdapter:
         # y sin este registro una caída de red relanzaría un encargo en curso y
         # pagaría dos veces el mismo clip.
         self._active_job_ids: Set[str] = set()
+        # Freno de mano: lo consulta el adaptador antes de emprender nada que
+        # salga hacia fuera o gaste crédito, para poder decir que no con motivo
+        # en vez de fallar a mitad.
+        self.brake = Brake()
 
         intents = discord.Intents.none()
         intents.guilds = True
@@ -369,6 +374,9 @@ class DiscordAdapter:
         if content.startswith("!ritmos") or content.startswith("!ritmo "):
             return self._handle_rituals_command(content, author_id, author_name)
 
+        if content.startswith("!freno"):
+            return self._handle_brake_command(content, author_name)
+
         if content.startswith("!bitacora") or content.startswith("!bitácora"):
             from ..core.blackbox import BlackBox
 
@@ -438,6 +446,48 @@ class DiscordAdapter:
             active_role="producer",
             producer_tools=True,
         )
+
+    def _handle_brake_command(self, content: str, author_name: str) -> str:
+        """
+        Freno de mano desde el DM: la palanca que no exige desplegar nada.
+
+        Se acepta con una sola palabra porque el momento de usarlo es el momento
+        de menos paciencia que hay. La palanca de entorno del operador sigue
+        mandando por encima de esto, y se dice cuando ocurre.
+        """
+        partes = content.split()
+        estado = self.brake.state()
+
+        if len(partes) == 1:
+            lineas = [f"🛑 **Freno de mano** — {self.brake.describe()}"]
+            if estado.activo:
+                detalles = estado.to_dict()
+                if detalles.get("minutos_restantes") is not None:
+                    lineas.append(f"Se suelta solo en {detalles['minutos_restantes']} min.")
+            lineas.append("`!freno publicacion|medios|todo [minutos] [motivo]` · `!freno soltar`")
+            return "\n".join(lineas)
+
+        orden = partes[1].lower()
+        if orden in ("soltar", "quitar", "off"):
+            nuevo = self.brake.release(actor=author_name)
+            if nuevo.activo:
+                return (f"🛑 Solté mi freno, pero sigue puesto desde {nuevo.origen} "
+                        f"en «{nuevo.nivel}»: eso no lo controlo yo.")
+            return "✅ Freno soltado. Vuelvo a funcionar con normalidad."
+
+        minutos = None
+        resto = partes[2:]
+        if resto and resto[0].isdigit():
+            minutos = float(resto[0])
+            resto = resto[1:]
+        try:
+            nuevo = self.brake.engage(orden, motivo=" ".join(resto), actor=author_name,
+                                      minutos=minutos)
+        except ValueError as exc:
+            return f"❌ {exc}"
+        caducidad = f" durante {minutos:g} min" if minutos else " hasta que lo sueltes"
+        return (f"🛑 Freno puesto en «{nuevo.nivel}»{caducidad}. {self.brake.describe()}\n"
+                "_Sigo respondiendo a quien me hable: enmudecerme no es frenarme._")
 
     def _handle_state_command(self, content: str, author_name: str) -> str:
         """Inventario del estado durable: qué guarda, quién lo escribe y qué acciona."""
@@ -629,6 +679,10 @@ class DiscordAdapter:
         origin_channel,
     ) -> str:
         """Lanza la producción en segundo plano y devuelve un acuse inmediato."""
+        frenada = self.brake.blocked_reason("publicar")
+        if frenada:
+            return (f"🛑 No abro el Salón ahora mismo: {frenada}. "
+                    "Suéltalo con `!freno soltar` cuando quieras que siga.")
         task = asyncio.create_task(
             self._run_discord_production(
                 author_id=author_id,
@@ -702,6 +756,10 @@ class DiscordAdapter:
         """El trabajo pesado no bloquea el gateway; los binarios se entregan en el mismo DM."""
         if origin_channel is None:
             return "❌ No tengo un canal de DM para entregar los archivos."
+        frenada = self.brake.blocked_reason("medios")
+        if frenada:
+            return (f"🛑 No genero medios ahora mismo: {frenada}. "
+                    "Suéltalo con `!freno soltar` cuando quieras que siga.")
         job = self.media_jobs.create(
             requester_id=author_id,
             order=content,

@@ -20,3 +20,5 @@ def libro_de_gasto_aislado(tmp_path, monkeypatch):
     monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "output"))
     monkeypatch.setenv("YUKI_PERSONA_PATH", str(tmp_path / "persona_drift.json"))
     monkeypatch.setenv("YUKI_BLACKBOX_PATH", str(tmp_path / "bitacora.jsonl"))
+    monkeypatch.setenv("YUKI_FRENO_PATH", str(tmp_path / "freno.json"))
+    monkeypatch.delenv("YUKI_FRENO", raising=False)

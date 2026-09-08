@@ -189,6 +189,14 @@ def build_registry() -> List[StateItem]:
             holds_personal_data=True,
         ),
         StateItem(
+            id="freno", path=str(datos / "freno.json"),
+            description="Freno de mano: qué tiene prohibido hacer ahora mismo",
+            authority=PRODUCTOR, scope="toda la iniciativa y el gasto",
+            mutability="mutable", provenance="DM del Productor, CLI o variable de entorno",
+            recoverability="soltarlo es inmediato; la variable de entorno manda sobre el fichero",
+            actionability="ALTA: mientras esté puesto, Yuki no emprende ni gasta",
+        ),
+        StateItem(
             id="transparencia", path=str(datos / "transparency.json"),
             description="A quién se le ha declarado su naturaleza y cuándo",
             authority=SISTEMA, scope="personas con las que ha hablado",
