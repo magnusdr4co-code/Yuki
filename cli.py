@@ -474,7 +474,7 @@ def cmd_daemon():
 
     asyncio.run(_daemon_loop())
 
-def cmd_sleep(fase="noche", seco=False, as_json=False):
+def cmd_sleep(fase="noche", seco=False, as_json=False, deshacer=None):
     """Ejecuta una fase del ciclo de sueño sobre la memoria real."""
     import asyncio
 
@@ -492,6 +492,28 @@ def cmd_sleep(fase="noche", seco=False, as_json=False):
 
     # Sin agente no hay narrador: las fases corren deterministas y no se llama a
     # ningún proveedor desde la terminal.
+    if fase == "fusiones":
+        pendientes = ciclo.pending_merges()
+        if as_json:
+            print(json.dumps(pendientes, ensure_ascii=False, indent=2))
+            return pendientes
+        print_banner()
+        print(f"{MAGENTA}{BOLD}🧷 Fusiones deshacibles{RESET}\n")
+        if not pendientes:
+            print(f"  {DIM}Ninguna dentro del periodo de gracia.{RESET}")
+        for grupo in pendientes:
+            print(f"  canónico {grupo['canonico']} · {grupo['titulo']} "
+                  f"{DIM}(expira en {grupo['expira_en_dias']} días){RESET}")
+            for absorbido in grupo["absorbidos"]:
+                print(f"    ← {absorbido['id']} · {absorbido['titulo']}")
+        print(f"\n  {DIM}Deshacer: python3 cli.py sueno --deshacer <canonico>{RESET}")
+        return pendientes
+
+    if deshacer is not None:
+        recibo = ciclo.undo_merge(deshacer)
+        print(json.dumps(recibo, ensure_ascii=False, indent=2))
+        return recibo
+
     if fase == "nrem":
         resultado = asyncio.run(ciclo.nrem(dry_run=seco))
     elif fase == "rem":
@@ -897,7 +919,10 @@ def main():
     sueno = subparsers.add_parser(
         "sueno", help="Ciclo de sueño: consolidar (nrem), soñar (rem), olvidar, o la noche entera",
     )
-    sueno.add_argument("--fase", choices=["nrem", "rem", "olvido", "noche"], default="noche")
+    sueno.add_argument("--fase", choices=["nrem", "rem", "olvido", "noche", "fusiones"],
+                       default="noche")
+    sueno.add_argument("--deshacer", type=int, metavar="CANONICO",
+                       help="Deshace una fusión dentro del periodo de gracia")
     sueno.add_argument("--seco", action="store_true",
                        help="Ensayo en seco: calcula y muestra, sin tocar la memoria")
     sueno.add_argument("--json", action="store_true", help="Emite JSON")
@@ -945,7 +970,7 @@ def main():
     elif args.command == "persona":
         cmd_persona(as_json=args.json)
     elif args.command == "sueno":
-        cmd_sleep(fase=args.fase, seco=args.seco, as_json=args.json)
+        cmd_sleep(fase=args.fase, seco=args.seco, as_json=args.json, deshacer=args.deshacer)
     elif args.command == "estado":
         cmd_state(exportar=args.exportar, olvidar=args.olvidar,
                   motivo=args.motivo, as_json=args.json)

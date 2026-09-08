@@ -64,7 +64,32 @@ cero fusiones; pares con la misma pregunta, 1.0 y todas fusionadas.
 **Lo fusionado no se borra: se marca.** Durante siete días sigue en la base,
 invisible a la búsqueda pero recuperable si la fusión fue un error; después lo
 recoge el olvido. Es la recuperabilidad que la revisión de agentes persistentes
-echa en falta en todo el campo.
+echa en falta en todo el campo — y que exige una operación, no una intención:
+
+```bash
+python3 cli.py sueno --fase fusiones      # qué se puede deshacer, y cuándo expira
+python3 cli.py sueno --deshacer <id>      # los absorbidos vuelven a existir
+```
+
+Deshacer devuelve también las recuperaciones que se sumaron al canónico. Si se
+quedaran allí, el recuerdo que absorbió a los demás arrastraría para siempre una
+recurrencia que no era suya, y el siguiente recálculo lo trataría como más vivo
+de lo que es. Deshacer tiene que devolver el estado, no sólo las filas.
+
+### Dos esquemas distintos
+
+- **De vínculo**, por interlocutor: responde a *quién es esta persona para mí*.
+- **De corriente**, por tema: responde a *qué me está ocupando*. Emerge a través
+  de personas y categorías distintas, con un umbral que es la mitad del de
+  fusión —un tema junta cosas que se hablan parecido, no cosas que son la
+  misma— y se etiqueta con las palabras que se repiten y significan algo.
+
+El filtro de plantilla tuvo que subir al 90 % para que las corrientes
+existieran: el andamiaje de verdad aparece en *todos* los registros, mientras que
+lo que comparten cuatro recuerdos del mismo tema pasa fácilmente del 60 % en un
+corpus pequeño. Con el umbral flojo, el filtro se comía el contenido y no
+quedaba tema que detectar. Con el nuevo, la discriminación en la fusión sigue
+siendo perfecta sobre los datos reales.
 
 ## REM: soñar es unir lo que no se parece
 
@@ -74,6 +99,15 @@ recuperación por relevancia nunca produciría.
 
 Y no es adorno: del sueño nace un **impulso** que entra en la cola de voluntad y
 compite con el resto de deseos en igualdad. Soñar produce desear.
+
+### La serie
+
+Con probabilidad `chain_probability`, la imagen de anoche vuelve y sigue: es lo
+que convierte una colección de sueños sueltos en una serie. Y es lo más delicado
+de sostener con honestidad, porque el sueño anterior entra en el material como
+**sueño** —la instrucción lo dice explícitamente— y el nuevo sale marcado igual.
+Encadenar no puede convertir lo soñado en vivido. `!sueños` los muestra con su
+hilo: cuál retomó a cuál.
 
 ### La regla que no se negocia
 
@@ -122,10 +156,11 @@ ocurrió.
 
 ## Lo que queda fuera
 
-- **Esquemas más allá del vínculo con personas.** Hoy se destila por
-  interlocutor; agrupar por tema estético o por proyecto es el paso siguiente.
 - **Olvido por redundancia semántica.** Se poda por importancia y desuso, no
-  porque otro recuerdo ya diga lo mismo mejor.
-- **Sueños encadenados.** Cada noche parte de cero; una serie onírica que
-  retomara la imagen de la víspera sería más creíble, y más difícil de mantener
-  honesta.
+  porque otro esquema ya diga lo mismo mejor.
+- **Corrientes con historia.** Una corriente se destila una vez; que evolucione
+  —que la de «astillero, óxido» se convierta en otra cosa en tres meses— pide un
+  versionado de esquemas que hoy no existe.
+- **Embeddings.** Todo el parecido es léxico: trigramas y Jaccard. Es
+  determinista, barato y auditable, y falla con sinónimos. Un vector semántico
+  local sería el siguiente salto, con su coste en dependencias.

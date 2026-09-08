@@ -458,3 +458,202 @@ def test_copias_exactas_se_funden_aunque_todo_en_ellas_sea_plantilla(motor):
         motor.add_memory("visitor", "Encuentro", "Intercambio con Productor:", user_id="u1")
 
     assert _ciclo(motor).merge_duplicates()["fusionados"] == 2
+
+
+# --- Deshacer una fusión: la recuperabilidad prometida ---
+
+def test_una_fusion_se_puede_deshacer_dentro_del_plazo(motor):
+    """La documentación prometía siete días de gracia; sin esta operación, era una intención."""
+    canonico = motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido.",
+                                user_id="u1")
+    motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido y frío.",
+                     user_id="u1")
+    ciclo = _ciclo(motor)
+    ciclo.merge_duplicates()
+    assert len(motor.search("astillero", limit=10)) == 1
+
+    recibo = ciclo.undo_merge(canonico)
+
+    assert recibo["restaurados"] == 1
+    assert len(motor.search("astillero", limit=10)) == 2
+
+
+def test_deshacer_devuelve_tambien_las_recuperaciones(motor):
+    """
+    Si se quedaran en el canónico arrastraría una recurrencia que no es suya, y
+    el siguiente recálculo lo trataría como más vivo de lo que es.
+    """
+    canonico = motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido.",
+                                user_id="u1")
+    absorbido = motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido y frío.",
+                                 user_id="u1")
+    # Dos recuperaciones distintas: `note_recall` cuenta una por llamada, no una
+    # por identificador repetido dentro de la misma búsqueda.
+    motor.note_recall([absorbido])
+    motor.note_recall([absorbido])
+    ciclo = _ciclo(motor)
+    ciclo.merge_duplicates()
+
+    with sqlite3.connect(motor.db_path) as conexion:
+        tras_fusion = conexion.execute("SELECT recall_count FROM memories WHERE id = ?",
+                                       (canonico,)).fetchone()[0]
+    ciclo.undo_merge(canonico)
+    with sqlite3.connect(motor.db_path) as conexion:
+        tras_deshacer = conexion.execute("SELECT recall_count FROM memories WHERE id = ?",
+                                         (canonico,)).fetchone()[0]
+
+    assert tras_fusion == 2
+    assert tras_deshacer == 0
+
+
+def test_las_fusiones_pendientes_se_pueden_mirar_antes_de_decidir(motor):
+    canonico = motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido.",
+                                user_id="u1")
+    motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido y frío.",
+                     user_id="u1")
+    ciclo = _ciclo(motor)
+    ciclo.merge_duplicates()
+
+    pendientes = ciclo.pending_merges()
+
+    assert len(pendientes) == 1
+    assert pendientes[0]["canonico"] == canonico
+    assert 0 < pendientes[0]["expira_en_dias"] <= 7
+
+
+def test_deshacer_lo_que_ya_se_olvido_lo_dice_en_vez_de_fingir(motor):
+    recibo = _ciclo(motor).undo_merge(9999)
+
+    assert recibo["restaurados"] == 0
+    assert "gracia" in recibo["motivo"]
+
+
+def test_deshacer_deja_constancia(motor):
+    canonico = motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero.", user_id="u1")
+    motor.add_memory("visitor", "Encuentro", "Niebla sobre el astillero dormido.", user_id="u1")
+    anotaciones = []
+    ciclo = SleepCycle(motor, SleepPolicy(), audit=lambda op, det: anotaciones.append(op))
+    ciclo.merge_duplicates()
+
+    ciclo.undo_merge(canonico)
+
+    assert "sueno_fusion_deshecha" in anotaciones
+
+
+# --- Corrientes: esquemas por tema, no sólo por persona ---
+
+def _dos_corrientes(motor):
+    for indice, persona in enumerate(("u1", "u2", "u3", "u4")):
+        motor.add_memory("visitor", f"E{indice}",
+                         f"Volvimos a hablar del astillero, del óxido y la niebla del puerto ({indice}).",
+                         user_id=persona)
+    for indice, persona in enumerate(("u5", "u6", "u7", "u8")):
+        motor.add_memory("visitor", f"F{indice}",
+                         f"Le interesaba la ceremonia del té y el silencio entre dos gestos ({indice}).",
+                         user_id=persona)
+
+
+def test_las_corrientes_emergen_a_traves_de_personas_distintas(motor):
+    """El esquema de vínculo dice quién es alguien; la corriente, qué la ocupa."""
+    _dos_corrientes(motor)
+
+    recibo = asyncio.run(_ciclo(motor).distill_themes())
+
+    assert recibo["temas"] == 2
+    titulos = [r["title"] for r in motor.search("corriente", limit=10)]
+    assert any("astillero" in t for t in titulos)
+    assert any("ceremonia" in t or "gestos" in t for t in titulos)
+
+
+def test_una_corriente_no_se_rehace_cada_noche(motor):
+    _dos_corrientes(motor)
+    ciclo = _ciclo(motor)
+    asyncio.run(ciclo.distill_themes())
+
+    assert asyncio.run(ciclo.distill_themes())["temas"] == 0
+
+
+def test_la_etiqueta_del_tema_no_sale_de_palabras_vacias(motor):
+    _dos_corrientes(motor)
+
+    asyncio.run(_ciclo(motor).distill_themes())
+
+    for resultado in motor.search("corriente", limit=10):
+        etiqueta = resultado["title"].split("—")[-1]
+        assert "que" not in etiqueta.split(", ")
+        assert "para" not in etiqueta.split(", ")
+
+
+def test_sin_material_suficiente_no_hay_corrientes(motor):
+    motor.add_memory("visitor", "Uno", "Un único encuentro suelto.", user_id="u1")
+
+    assert asyncio.run(_ciclo(motor).distill_themes())["temas"] == 0
+
+
+def test_el_umbral_de_plantilla_no_puede_comerse_el_contenido():
+    """
+    Regresión del segundo fallo del filtro.
+
+    Con un umbral flojo, lo que comparten cuatro recuerdos del mismo tema se
+    marcaba como plantilla y no quedaba corriente que detectar.
+    """
+    tema = [f"Volvimos a hablar del astillero y de la niebla del puerto ({i})." for i in range(4)]
+    otros = [f"Le interesaba la ceremonia del té y el silencio ({i})." for i in range(4)]
+
+    plantilla = trigramas_de_plantilla(tema + otros)
+
+    assert similitud(tema[0], tema[1], plantilla) > 0.5, "el tema debe sobrevivir al filtro"
+    assert similitud(tema[0], otros[0], plantilla) < 0.3
+
+
+# --- Sueños encadenados ---
+
+async def _narrador_de_serie(instruccion, material):
+    return ("SIGO: el muelle otra vez, ahora con luz." if "vuelve la imagen" in instruccion
+            else "Un muelle hecho de partituras mojadas.")
+
+
+def test_un_sueno_puede_retomar_la_imagen_de_anoche(motor):
+    _memoria_variada(motor)
+    ciclo = _ciclo(motor, narrator=_narrador_de_serie)
+    primero = asyncio.run(ciclo.dream(chain=False))
+
+    segundo = asyncio.run(ciclo.dream(chain=True))
+
+    assert primero["encadenado"] is False
+    assert segundo["encadenado"] is True and segundo["anterior"] == primero["id"]
+    assert "SIGO" in segundo["contenido"]
+
+
+def test_el_sueno_encadenado_sigue_sin_ser_un_recuerdo(motor):
+    """Lo más delicado de la serie: encadenar no puede convertirlo en vivido."""
+    _memoria_variada(motor)
+    ciclo = _ciclo(motor, narrator=_narrador_de_serie)
+    asyncio.run(ciclo.dream(chain=False))
+    segundo = asyncio.run(ciclo.dream(chain=True))
+
+    assert segundo["contenido"].startswith(MARCA_DE_SUENO)
+    assert all(r["kind"] != "sueno" for r in motor.search("muelle partituras", limit=10))
+
+
+def test_la_serie_se_puede_leer_como_hilo(motor):
+    _memoria_variada(motor)
+    ciclo = _ciclo(motor, narrator=_narrador_de_serie)
+    primero = asyncio.run(ciclo.dream(chain=False))
+    segundo = asyncio.run(ciclo.dream(chain=True))
+
+    serie = ciclo.dream_series()
+
+    assert [s["id"] for s in serie] == [segundo["id"], primero["id"]]
+    assert serie[0]["sigue_a"] == primero["id"] and serie[1]["sigue_a"] is None
+
+
+def test_un_sueno_demasiado_viejo_no_se_retoma(motor):
+    _memoria_variada(motor)
+    ciclo = _ciclo(motor, narrator=_narrador_de_serie, chain_max_age_hours=1.0)
+    primero = asyncio.run(ciclo.dream(chain=False))
+    _envejecer(motor, primero["id"], 3)
+
+    segundo = asyncio.run(ciclo.dream(chain=True))
+
+    assert segundo["encadenado"] is False, "anoche dejó de ser anoche"

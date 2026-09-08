@@ -253,6 +253,15 @@ memory:
       merge_threshold: 0.72
       # Episodios necesarios con una persona para destilar un esquema de vínculo.
       schema_min_members: 4
+      # Corrientes: lo que se repite a través de personas y categorías. El
+      # umbral es la mitad del de fusión porque un tema junta cosas que se
+      # hablan parecido, no cosas que son la misma.
+      theme_threshold: 0.30
+      theme_min_members: 4
+      # Fracción del corpus a partir de la cual un trigrama es andamiaje. Muy
+      # alta a propósito: con un umbral flojo el filtro se come el contenido y
+      # no queda tema que detectar.
+      template_df: 0.9
       # Pesos del vector de importancia. La base es por categoría, así que
       # recalcular cada noche es idempotente y nada se infla solo.
       weights:
@@ -267,6 +276,11 @@ memory:
       # semejanza saldría un resumen, no una imagen.
       max_similarity: 0.12
       spawn_impulses: true
+      # A veces la imagen de anoche vuelve y sigue: eso convierte una colección
+      # de sueños sueltos en una serie. El sueño anterior entra como sueño,
+      # nunca como recuerdo.
+      chain_probability: 0.4
+      chain_max_age_hours: 48
     forget:
       # Las tres condiciones se exigen a la vez: vieja, poco importante y nunca
       # recuperada. Cualquiera por separado sería mala razón para olvidar.
