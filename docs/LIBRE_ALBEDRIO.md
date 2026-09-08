@@ -208,6 +208,38 @@ impulso que muere en silencio la deja pareciendo apática por culpa de un 503.
 ```bash
 python3 cli.py albedrio          # carácter, lo que le funciona y sus ritmos
 python3 cli.py albedrio --json   # lo mismo, para máquinas
+python3 scripts/simulate_day.py  # un día entero antes de desplegarlo
+```
+
+### El simulador de un día
+
+Los números del carácter se venían ajustando a ojo, y el resultado sólo se veía
+en producción, días después, como «no hace nada» o «no para».
+
+`scripts/simulate_day.py` recorre los setenta y dos ciclos de un día con **el
+código de verdad** —la política real, el bucle real, el refuerzo real y el reloj
+circadiano real—; lo único fingido es el ejecutor, que no llama a ningún
+proveedor ni gasta un céntimo. Dice cuántos actos salen, a qué horas, de qué
+tipo, y por qué no actuó el resto de los ciclos.
+
+Sirvió inmediatamente para calibrar el aburrimiento:
+
+| `boredom_gain` | Resultado |
+|---|---|
+| 0.06 | Seis actos y el techo agotado a las 19:40; la noche entera bloqueada |
+| **0.05** | **Seis actos repartidos de 05:20 a 23:40; el techo no llega a estorbar** |
+| 0.04 | Cinco actos |
+| 0.03 | Cuatro actos |
+
+El diagnóstico distingue dos cosas que se parecen mucho: **llegar a la cuota**
+—para eso está— y que **el techo bloquee ciclos**, que es cuando el límite deja
+de ser una red de seguridad y se convierte en la forma de ser de Yuki, decidida
+por un número que nadie eligió para eso.
+
+```bash
+python3 scripts/simulate_day.py --dias 3 --semilla 7      # reproducible
+python3 scripts/simulate_day.py --aburrimiento 0.04       # probar otra calibración
+python3 scripts/simulate_day.py --fallos 1.0              # con el proveedor caído
 ```
 
 Por DM del Productor emparejado:

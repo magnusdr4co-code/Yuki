@@ -162,7 +162,13 @@ agency:
   # meses fueron dos—. Sin techo en la rebaja, un fin de semana tranquilo la
   # volvería incontinente el lunes; con el techo aplicado también a la
   # acumulación, la espontaneidad no llegaba nunca.
-  boredom_gain: 0.06
+  # 0.05 no está elegido a ojo: `scripts/simulate_day.py` recorre los 72 ciclos
+  # del día con el bucle real. A 0.06 hace sus seis actos y agota el techo a las
+  # 19:40, con la noche entera bloqueada —el techo haciendo de carácter, que no
+  # es carácter—; a 0.04 se queda en cinco. A 0.05 los reparte de 05:20 a 23:40
+  # sin que el techo llegue a estorbar, que es lo que se quería: el límite como
+  # red de seguridad y no como forma de ser.
+  boredom_gain: 0.05
   boredom_cap: 1.0
   boredom_relief_cap: 0.35
 

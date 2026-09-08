@@ -7,7 +7,7 @@
 .DEFAULT_GOAL := ayuda
 PY ?= python3
 
-.PHONY: ayuda instalar pruebas cobertura linter humo humo-ci simulacro restaurar circuito pulso estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
+.PHONY: ayuda instalar pruebas cobertura linter humo humo-ci simulacro restaurar circuito pulso dia estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
 
 ayuda:  ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -44,6 +44,9 @@ todo: linter pruebas simulacro circuito humo-ci  ## Lo que ejecuta la CI, en loc
 
 pulso:  ## Signos vitales: ¿corre el proceso, y además vive Yuki?
 	$(PY) cli.py pulso
+
+dia:  ## Simula un día de su carácter antes de desplegarlo (DIAS=3 SEMILLA=7)
+	$(PY) scripts/simulate_day.py --dias $(or $(DIAS),1) $(if $(SEMILLA),--semilla $(SEMILLA),)
 
 estado:  ## Inventario del estado durable
 	$(PY) cli.py estado
