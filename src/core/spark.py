@@ -394,13 +394,21 @@ class AgencyLoop:
         if hasattr(self.vital_state, 'spend_energy'):
             self.vital_state.spend_energy(cost)
 
-        if impulse.tool_hint in ('compose', 'paint', 'write') and hasattr(self.vital_state, 'apply_stimulus'):
+        # Un intento fallido cuenta como intento —para el techo diario y para que
+        # el impulso no se reintente en bucle— pero **no se premia**. Reforzar un
+        # fallo enseña exactamente lo contrario de lo que hay que aprender, y el
+        # estímulo creativo por algo que no llegó a existir es una mentira que se
+        # cuenta a sí misma.
+        fallo = str(result.get('status', 'completed')) == 'failed'
+
+        if (not fallo and impulse.tool_hint in ('compose', 'paint', 'write')
+                and hasattr(self.vital_state, 'apply_stimulus')):
             self.vital_state.apply_stimulus('creative_output', 0.5)
 
         # Refuerzo intermitente: el premio interno llega de forma aleatoria, no
         # siempre. Premiar cada acto haría que su ausencia se notara y la
         # iniciativa se apagase en cuanto el mundo callara un par de días.
-        if self.model.premio_intermitente() and hasattr(self.vital_state, 'apply_stimulus'):
+        if not fallo and self.model.premio_intermitente() and hasattr(self.vital_state, 'apply_stimulus'):
             self.vital_state.apply_stimulus('positive_interaction', 0.4)
             logger.info("Premio intermitente aplicado tras actuar por voluntad propia.")
 

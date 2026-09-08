@@ -17,7 +17,7 @@ Esto lo convierte en cosas que se ejecutan.
 |---|---|
 | **pruebas** | La suite en 3.11 (la de la imagen) y 3.12 (aviso anticipado), con `pytest` y también con `unittest`, que es lo que documenta el README: si deja de funcionar, la documentación miente |
 | **cumplimiento** | Humo sin credenciales + el gemelo virtual sigue siendo legible y reportando |
-| **simulacro y recuperación** | Los once modos de fallo del §6 y el circuito de copia y restauración del §7: romperla a propósito, y comprobar que se la puede volver a levantar |
+| **simulacro y recuperación** | Los doce modos de fallo del §6 y el circuito de copia y restauración del §7: romperla a propósito, y comprobar que se la puede volver a levantar |
 | **imagen** | La imagen construye, las dos composiciones son válidas, y **fluidsynth y el banco de sonidos están dentro** — lo que separa tener respaldo musical de no tenerlo, y sólo se nota el día que Lyria falla |
 
 Las pruebas inyectan dobles en lugar de llamar a proveedores, así que abrir una
@@ -166,7 +166,7 @@ recordarlo cuesta media hora de gente preguntándose qué pasa.
 ## 6. El simulacro
 
 ```bash
-python3 scripts/chaos_drill.py           # once modos de fallo, código de salida
+python3 scripts/chaos_drill.py           # doce modos de fallo, código de salida
 python3 scripts/chaos_drill.py --json
 python3 scripts/chaos_drill.py --solo bitacora_manipulada --verboso
 ```
@@ -185,6 +185,7 @@ fallado o puede fallar**, y comprueba que las invariantes siguen en pie.
 | `bitacora_manipulada` | ¿Y si alguien edita el registro? | Se ve la edición **y** el corte por detrás |
 | `sueno_no_es_recuerdo` | ¿Y si un sueño vuelve como algo vivido? | Cuatro consultas y ninguna lo devuelve |
 | `olvido_respeta_lo_intocable` | ¿Y si el olvido corre sobre una memoria antigua entera? | Canon, síntesis y lo fijado sobreviven |
+| `acto_propio_que_falla` | ¿Y si el proveedor se cae en mitad de un acto por voluntad propia? | El intento cuenta, no se premia y no se reintenta en bucle |
 | `hilo_de_tareas_muerto` | ¿Y si el hilo del planificador muere y el contenedor sigue verde? | La sonda lo dice, y no lo confunde con freno, arranque ni caída |
 | `reloj_hacia_atras` | ¿Y si el reloj de la VM salta? | Ni el presupuesto ni el refuerzo se corrompen |
 

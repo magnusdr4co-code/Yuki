@@ -115,7 +115,7 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Romper a Yuki a propósito
-        # Once modos de fallo reales —reinicio a mitad de encargo, proveedor
+        # Doce modos de fallo reales —reinicio a mitad de encargo, proveedor
         # caído, estado corrupto, bitácora manipulada, reloj que salta, hilo de
         # tareas muerto con el contenedor en verde— contra un sandbox temporal.
         # Si una invariante se rompe, la rama no pasa.

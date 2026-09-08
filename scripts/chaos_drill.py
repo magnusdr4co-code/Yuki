@@ -458,6 +458,56 @@ def _diagnosticos(escribir: Callable[..., None], leer: Callable[[], str],
     return True, "distingue nueva, viva, catatónica, frenada y ausente"
 
 
+def acto_propio_que_falla(raiz: Path) -> Tuple[bool, str]:
+    """
+    El proveedor se cae en mitad de un acto por voluntad propia.
+
+    Todo el freno del albedrío —techo diario, reinicio del aburrimiento, dar el
+    impulso por cumplido— vive en `record_action`. Si una excepción se lo salta,
+    el impulso sigue vivo, el contador del día no sube y la tensión sigue
+    subiendo: el mismo acto fallido se reintenta cada veinte minutos durante las
+    diez horas que dura el impulso. Treinta llamadas a un proveedor caído, y con
+    `compose` o `paint` eso es dinero.
+
+    Sólo es alcanzable desde que la espontaneidad funciona, que es de esta misma
+    semana: antes no había impulsos propios que pudieran fallar.
+    """
+    import types
+
+    from src.core.agency import AgencyLedger, AgencyPolicy
+    from src.core.spark import AgencyLoop, Impulse, WillQueue
+
+    diario = AgencyLedger(path=str(raiz / "albedrio_fallido.json"))
+    vital = types.SimpleNamespace(energy=0.9, inspiration=0.5, curiosity=0.5,
+                                  has_energy_for=lambda coste: True,
+                                  spend_energy=lambda coste: None,
+                                  apply_stimulus=lambda tipo, fuerza: premios.append(tipo))
+    premios: List[str] = []
+    cola = WillQueue()
+    bucle = AgencyLoop(cola, vital, policy=AgencyPolicy(), ledger=diario)
+
+    impulso = Impulse(source="espontaneo", desire="componer algo", tool_hint="compose",
+                      intensity=0.9, born_at=time.time(), max_age_hours=10.0)
+    cola.add(impulso)
+
+    # El proveedor devuelve 503: se registra el intento igualmente.
+    bucle.record_action(impulso, {"status": "failed", "error": "503 del proveedor"})
+
+    if not impulso.fulfilled:
+        return False, "un impulso fallido queda vivo y se reintentará cada veinte minutos"
+    if diario.acciones_hoy() != 1:
+        return False, "un intento fallido no cuenta para el techo diario: no hay techo"
+    if diario.boredom() != 0.0:
+        return False, "la tensión no se reinicia tras el intento: seguirá subiendo sola"
+    if premios:
+        return False, f"premió un fallo ({premios}): eso enseña lo contrario"
+
+    # Y el ciclo siguiente ya no lo elige.
+    if bucle.decidir(phase="atelier").motivo == "actua":
+        return False, "el ciclo siguiente vuelve a elegir el impulso ya fallido"
+    return True, "el intento cuenta, no se premia, y no se reintenta en bucle"
+
+
 ESCENARIOS = [
     Escenario("reinicio_a_media_produccion",
               "¿Y si el despliegue cae a mitad de un encargo?",
@@ -499,6 +549,10 @@ ESCENARIOS = [
               "¿Y si el hilo del planificador muere y el contenedor sigue verde?",
               "la sonda lo dice, y no lo confunde con freno, arranque ni caída",
               hilo_de_tareas_muerto),
+    Escenario("acto_propio_que_falla",
+              "¿Y si el proveedor se cae en mitad de un acto por voluntad propia?",
+              "el intento cuenta, no se premia y no se reintenta en bucle",
+              acto_propio_que_falla),
     Escenario("reloj_hacia_atras",
               "¿Y si el reloj de la VM salta?",
               "ni el presupuesto ni el refuerzo se corrompen",

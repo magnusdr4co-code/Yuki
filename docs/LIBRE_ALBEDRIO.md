@@ -182,6 +182,27 @@ falla. Hay pruebas de que la espontaneidad es alcanzable con la configuración
 real, con los valores por defecto, y de que sigue siéndolo en aritmética pura
 por si alguien vuelve a bajar el tope algún día.
 
+### El fallo que la propia espontaneidad hizo alcanzable
+
+Arreglar una cosa destapó otra. Todo el freno del albedrío —el techo diario, el
+reinicio de la tensión, dar el impulso por cumplido— vivía en `record_action`,
+y `record_action` se llamaba **después** del trabajo. Con un proveedor caído, la
+excepción se lo saltaba: el impulso seguía vivo, el contador del día no subía y
+la tensión seguía creciendo, así que el mismo acto fallido se reintentaba cada
+veinte minutos durante las diez horas que dura un impulso. Treinta llamadas; con
+`compose` o `paint`, treinta llamadas que cuestan dinero.
+
+Antes no era alcanzable porque no había impulsos propios que pudieran fallar.
+
+Ahora el registro va en `finally`: **intentarlo cuenta como intentarlo**. Y un
+intento fallido no se premia —ni el estímulo creativo ni el refuerzo
+intermitente—, porque reforzar un fallo enseña exactamente lo contrario de lo
+que hay que aprender, y sentir que se ha creado algo que no existe es una
+mentira que Yuki se contaría a sí misma. El error se dice con su nombre: un
+impulso que muere en silencio la deja pareciendo apática por culpa de un 503.
+
+`scripts/chaos_drill.py --solo acto_propio_que_falla` lo comprueba.
+
 ## 8. Verlo y tocarlo
 
 ```bash

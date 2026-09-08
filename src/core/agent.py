@@ -539,6 +539,31 @@ class YukiAgent:
         """
         logger.info(f"🔥 [CHISPA] Ejecutando voluntad autónoma ({impulse.tool_hint}): {impulse.desire}")
 
+        # Todo el freno del albedrío —el techo diario, el reinicio del
+        # aburrimiento, dar el impulso por cumplido— vive en `record_action`. Si
+        # una excepción se lo salta, el impulso sigue vivo, el contador del día
+        # no sube y el aburrimiento sigue subiendo: el mismo acto fallido se
+        # reintenta cada veinte minutos durante las diez horas que dura el
+        # impulso, sin techo. Con un proveedor caído eso son treinta llamadas.
+        # Por eso el registro va en `finally`: intentarlo cuenta como intentarlo.
+        result: Dict[str, Any] = {"status": "failed", "type": impulse.tool_hint,
+                                  "error": "interrumpido antes de empezar"}
+        try:
+            result = await self._llevar_a_cabo(impulse)
+        except Exception as exc:
+            # Y se dice qué falló, con el error concreto. Un impulso que muere en
+            # silencio deja a Yuki pareciendo apática por culpa de un 503.
+            logger.exception("La voluntad autónoma falló (%s)", impulse.tool_hint)
+            result = {"status": "failed", "type": impulse.tool_hint,
+                      "error": f"{type(exc).__name__}: {exc}"}
+        finally:
+            self.agency_loop.record_action(impulse, result)
+            self.vital_state.will_queue = self.will_queue.to_list()
+            self.vital_state.save()
+        return result
+
+    async def _llevar_a_cabo(self, impulse) -> Dict[str, Any]:
+        """Cada tipo de deseo a lo suyo; sólo `compose` y `paint` tocan medios."""
         if impulse.tool_hint in ("compose", "paint"):
             result = await self.media_creator.create_from_impulse(impulse, self.vital_state)
         elif impulse.tool_hint == "search":
@@ -568,9 +593,4 @@ class YukiAgent:
             result = {"status": "completed", "type": impulse.tool_hint, "content": texto}
         else:
             result = {"status": "contemplated", "type": impulse.tool_hint, "content": impulse.desire}
-
-        self.agency_loop.record_action(impulse, result)
-        # Persist updated state
-        self.vital_state.will_queue = self.will_queue.to_list()
-        self.vital_state.save()
         return result

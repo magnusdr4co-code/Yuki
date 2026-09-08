@@ -12,6 +12,7 @@ distinga las dos cosas que más se parecen en un panel: **decidir no actuar** y
 import os
 import sys
 import types
+from pathlib import Path
 
 import pytest
 
@@ -22,6 +23,13 @@ from src.core.spark import (  # noqa: E402
     ACTUA, BAJO_UMBRAL, DESACTIVADO, FASE_DE_SILENCIO, FRENADA, SIN_DESEOS,
     SIN_ENERGIA, TECHO_DIARIO, AgencyLoop, Impulse, WillQueue,
 )
+
+
+def _ruta_temporal():
+    """Un diario de agencia desechable, fuera del repositorio."""
+    import tempfile
+
+    return Path(tempfile.mkdtemp()) / "agencia.json"
 
 
 def _vital(energia=0.9):
@@ -293,3 +301,58 @@ def test_sola_y_aburrida_acaba_queriendo_algo(bucle):
     primero = next(i for i, d in enumerate(actuados, 1) if d.actua)
     assert 3 < primero <= 12, f"actuó en el ciclo {primero}: ni instantáneo ni inalcanzable"
     assert diario.censo()["actua"] >= 1
+
+
+# --- Que un fallo no se convierta en un bucle ---
+
+def test_un_impulso_que_falla_cuenta_igual_y_no_se_reintenta_en_bucle(bucle):
+    """
+    El fallo que la propia espontaneidad hizo alcanzable.
+
+    Todo el freno del albedrío —techo diario, reinicio del aburrimiento, dar el
+    impulso por cumplido— vive en `record_action`. Si una excepción se lo salta,
+    el impulso sigue vivo, el contador del día no sube y el aburrimiento sigue
+    subiendo: con un proveedor caído, el mismo acto se reintenta cada veinte
+    minutos durante las diez horas que dura el impulso. Treinta llamadas.
+    """
+    cola = WillQueue()
+    impulso = _deseo()
+    cola.add(impulso)
+    loop, diario = bucle(cola=cola)
+
+    loop.record_action(impulso, {"status": "failed", "error": "503 del proveedor"})
+
+    assert impulso.fulfilled, "un impulso fallido tiene que quedar cerrado"
+    assert diario.acciones_hoy() == 1, "intentarlo cuenta para el techo del día"
+    assert diario.boredom() == 0.0, "el aburrimiento se reinicia aunque el acto fallara"
+    # Y el siguiente ciclo ya no lo vuelve a elegir: ahí está el bucle evitado.
+    assert loop.decidir(phase="atelier").motivo != "actua"
+
+
+def test_un_fallo_no_se_premia(bucle):
+    """
+    Reforzar un fallo enseña lo contrario de lo que hay que aprender.
+
+    Y el estímulo creativo por algo que no llegó a existir es una mentira que
+    Yuki se cuenta a sí misma, que es justo lo que este proyecto no hace.
+    """
+    estimulos = []
+    vital = types.SimpleNamespace(
+        energy=0.9, inspiration=0.5, curiosity=0.5,
+        has_energy_for=lambda coste: True,
+        spend_energy=lambda coste: None,
+        apply_stimulus=lambda tipo, fuerza: estimulos.append(tipo))
+
+    cola = WillQueue()
+    impulso = _deseo(tool="write")
+    cola.add(impulso)
+    diario = AgencyLedger(path=str(_ruta_temporal()))
+    loop = AgencyLoop(cola, vital, policy=AgencyPolicy(), ledger=diario)
+
+    loop.record_action(impulso, {"status": "failed", "error": "503"})
+    assert estimulos == [], f"premió un fallo: {estimulos}"
+
+    otro = _deseo(tool="write")
+    cola.add(otro)
+    loop.record_action(otro, {"status": "completed"})
+    assert "creative_output" in estimulos, "un acto que sí ocurrió sí se siente"
