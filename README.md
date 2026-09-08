@@ -129,6 +129,9 @@ python3 cli.py bitacora --verificar
 # Comprobación de humo tras un despliegue (código de salida ≠ 0 si algo falla)
 python3 scripts/smoke_check.py --url https://<salon>
 
+# Simulacro: romperla a propósito de nueve formas y ver si las invariantes aguantan
+python3 scripts/chaos_drill.py
+
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
 python3 cli.py backup
 ```
@@ -207,6 +210,7 @@ contratar servicios de pago o de prometer una demo.
 | Ritmos propios propuestos por Yuki | ✅ Real | `src/core/rituals.py`: propone un cron fundado en sus datos; sólo entra en el planificador si el Productor lo aprueba por DM |
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
 | Bitácora encadenada de actos | ✅ Real | `src/core/blackbox.py`: cada anotación lleva el hash de la anterior, así que editar el pasado deja marca. El precinto sale con la copia diaria y detecta también el corte por detrás |
+| Simulacro de fallos | ✅ Real | `scripts/chaos_drill.py`: nueve modos de fallo reales —reinicio a mitad de encargo, proveedor caído, estado corrupto, bitácora manipulada, reloj que salta— sobre un sandbox temporal, en CI |
 | Métricas y humo operables | ✅ Real | `GET /metrics` (Prometheus, tras credencial) y `scripts/smoke_check.py` con código de salida. CI en `.github/workflows/ci.yml`. Ver [`docs/OPERACION.md`](docs/OPERACION.md) |
 | Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT`. Rutas `/api` con credencial si se declara `SALON_API_TOKEN`, y techo de peticiones por cliente siempre activo |
 | Generación de texto vía OpenRouter | ✅ Real | Peticiones HTTP reales al agregador, con modelo de respaldo si el primario falla |

@@ -91,6 +91,28 @@ jobs:
         if: always()
         run: python scripts/virtualize_instance.py
 
+  simulacro:
+    name: Simulacro de fallos
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Instalar dependencias de prueba
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Romper a Yuki a propósito
+        # Nueve modos de fallo reales —reinicio a mitad de encargo, proveedor
+        # caído, estado corrupto, bitácora manipulada, reloj que salta— contra
+        # un sandbox temporal. Si una invariante se rompe, la rama no pasa.
+        run: python scripts/chaos_drill.py
+
   imagen:
     name: Imagen y réplica
     runs-on: ubuntu-latest

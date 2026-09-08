@@ -113,7 +113,49 @@ Y **no es una cadena de bloques**: no hay consenso, ni red, ni prueba de
 trabajo. Es un fichero append-only con hashes encadenados, y decirlo así es más
 honesto que adornarlo.
 
-## 5. Qué mirar cuando algo va mal
+## 5. El simulacro
+
+```bash
+python3 scripts/chaos_drill.py           # nueve modos de fallo, código de salida
+python3 scripts/chaos_drill.py --json
+python3 scripts/chaos_drill.py --solo bitacora_manipulada --verboso
+```
+
+La suite prueba que el código hace lo que dice cuando todo va bien. El simulacro
+es otra cosa: reproduce las formas concretas en que esta instancia **ya ha
+fallado o puede fallar**, y comprueba que las invariantes siguen en pie.
+
+| Escenario | La pregunta de las tres de la madrugada | Invariante |
+|---|---|---|
+| `reinicio_a_media_produccion` | ¿Y si el despliegue cae a mitad de un encargo? | No se pierde, y no se vuelve a pagar lo generado |
+| `fichero_desaparecido` | ¿Y si el fichero de un paso hecho ya no está? | El paso deja de contar como hecho |
+| `presupuesto_agotado` | ¿Y si se acaba el crédito a mitad? | Rechaza con la cifra concreta, sin dejar rastro |
+| `proveedor_caido` | ¿Y si Veo devuelve 503 tras reservar? | La reserva se devuelve: un fallo no se cobra |
+| `estado_corrupto` | ¿Y si todos los ficheros de estado quedan ilegibles? | Los siete módulos arrancan igual |
+| `bitacora_manipulada` | ¿Y si alguien edita el registro? | Se ve la edición **y** el corte por detrás |
+| `sueno_no_es_recuerdo` | ¿Y si un sueño vuelve como algo vivido? | Cuatro consultas y ninguna lo devuelve |
+| `olvido_respeta_lo_intocable` | ¿Y si el olvido corre sobre una memoria antigua entera? | Canon, síntesis y lo fijado sobreviven |
+| `reloj_hacia_atras` | ¿Y si el reloj de la VM salta? | Ni el presupuesto ni el refuerzo se corrompen |
+
+Corre entero sobre un sandbox temporal: **un simulacro que tocara la instancia
+sería el propio incidente que pretende ensayar**. Está en CI como trabajo
+propio, así que una rama que rompa una invariante no pasa.
+
+## 6. Alertas
+
+`deploy/alertas-prometheus.yml`: ocho reglas escritas en el repositorio y no en
+el panel de quien las mire, porque una alerta que vive sólo en la consola de un
+proveedor se pierde con la cuenta.
+
+La única crítica y sin espera es `BitacoraManipulada`. Las demás son avisos con
+ventana: gasto anómalo respecto a la media de la semana, deriva de persona
+sostenida media hora, propuestas de ritmo sin responder en tres días, un día
+entero sin un solo acto propio con la tensión alta —que no es un fallo técnico
+sino la señal de que algo la está bloqueando— y la ausencia total de métricas,
+que con las familias emitidas siempre sólo puede significar que la sonda no
+responde.
+
+## 7. Qué mirar cuando algo va mal
 
 | Síntoma | Primer sitio donde mirar |
 |---|---|

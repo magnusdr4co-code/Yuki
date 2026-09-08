@@ -1,0 +1,108 @@
+# Reglas de alerta para la instancia de Yuki.
+#
+# Se escriben aquí, y no en el panel de quien las mire, porque una alerta que
+# vive sólo en la consola de un proveedor se pierde con la cuenta. Cada regla
+# responde a una pregunta concreta que ya se ha hecho alguien mirando esta
+# instancia a deshora.
+#
+# Cargar con: --rules.file=deploy/alertas-prometheus.yml
+groups:
+  - name: yuki-integridad
+    rules:
+      - alert: BitacoraManipulada
+        # La más grave de todas y la única que no admite espera: si la cadena
+        # de auditoría no cuadra, alguien editó el registro de lo que Yuki hizo.
+        expr: yuki_bitacora_integra == 0
+        for: 0m
+        labels:
+          severity: critica
+        annotations:
+          resumen: "La bitácora de Yuki no cuadra"
+          accion: >-
+            Ejecutar `cli.py bitacora --verificar --precinto <el de la última copia>`.
+            Un precinto guardado en la propia instancia no prueba nada: usar el que
+            viajó con la copia diaria.
+
+      - alert: MaterialSinMarcar
+        # Artículo 50: material sintético entregable sin marca de origen.
+        expr: yuki_material_sin_marcar > 0
+        for: 15m
+        labels:
+          severity: alta
+        annotations:
+          resumen: "{{ $value }} fichero(s) generados sin marca de origen sintético"
+          accion: "`cli.py transparency --marcar`. En vigor desde 2026-08-02."
+
+  - name: yuki-credito
+    rules:
+      - alert: PresupuestoDeVideoCasiAgotado
+        expr: >-
+          yuki_gasto_hoy{unidad="video_segundos"}
+          / on(unidad) yuki_gasto_limite{unidad="video_segundos"} > 0.8
+        for: 5m
+        labels:
+          severity: media
+        annotations:
+          resumen: "Más del 80% del vídeo del día consumido"
+          accion: >-
+            Es aviso, no incidente: el presupuesto ya rechaza solo al llegar al
+            límite y los encargos se aplazan en vez de fallar. Sirve para saber
+            por qué mañana Yuki dirá que no.
+
+      - alert: GastoDiarioAnomalo
+        # Cambio brusco respecto a la media de la semana: un bucle de encargos,
+        # un cron mal escrito o alguien probando cosas.
+        expr: yuki_gasto_usd_estimado > 3 * avg_over_time(yuki_gasto_usd_estimado[7d]) + 1
+        for: 10m
+        labels:
+          severity: alta
+        annotations:
+          resumen: "El gasto de hoy triplica la media de la semana"
+          accion: "`cli.py spend` y revisar `data/media_jobs/` por encargos en bucle."
+
+  - name: yuki-presencia
+    rules:
+      - alert: DerivaDePersona
+        # -1 significa "sin muestras"; se excluye para no alertar del silencio.
+        expr: yuki_persona_registro >= 0 and yuki_persona_registro < 0.6
+        for: 30m
+        labels:
+          severity: media
+        annotations:
+          resumen: "La voz de Yuki se está yendo al registro de asistente"
+          accion: >-
+            `cli.py persona` para ver por dónde. Si coincide con un cambio de
+            modelo, el historial guarda cuál sirvió cada turno.
+
+      - alert: SinIniciativaEnTodoElDia
+        # No es un fallo técnico: es que Yuki lleva un día entero sin querer
+        # nada, y eso normalmente significa que algo la está bloqueando.
+        expr: yuki_agencia_actos_hoy == 0 and yuki_agencia_aburrimiento >= 0.3
+        for: 6h
+        labels:
+          severity: baja
+        annotations:
+          resumen: "Un día sin un solo acto propio, con la tensión alta"
+          accion: "`cli.py albedrio`: mirar techo diario, umbral efectivo y energía."
+
+      - alert: PropuestasSinResponder
+        expr: yuki_ritmos_propuestos > 0
+        for: 72h
+        labels:
+          severity: baja
+        annotations:
+          resumen: "Yuki propuso ritmos y llevan tres días sin respuesta"
+          accion: "`!ritmos` en el DM para aprobarlos o rechazarlos."
+
+  - name: yuki-sonda
+    rules:
+      - alert: SondaDeYukiMuda
+        # Con las familias emitidas siempre —también a cero— la ausencia total
+        # de métrica sólo puede significar que la sonda no responde.
+        expr: absent(yuki_gasto_usd_estimado)
+        for: 10m
+        labels:
+          severity: alta
+        annotations:
+          resumen: "No llegan métricas de Yuki"
+          accion: "Comprobar /health y el token del Salón; `scripts/smoke_check.py --url …`."
