@@ -221,10 +221,16 @@ def ciclo_completo(raiz: Path) -> Tuple[Optional[Path], List[Dict[str, Any]]]:
             return None, resultados
 
         copia = Path(copia_resultado.path)
+        # El detalle nombra las piezas, no las cuenta. Un ensayo que falle a las
+        # tres de la mañana tiene que decir **qué** faltaba sin que nadie lo
+        # reproduzca: «3 piezas» no distingue una copia buena de una copia sin
+        # memoria dentro.
         resultados.append({
             "prueba": "copia", "ok": True,
             "detalle": (f"{copia.stat().st_size / 1024:.1f} KiB · "
-                        f"{len(copia_resultado.included)} pieza(s) incluidas"),
+                        f"incluye {', '.join(copia_resultado.included) or 'nada'}"
+                        + (f" · {len(copia_resultado.skipped)} pieza(s) ausentes"
+                           if copia_resultado.skipped else "")),
         })
         resultados.extend(restaurar(copia, raiz / "restaurado"))
         return copia, resultados

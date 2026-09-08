@@ -790,6 +790,8 @@ def cmd_agency(as_json=False):
             "umbral_ahora": round(politica.umbral_efectivo(float(datos.get("boredom", 0.0))), 3),
             "pesos_por_accion": pesos,
             "esperando_eco": len(datos.get("pendientes", [])),
+            "censo_de_ciclos": diario.censo(),
+            "censo_de_hoy": diario.censo_de_hoy(),
             "ritmos_propios": [r.to_dict() for r in ritmos.aprobados()],
             "propuestas": [r.to_dict() for r in ritmos.pendientes()],
         }, ensure_ascii=False, indent=2))
@@ -806,6 +808,20 @@ def cmd_agency(as_json=False):
           f"{DIM}(aburrimiento {float(datos.get('boredom', 0.0)):.2f}){RESET}")
     print(f"  Actos hoy: {diario.acciones_hoy()}/{politica.max_actions_per_day} · "
           f"esperando eco: {len(datos.get('pendientes', []))}")
+    censo = diario.censo()
+    if censo:
+        total = sum(censo.values())
+        print(f"\n{BOLD}Por qué no actuó{RESET} {DIM}({total} ciclo(s) evaluados){RESET}")
+        for motivo, veces in sorted(censo.items(), key=lambda par: -par[1]):
+            marca = f"{GREEN}✓{RESET}" if motivo == "actua" else f"{DIM}·{RESET}"
+            print(f"  {marca} {motivo:<18} {veces:>4} {DIM}({veces * 100 // total}%){RESET}")
+    else:
+        # Que no haya censo dice algo por sí mismo: el bucle no ha llegado a
+        # evaluar ni una vez, que es distinto de evaluar y decidir que no.
+        print(f"\n{YELLOW}El bucle de albedrío no ha evaluado todavía ni un solo ciclo.{RESET}")
+        print(f"{DIM}No es que decida no actuar: es que no está corriendo. Mirar el "
+              f"planificador y `cli.py pulso`.{RESET}")
+
     print(f"\n{BOLD}Lo que le funciona{RESET} {DIM}(tasa de eco suavizada){RESET}")
     for accion, peso in sorted(pesos.items(), key=lambda par: -par[1]):
         intentos = datos.get("acciones", {}).get(accion, {}).get("intentos", 0)

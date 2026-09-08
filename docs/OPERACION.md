@@ -272,7 +272,7 @@ exactamente lo contrario.
 
 ## 9. Alertas
 
-`deploy/alertas-prometheus.yml`: doce reglas escritas en el repositorio y no en
+`deploy/alertas-prometheus.yml`: catorce reglas escritas en el repositorio y no en
 el panel de quien las mire, porque una alerta que vive sólo en la consola de un
 proveedor se pierde con la cuenta.
 
@@ -296,7 +296,7 @@ responde.
 |---|---|
 | Yuki calla o responde raro | `cli.py persona` — ¿se está yendo al registro de asistente? |
 | Se acabó el crédito antes de tiempo | `cli.py spend`, y `yuki_gasto_hoy` en el panel |
-| No hace nada por su cuenta | `cli.py albedrio` — techo diario, umbral, aburrimiento |
+| No hace nada por su cuenta | `cli.py albedrio` — el censo dice **por qué**; un censo vacío significa que el bucle no corre |
 | Un encargo multimedia no llegó | `!status` en el DM, y `data/media_jobs/` |
 | Hay que pararla YA | `cli.py freno --nivel todo --motivo ...`, o `YUKI_FRENO=todo` en el entorno |
 | Sospecha de manipulación | `cli.py bitacora --verificar --precinto <el de la última copia>` |

@@ -295,9 +295,12 @@ class AutonomousTasks:
         impulsos y la tensión ha subido bastante, nace uno.
         """
         phase = self.agent.circadian.current_phase()
-        action_decision = self.agent.agency_loop.evaluate(phase=phase)
-        if action_decision:
-            return await self.agent.execute_autonomous_will(action_decision)
+        decision = self.agent.agency_loop.decidir(phase=phase)
+        if decision.impulso is not None:
+            return await self.agent.execute_autonomous_will(decision.impulso)
+        # El porqué queda contado en el diario; aquí se deja además en el
+        # registro, que es donde mira quien está investigando ahora mismo.
+        logger.debug("Sin acto propio este ciclo — %s", decision.describe())
         return None
 
     async def spontaneous_monologue(self):

@@ -235,7 +235,7 @@ class AgencyLedger:
     def _leer(self) -> Dict[str, Any]:
         if not self.path.is_file():
             return {"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
-                    "boredom": 0.0, "recientes": []}
+                    "boredom": 0.0, "recientes": [], "ciclos": {}}
         try:
             datos = json.loads(self.path.read_text(encoding="utf-8"))
             if isinstance(datos, dict):
@@ -245,11 +245,12 @@ class AgencyLedger:
                 datos.setdefault("pendientes", [])
                 datos.setdefault("recientes", [])
                 datos.setdefault("boredom", 0.0)
+                datos.setdefault("ciclos", {})
                 return datos
         except (json.JSONDecodeError, OSError, TypeError):
             logger.warning("Diario de agencia ilegible; se empieza uno nuevo.")
         return {"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
-                "boredom": 0.0, "recientes": []}
+                "boredom": 0.0, "recientes": [], "ciclos": {}}
 
     def _escribir(self, datos: Dict[str, Any]) -> None:
         temporal = self.path.with_suffix(".json.tmp")
@@ -270,7 +271,46 @@ class AgencyLedger:
     def recientes(self, limite: int = 5) -> List[str]:
         return [r["tool"] for r in self._leer()["recientes"][-limite:]]
 
+    def censo(self) -> Dict[str, int]:
+        """
+        Por qué no actuó, contado.
+
+        Es la respuesta a la pregunta que antes no tenía ninguna: «¿por qué Yuki
+        no hace nada?». Sin esto sólo cabía leer registros y suponer; con esto,
+        `68 fase_de_silencio · 4 bajo_umbral` dice si hay que tocar el carácter,
+        soltar el freno o buscar una avería.
+        """
+        censo: Dict[str, int] = {}
+        for por_motivo in self._leer().get("ciclos", {}).values():
+            if not isinstance(por_motivo, dict):
+                continue
+            for motivo, numero in por_motivo.items():
+                if isinstance(numero, (int, float)):
+                    censo[motivo] = censo.get(motivo, 0) + int(numero)
+        return censo
+
+    def censo_de_hoy(self) -> Dict[str, int]:
+        """El censo del día en curso: lo que hay que mirar cuando pasa algo hoy."""
+        por_dia = self._leer().get("ciclos", {}).get(_hoy(self.timezone_name), {})
+        return {motivo: int(numero) for motivo, numero in por_dia.items()
+                if isinstance(numero, (int, float))} if isinstance(por_dia, dict) else {}
+
     # -- Escritura -------------------------------------------------------
+
+    def registrar_ciclo(self, motivo: str) -> None:
+        """
+        Anota el resultado de un ciclo de evaluación.
+
+        Es un contador y no una lista de eventos a propósito: el bucle corre
+        cada veinte minutos, y guardar una entrada por ciclo llenaría el fichero
+        de estado con setenta y dos anotaciones diarias que nadie va a leer una
+        por una. Lo que hace falta es la proporción, no el diario.
+        """
+        datos = self._leer()
+        por_dia = datos.setdefault("ciclos", {}).setdefault(_hoy(self.timezone_name), {})
+        por_dia[motivo] = int(por_dia.get(motivo, 0)) + 1
+        self._podar(datos)
+        self._escribir(datos)
 
     def registrar_intento(self, tool: str, desire: str = "") -> None:
         """Anota la acción, abre su ventana de eco y reinicia el aburrimiento."""
@@ -328,8 +368,11 @@ class AgencyLedger:
 
     def _podar(self, datos: Dict[str, Any]) -> None:
         limite = (datetime.now(timezone.utc).timestamp() - DIAS_RETENIDOS_ECO * 86400)
-        datos["dias"] = {d: n for d, n in datos["dias"].items()
-                         if d >= datetime.fromtimestamp(limite, timezone.utc).strftime("%Y-%m-%d")}
+        frontera = datetime.fromtimestamp(limite, timezone.utc).strftime("%Y-%m-%d")
+        datos["dias"] = {d: n for d, n in datos["dias"].items() if d >= frontera}
+        # El censo de ciclos se poda igual: setenta y dos anotaciones al día
+        # llenarían el fichero de estado con historia que nadie va a leer.
+        datos["ciclos"] = {d: n for d, n in datos.get("ciclos", {}).items() if d >= frontera}
 
 
 class ReinforcementModel:

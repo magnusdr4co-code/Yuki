@@ -616,6 +616,13 @@ class DiscordAdapter:
             estado = self.agent.agency_loop.estado()
             politica = estado["politica"]
             pesos = " · ".join(f"{a}:{v}" for a, v in sorted(estado["pesos_por_accion"].items()))
+            # El censo contesta la pregunta que el Productor hace de verdad —«¿por
+            # qué no hace nada?»—, y su ausencia contesta una distinta y más
+            # urgente: que el bucle ni siquiera está evaluando.
+            censo = estado.get("censo_de_ciclos") or {}
+            porque = (" · ".join(f"{motivo} {veces}"
+                                 for motivo, veces in sorted(censo.items(), key=lambda p: -p[1]))
+                      if censo else "todavía no ha evaluado ni un ciclo (el bucle no corre)")
             return (
                 "🌱 **Libre albedrío de Yuki**\n"
                 f"• **Iniciativa:** {'activa' if politica['enabled'] else 'apagada'}\n"
@@ -627,6 +634,7 @@ class DiscordAdapter:
                 f"**impulsos vivos:** {estado['impulsos_vivos']} · "
                 f"**esperando eco:** {estado['esperando_eco']}\n"
                 f"• **Lo que le funciona:** {pesos}\n"
+                f"• **Por qué no actúa:** {porque}\n"
                 f"• **Fases en silencio:** {', '.join(politica['fases_en_silencio'])}\n"
                 "Ajusta con `!albedrio espontaneidad 0.7` · claves: espontaneidad, audacia, "
                 "constancia, umbral, energia_minima, acciones_por_dia."

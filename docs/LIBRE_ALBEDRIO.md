@@ -108,7 +108,41 @@ Los ritmos propios viven en `data/runtime_rituals.json`, **no** en `config.yaml`
 los del proyecto siguen siendo del proyecto, y los que Yuki gana se pueden
 retirar de un plumazo sin que se pierda su historia.
 
-## 6. Verlo y tocarlo
+## 6. Por qué no actuó: el censo de ciclos
+
+Cada veinte minutos el bucle decide. Durante mucho tiempo, cuando decidía que
+no, lo hacía con un `return None` mudo, y «Yuki no hace nada» era un misterio
+que sólo se investigaba leyendo registros y suponiendo.
+
+Ahora cada salida lleva nombre y queda contada:
+
+| Motivo | Qué significa | Dónde se arregla |
+|---|---|---|
+| `actua` | Actuó | — |
+| `desactivado` | El albedrío está apagado | `agency.enabled` |
+| `frenada` | El freno impide la iniciativa | `cli.py freno --soltar` |
+| `fase_de_silencio` | Es una de sus horas calladas | `agency.quiet_phases` |
+| `techo_diario` | Ya hizo lo que puede hacer hoy | `agency.max_actions_per_day` |
+| `sin_deseos` | No hay impulso vivo, y el aburrimiento no llega para inventar uno | `agency.spontaneous_threshold` |
+| `bajo_umbral` | Quería algo, pero no lo bastante | `agency.min_intensity` |
+| `sin_energia` | No le da la energía para esa acción | esperar, o `agency.min_energy` |
+
+```bash
+python3 cli.py albedrio    # incluye el censo, con porcentajes
+```
+
+La distinción que da sentido a todo esto es la última: **un censo vacío no es
+que decidiera no actuar, es que nadie está evaluando**. Son dos incidentes
+distintos —uno se arregla tocando el carácter, el otro averiguando por qué murió
+el planificador— y desde fuera se ven exactamente igual. Por eso `cli.py
+albedrio` lo dice con todas las letras, y hay una alerta para cada caso
+(`ElBucleDeAlbedrioNoEvalua`, `SiempreElMismoMotivoParaNoActuar`).
+
+Los contadores son por día y se podan como el resto: setenta y dos ciclos
+diarios durante meses no caben en un fichero de estado, y lo que hace falta es
+la proporción, no el diario.
+
+## 7. Verlo y tocarlo
 
 ```bash
 python3 cli.py albedrio          # carácter, lo que le funciona y sus ritmos
@@ -128,7 +162,7 @@ Por DM del Productor emparejado:
 !ritmo retirar <id>             apagar un ritmo propio ya activo
 ```
 
-## 7. Lo que sigue sin poder hacer
+## 8. Lo que sigue sin poder hacer
 
 Por diseño, y conviene que quede escrito: no puede publicar en un canal por
 iniciativa propia sin pasar por el controlador de presencia, no puede darse más

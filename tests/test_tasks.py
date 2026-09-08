@@ -52,6 +52,21 @@ class PortalFalso:
         return {"audio_url": "file:///voz.ogg", "local_path": "/tmp/voz.ogg"}
 
 
+def _arnes(impulso=None, motivo=None):
+    """
+    Doble del bucle de albedrío.
+
+    Devuelve una `Decision`, no un impulso suelto: el tick pregunta *por qué* no
+    actuó, y un doble que sólo supiera decir «nada» dejaría esa rama sin probar.
+    """
+    from src.core.spark import ACTUA, SIN_DESEOS, Decision
+
+    decision = Decision(motivo or (ACTUA if impulso is not None else SIN_DESEOS),
+                        impulso=impulso)
+    return types.SimpleNamespace(decidir=lambda phase=None: decision,
+                                 evaluate=lambda phase=None: decision.impulso)
+
+
 def _agente(*, energia=0.8, humor=0.5, interacciones=10, fase="atelier", **extra):
     generadas: List[Dict[str, Any]] = []
 
@@ -86,7 +101,7 @@ def _agente(*, energia=0.8, humor=0.5, interacciones=10, fase="atelier", **extra
             impulse_from_dream=lambda sueno: None),
         propose_own_ritual=_corrutina(None),
         will_queue=types.SimpleNamespace(add=lambda impulso: None, to_list=lambda: []),
-        agency_loop=types.SimpleNamespace(evaluate=lambda phase=None: None),
+        agency_loop=_arnes(),
         inner_monologue=types.SimpleNamespace(
             should_think=lambda: False,
             generate_thought_prompt=lambda: "piensa",
@@ -296,7 +311,7 @@ def test_el_tick_ejecuta_lo_que_el_arnes_elija():
     ejecutados = []
     agente = _agente()
     impulso = types.SimpleNamespace(tool_hint="write", desire="escribir")
-    agente.agency_loop = types.SimpleNamespace(evaluate=lambda phase=None: impulso)
+    agente.agency_loop = _arnes(impulso)
 
     async def ejecutar(elegido):
         ejecutados.append(elegido)

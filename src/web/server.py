@@ -138,6 +138,7 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         from ..core.brake import NIVELES, Brake
         from ..core.persona_anchor import PersonaAnchor, PersonaPolicy
         from ..core.pulse import GRAVEDAD, Pulse
+        from ..core.spark import MOTIVOS
         from ..core.rituals import RitualStore
         from ..core.spend_budget import (
             IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, TOKENS_ENTRADA, TOKENS_SALIDA,
@@ -225,6 +226,14 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         for accion in ("publicar", "medios", "iniciativa"):
             metrica("freno_permite", "1 si el freno deja pasar ese tipo de acto",
                     1 if freno.permits(accion) else 0, etiquetas=f'accion="{accion}"')
+
+        # Por qué no actuó, en números. Sin esto, `yuki_agencia_actos_hoy == 0`
+        # sólo dice que no hizo nada: no si es fase de silencio, freno, techo
+        # diario o que el bucle ni siquiera está corriendo.
+        censo = diario.censo()
+        for motivo in MOTIVOS:
+            metrica("albedrio_ciclos", "Ciclos de evaluación por motivo, últimos días",
+                    censo.get(motivo, 0), tipo="counter", etiquetas=f'motivo="{motivo}"')
 
         # Signos vitales. La métrica que faltaba: `up` y `/health` sólo dicen que
         # el proceso contesta, y el fallo más silencioso de esta instancia es

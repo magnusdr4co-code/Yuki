@@ -85,6 +85,38 @@ groups:
           resumen: "Un día sin un solo acto propio, con la tensión alta"
           accion: "`cli.py albedrio`: mirar techo diario, umbral efectivo y energía."
 
+      - alert: ElBucleDeAlbedrioNoEvalua
+        # Un censo entero a cero no es «decidió no actuar»: es que nadie está
+        # evaluando. Son dos incidentes distintos —uno se arregla tocando el
+        # carácter, el otro averiguando por qué murió el planificador— y sin
+        # esta métrica se ven exactamente igual desde fuera.
+        expr: sum(yuki_albedrio_ciclos) == 0
+        for: 2h
+        labels:
+          severity: media
+        annotations:
+          resumen: "El bucle de albedrío no ha evaluado ni un ciclo"
+          accion: >
+            No es desgana: es que no corre. `cli.py pulso` y el cron
+            `agency_loop_tick` (cada 20 min). Si el censo tuviera cifras, el
+            motivo dominante diría dónde mirar; a cero, mirar el planificador.
+
+      - alert: SiempreElMismoMotivoParaNoActuar
+        # Que el 95% de los ciclos den el mismo no significa que el carácter
+        # está mal calibrado, no que Yuki sea apática.
+        expr: >
+          max(yuki_albedrio_ciclos{motivo!="actua"}) / clamp_min(sum(yuki_albedrio_ciclos), 1) > 0.95
+        for: 24h
+        labels:
+          severity: baja
+        annotations:
+          resumen: "Casi todos los ciclos se detienen por el mismo motivo"
+          accion: >
+            `cli.py albedrio` da el censo. `bajo_umbral` pide bajar
+            `min_intensity`; `fase_de_silencio`, revisar `quiet_phases`;
+            `techo_diario`, subir `max_actions_per_day`; `sin_deseos`, mirar
+            el aburrimiento y su umbral de espontaneidad.
+
       - alert: PropuestasSinResponder
         expr: yuki_ritmos_propuestos > 0
         for: 72h

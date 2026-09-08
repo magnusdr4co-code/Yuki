@@ -178,6 +178,39 @@ class EchoRitual:
         self.last_echo_at = time.time()
         logger.info("El Eco Ritual ha sido registrado.")
 
+# Por qué no actuó. Antes cada una de estas salidas era un `return None` mudo, y
+# «Yuki no hace nada» era un misterio que sólo se podía investigar leyendo
+# registros. Con nombre y censo se convierte en una frase: «de los últimos 72
+# ciclos, 68 fueron fase de silencio y 4 no llegaron al umbral».
+ACTUA = "actua"
+DESACTIVADO = "desactivado"
+FRENADA = "frenada"
+FASE_DE_SILENCIO = "fase_de_silencio"
+TECHO_DIARIO = "techo_diario"
+SIN_DESEOS = "sin_deseos"
+BAJO_UMBRAL = "bajo_umbral"
+SIN_ENERGIA = "sin_energia"
+
+MOTIVOS = (ACTUA, DESACTIVADO, FRENADA, FASE_DE_SILENCIO, TECHO_DIARIO,
+           SIN_DESEOS, BAJO_UMBRAL, SIN_ENERGIA)
+
+
+@dataclass
+class Decision:
+    """Lo que el bucle decidió y, sobre todo, por qué."""
+
+    motivo: str
+    impulso: Optional["Impulse"] = None
+    detalle: str = ""
+
+    @property
+    def actua(self) -> bool:
+        return self.impulso is not None
+
+    def describe(self) -> str:
+        return f"{self.motivo}: {self.detalle}" if self.detalle else self.motivo
+
+
 class AgencyLoop:
     """El bucle que evalúa impulsos y decide actuar por iniciativa propia."""
 
@@ -276,29 +309,46 @@ class AgencyLoop:
         return impulso
 
     def evaluate(self, phase: Optional[str] = None) -> Optional[Impulse]:
+        """Compatibilidad: el impulso, o nada. El porqué está en `decidir()`."""
+        return self.decidir(phase=phase).impulso
+
+    def decidir(self, phase: Optional[str] = None) -> Decision:
         """
-        Decide si actuar ahora, y qué.
+        Decide si actuar ahora, qué, y **por qué no** cuando no.
 
         Ya no es una tabla de consulta: el umbral cede con el aburrimiento
         acumulado, la elección entre impulsos sale de un softmax con la
         temperatura de la espontaneidad, y una fracción de las decisiones es
         exploración pura. Mismo estado, dos ciclos, decisiones distintas.
+
+        Cada salida lleva nombre y queda contada. Un bucle que sólo sabe decir
+        que no hizo nada obliga a investigar leyendo registros; uno que dice
+        «fase de silencio, 68 de los últimos 72 ciclos» se contesta solo, y
+        además convierte el carácter en algo que se puede ajustar mirando datos
+        en vez de a ojo.
         """
+        decision = self._decidir(phase)
+        self.ledger.registrar_ciclo(decision.motivo)
+        return decision
+
+    def _decidir(self, phase: Optional[str]) -> Decision:
         if not self.policy.enabled:
-            return None
+            return Decision(DESACTIVADO, detalle="el libre albedrío está apagado")
 
         frenada = self.brake.blocked_reason("iniciativa")
         if frenada:
             logger.info("Sin iniciativa: %s", frenada)
-            return None
+            return Decision(FRENADA, detalle=frenada)
 
         if phase is not None and phase in set(self.policy.quiet_phases):
-            return None
+            return Decision(FASE_DE_SILENCIO, detalle=f"fase '{phase}'")
 
-        if self.ledger.acciones_hoy() >= self.policy.max_actions_per_day:
+        hoy = self.ledger.acciones_hoy()
+        if hoy >= self.policy.max_actions_per_day:
             logger.info("Techo diario de acciones autónomas alcanzado (%d).",
                         self.policy.max_actions_per_day)
-            return None
+            return Decision(TECHO_DIARIO,
+                            detalle=f"{hoy}/{self.policy.max_actions_per_day} hoy")
 
         vivos = self.candidatos()
         aburrimiento = self.ledger.boredom()
@@ -310,24 +360,31 @@ class AgencyLoop:
 
         if not vivos:
             self.ledger.acumular_aburrimiento(self.policy.boredom_gain, self.policy.boredom_cap)
-            return None
+            return Decision(SIN_DESEOS,
+                            detalle=f"nada vivo; aburrimiento {aburrimiento:.2f} de "
+                                    f"{self.policy.spontaneous_threshold:.2f} para inventar uno")
 
         impulse = self.model.elegir(vivos)
         if impulse is None:
-            return None
+            return Decision(SIN_DESEOS, detalle="el refuerzo no eligió ninguno")
 
         umbral = self.policy.umbral_efectivo(aburrimiento)
         if impulse.current_intensity < umbral:
             self.ledger.acumular_aburrimiento(self.policy.boredom_gain, self.policy.boredom_cap)
-            return None
+            return Decision(BAJO_UMBRAL,
+                            detalle=f"{impulse.tool_hint} a {impulse.current_intensity:.2f}, "
+                                    f"umbral {umbral:.2f}")
 
         energia = float(getattr(self.vital_state, "energy", 1.0) or 0.0)
         coste = self._coste(impulse.tool_hint)
         if energia < self.policy.min_energy or not getattr(
                 self.vital_state, "has_energy_for", lambda c: True)(coste):
-            return None
+            return Decision(SIN_ENERGIA,
+                            detalle=f"energía {energia:.2f}, mínimo {self.policy.min_energy:.2f}, "
+                                    f"coste {coste:.2f}")
 
-        return impulse
+        return Decision(ACTUA, impulso=impulse,
+                        detalle=f"{impulse.tool_hint} a {impulse.current_intensity:.2f}")
 
     def record_action(self, impulse: Impulse, result: dict):
         """Registra la acción, cobra su energía y abre la ventana de eco."""
@@ -382,6 +439,7 @@ class AgencyLoop:
             "impulsos_vivos": len(self.candidatos()),
             "pesos_por_accion": pesos,
             "esperando_eco": len(datos.get("pendientes", [])),
+            "censo_de_ciclos": self.ledger.censo(),
         }
 
     def get_autonomy_ratio(self) -> float:
