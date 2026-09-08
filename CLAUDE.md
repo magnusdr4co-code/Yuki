@@ -55,7 +55,8 @@ src/web/        Salón + /metrics
 scripts/        smoke_check, chaos_drill, restore_drill, simulate_day,
                 virtualize_instance; `_consola.py` es el armazón común
                 (paleta, fila de informe, sobre --json, código de salida)
-docs/           una guía por subsistema; empieza por OPERACION.md
+docs/           una guía por subsistema; el mapa está en docs/README.md
+                y lo urgente, en OPERACION.md
 ```
 
 ## Convenciones de código

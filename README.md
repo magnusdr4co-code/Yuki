@@ -93,9 +93,6 @@ python3 cli.py memory-benchmark
 # Comprobar la ruta de Vertex AI y estimar el gasto del crédito de Google Cloud
 python3 cli.py vertex-check
 
-# Probar la generación de portadas y notas de voz
-python3 cli.py media-test
-
 # Disparar manualmente una tarea autónoma del Cron
 python3 cli.py cron-task --name morning_inspiration_drop
 

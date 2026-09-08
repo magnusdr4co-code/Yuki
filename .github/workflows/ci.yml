@@ -79,6 +79,14 @@ jobs:
         # que una CI no tiene ni debe tener; se ejecutan en el despliegue real.
         run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso,caracter
 
+      - name: La documentación no miente
+        # Comandos, guiones, módulos y ficheros de despliegue citados en los
+        # documentos tienen que existir. El README mandó durante meses ejecutar
+        # un `cli.py media-test` que nunca llegó a existir: una documentación
+        # que miente no falla, engaña, y se descubre cuando alguien la sigue al
+        # pie de la letra porque algo se ha roto.
+        run: python -m pytest tests/test_documentacion.py -q
+
       - name: Gemelo virtual
         run: python scripts/virtualize_instance.py --json > /tmp/gemelo.json
 

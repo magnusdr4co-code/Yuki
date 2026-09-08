@@ -304,7 +304,7 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 | 2.2 | **Corregir la URL base ficticia** `https://api.nousportal.com/v1` → `https://inference-api.nousresearch.com/v1` y pasar de clave estática a OAuth | `src/tools/nous_portal.py`, `config.yaml`, `hermes_config.yaml` |
 | 2.3 | Sustituir los *mocks* de `NousPortalClient` por llamadas reales (imagen, TTS, búsqueda) | `src/tools/nous_portal.py`, `src/tools/media_creator.py`, `src/tools/web_search.py` |
 | 2.4 | Marcar `suno_v4` y `flow_audio` como **no disponibles** y enrutar la música a `midi_generator.py` (D-6) | `config.yaml`, `docs/NOUS_PORTAL_TOOLS.md` |
-| 2.5 | Añadir `src/tools/openrouter_client.py` (compatible OpenAI, cabeceras `HTTP-Referer` y `X-Title`) y declararlo en `fallback_providers` (D-2) | módulo nuevo, `hermes_config.yaml` |
+| 2.5 | Añadir un cliente de OpenRouter (compatible OpenAI, cabeceras `HTTP-Referer` y `X-Title`) y declararlo en `fallback_providers` (D-2) _(hecho, pero no como módulo aparte: vive dentro de `src/core/llm_router.py`)_ | `src/core/llm_router.py`, `config.yaml` |
 | 2.6 | Añadir el tier `tier_2_nuclear` con `reasoning.effort` por ruta y la validación de `usage.reasoning_tokens` (D-3) | `config.yaml`, `src/core/agent.py` |
 | 2.7 | Transcodificar la salida TTS a OGG Opus (`ffmpeg -c:a libopus`) para las notas de voz (D-5) | `src/tools/media_creator.py` |
 | 2.8 | Registrar el `usage` (tokens y coste) de cada petición en la memoria, por tarea de cron | `src/memory/memory_manager.py` |
@@ -312,7 +312,7 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 | 2.10 | Autenticar el Portal en local y guardar el `refresh token` como secreto montado en el contenedor (§2.4) | Secret Manager, `docker-compose.yml` |
 | 2.11 | Marcar `src/serverless/modal_app.py` como no soportado y retirar `modal` de `requirements.txt` | `requirements.txt`, `docs/DEPLOYMENT_GUIDE.md` |
 
-**Criterio de aceptación:** `cli.py media-test` genera una portada real en `output/art` y una nota de voz OGG en `output/voice` usando sólo credenciales del Portal; al forzar un fallo del Portal, la cadena `fallback_providers` responde con OpenRouter sin intervención manual; el `tier_2_nuclear` registra `reasoning_tokens > 0`.
+**Criterio de aceptación** _(pendiente: `cli.py media-test` nunca llegó a existir; lo más cercano hoy es `cli.py vertex-check`, que comprueba la ruta sin generar nada ni gastar crédito)_**:** `cli.py media-test` generaría una portada real en `output/art` y una nota de voz OGG en `output/voice` usando sólo credenciales del Portal; al forzar un fallo del Portal, la cadena `fallback_providers` responde con OpenRouter sin intervención manual; el `tier_2_nuclear` registra `reasoning_tokens > 0`.
 
 ### Fase 3 — Presencia social y resiliencia (semana 2–4)
 
@@ -333,7 +333,7 @@ Tres fases, cada una con entregables verificables y un criterio de aceptación e
 | Fichero | Cambio |
 |---|---|
 | `src/tools/nous_portal.py` | URL base real, OAuth, llamadas reales en lugar de *mocks* |
-| `src/tools/openrouter_client.py` | **Nuevo:** cliente de respaldo con `reasoning` y cadena de modelos |
+| `src/core/llm_router.py` | Cliente de respaldo con `reasoning` y cadena de modelos. _Se planificó como `src/tools/openrouter_client.py`; acabó dentro del enrutador, que es donde se decide el proveedor._ |
 | `src/tools/media_creator.py` | Imagen por Tool Gateway; TTS + transcodificado a OGG Opus |
 | `src/tools/web_search.py` | Firecrawl a través del Portal, sin clave propia |
 | `src/core/agent.py` | Selección de tier y validación de `reasoning_tokens` |
