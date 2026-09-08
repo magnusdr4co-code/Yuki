@@ -114,7 +114,8 @@ class CreationLibrary:
                     imported += 1
             self._commit(self._load())
             return {"checked_files": imported, "total": len(self._load()), "errors": errors,
-                    "index": "output/Biblioteca/INDEX.md", "canon": "output/Biblioteca/CANON.md"}
+                    "index": str(salida("Biblioteca/INDEX.md")),
+                    "canon": str(salida("Biblioteca/CANON.md"))}
 
     def list_entries(self):
         with self._lock:

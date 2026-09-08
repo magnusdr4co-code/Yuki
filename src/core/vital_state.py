@@ -10,11 +10,16 @@ import logging
 from datetime import datetime
 from typing import Dict, Any, Optional
 
+from .rutas import datos
+
 logger = logging.getLogger("Yuki.VitalState")
 
 class VitalState:
-    def __init__(self, state_path: str = "data/vital_state.json"):
-        self.state_path = state_path
+    def __init__(self, state_path: Optional[str] = None):
+        # Se resuelve al construir, no en el valor por defecto: la copia de
+        # seguridad busca este fichero en el directorio de la memoria, y con
+        # `data/` fijo no entraba en ninguna copia de una instancia reubicada.
+        self.state_path = state_path or str(datos("vital_state.json"))
 
         # Corrientes vitales (0.0 a 1.0)
         self.energy: float = 0.75

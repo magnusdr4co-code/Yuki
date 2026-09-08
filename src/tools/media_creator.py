@@ -282,7 +282,7 @@ class MediaCreatorTool:
         )
 
         # Paso 5: Post empaquetado en ./output/posts/
-        posts_dir = "output/posts"
+        posts_dir = str(salida("posts"))
         os.makedirs(posts_dir, exist_ok=True)
         post_file = os.path.join(posts_dir, f"single_release_{title.lower().replace(' ', '_')}.md")
 

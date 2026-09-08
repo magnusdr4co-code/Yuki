@@ -146,3 +146,45 @@ def test_la_suite_no_deja_medios_sin_marcar_en_la_salida_del_repositorio():
 
     assert not auditoria["sin_marcar"], (
         f"hay material sin marcar en la salida real: {auditoria['sin_marcar'][:5]}")
+
+
+def test_quien_escribe_y_quien_copia_miran_el_mismo_sitio(monkeypatch, tmp_path):
+    """
+    La propiedad que faltaba, y cuya ausencia no daba ningún error.
+
+    `VitalState` y el perfil de Honcho escribían en `data/` fijo mientras la
+    copia de seguridad los buscaba en el directorio reubicado, y la Biblioteca
+    se guardaba donde dijera `YUKI_OUTPUT_DIR` mientras la copia miraba
+    `output/`. En una instancia con esas variables puestas, **nada de eso
+    entraba en ninguna copia**: el manifiesto los listaba como ausentes, que es
+    donde nadie mira hasta el día de restaurar.
+    """
+    from src.core.vital_state import VitalState
+    from src.tools.backup import BackupManager
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "datos" / "memoria.db"))
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "salida"))
+
+    gestor = BackupManager.from_config({})
+
+    assert VitalState().state_path == str(gestor.data_dir / "vital_state.json")
+    assert str(gestor.output_dir) == str(tmp_path / "salida")
+    assert str(gestor.db_path) == str(tmp_path / "datos" / "memoria.db")
+
+
+def test_la_auditoria_del_articulo_50_mira_donde_se_escribe(monkeypatch, tmp_path):
+    """
+    Si el auditor mira `output/` fijo y los medios se escriben en otro sitio, la
+    conformidad que declara es sobre un directorio vacío.
+    """
+    from src.core.rutas import salida
+    from src.core.transparency import audit_directory
+
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "salida"))
+    (tmp_path / "salida" / "art").mkdir(parents=True)
+    (tmp_path / "salida" / "art" / "sin_marca.png").write_bytes(b"\x89PNG\r\n\x1a\n" + b"0" * 40)
+
+    auditoria = audit_directory()
+
+    assert str(salida()) == str(tmp_path / "salida")
+    assert auditoria["sin_marcar"], "el auditor no vio un fichero que sí está sin marcar"

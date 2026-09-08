@@ -38,6 +38,8 @@ from dataclasses import dataclass, asdict
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
+from ..core.rutas import salida
+
 logger = logging.getLogger("Yuki.Backup")
 
 # Copias locales que se conservan. El disco de la e2-small es pequeño y una
@@ -109,7 +111,7 @@ def _copia_coherente_de_sqlite(origen: Path, destino: Path) -> str:
 class BackupManager:
     """Empaqueta memoria, canon y estado en un archivo verificable."""
 
-    def __init__(self, data_dir: Optional[str] = None, output_dir: str = "output",
+    def __init__(self, data_dir: Optional[str] = None, output_dir: Optional[str] = None,
                  backup_dir: Optional[str] = None, bucket: Optional[str] = None,
                  retention: int = COPIAS_RETENIDAS, uploader: Any = None,
                  db_name: Optional[str] = None):
@@ -117,7 +119,9 @@ class BackupManager:
         self.data_dir = Path(data_dir) if data_dir else Path(db_path).parent
         self.db_path = (Path(db_path) if not data_dir
                         else self.data_dir / (db_name or Path(db_path).name))
-        self.output_dir = Path(output_dir)
+        # La Biblioteca vive donde diga `YUKI_OUTPUT_DIR`. Con `output` fijo,
+        # el canon de una instancia reubicada no entraba en ninguna copia.
+        self.output_dir = Path(output_dir or salida())
         self.backup_dir = Path(backup_dir) if backup_dir else self.data_dir / "backups"
         self.bucket = bucket if bucket is not None else os.getenv("BACKUP_GCS_BUCKET", "").strip()
         self.retention = retention

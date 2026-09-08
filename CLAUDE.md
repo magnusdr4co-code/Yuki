@@ -68,10 +68,16 @@ docs/           una guía por subsistema; el mapa está en docs/README.md
   pública de clases en inglés cuando ya lo estaba.
 - Los módulos nuevos empiezan con un docstring que explica **qué problema real
   resuelve**, no qué hace.
-- **La ruta de la memoria sale de `DATABASE_PATH` antes que de `config.yaml`**,
-  igual en el que escribe que en los que leen. Cuando el agente no lo respetaba,
-  la copia y la sonda vigilaban una base que nadie usaba —y la suite escribía
-  recuerdos de verdad en la de la instancia: 887 llegó a acumular—.
+- **Las rutas se piden a `src/core/rutas.py`**, nunca se escriben a mano:
+  `base_de_datos()`, `datos("x.json")`, `salida("art")`. La regla es entorno →
+  configuración → valor por defecto, y se resuelve **al llamar**, jamás en el
+  valor por defecto de un argumento (ése se congela al importar, antes de que
+  nadie haya podido reubicar nada). Once módulos lo resolvían por su cuenta y
+  no todos igual: la copia respaldaba una base que nadie usaba, el estado vital
+  y el perfil de Honcho no entraban en ninguna copia, la auditoría del Artículo
+  50 miraba un directorio distinto de aquel donde se escribían los medios, y la
+  suite dejaba recuerdos de verdad en la instancia —887 llegó a acumular—.
+  Ninguno de esos fallos daba un error.
 - **`with sqlite3.connect(...)` no cierra la conexión**: sólo confirma o deshace
   la transacción. Usa `contextlib.closing`. Costó una copia nocturna que moría
   con `FileNotFoundError` una vez de cada treinta y tantas —los `-wal`/`-shm`

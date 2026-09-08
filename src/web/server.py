@@ -206,7 +206,7 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
                 informe["anclajes"], tipo="counter")
 
         # Cumplimiento: material sintético sin marcar.
-        auditoria = audit_directory("output")
+        auditoria = audit_directory()
         metrica("material_marcado", "Ficheros generados con marca de origen sintético",
                 len(auditoria["marcados"]))
         metrica("material_sin_marcar", "Ficheros generados sin marca (incumplimiento)",
@@ -343,9 +343,11 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
 
         # 5. API: Archivos en Workspace Nativo ./output/
         elif path == "/api/outputs":
+            from ..core.rutas import salida
+
             outputs = {"music": [], "art": [], "voice": [], "posts": []}
             for cat in outputs.keys():
-                dir_path = os.path.join("output", cat)
+                dir_path = str(salida(cat))
                 if os.path.exists(dir_path):
                     for fname in os.listdir(dir_path):
                         if not fname.startswith("."):

@@ -46,6 +46,21 @@ def salida(sub: str = "") -> Path:
     return raiz / sub if sub else raiz
 
 
+def datos(nombre: str = "") -> Path:
+    """
+    El directorio del estado durable: el que contiene la memoria.
+
+    Se deriva de la base y no de una variable propia porque son la misma cosa:
+    todo lo irremplazable vive junto. `VitalState` y el perfil de Honcho
+    escribían en `data/` fijo mientras la copia de seguridad los buscaba en el
+    directorio reubicado, así que en una instancia con `DATABASE_PATH` puesta
+    **no entraban en ninguna copia**. En silencio, y el manifiesto los listaba
+    como ausentes donde nadie mira hasta el día de restaurar.
+    """
+    directorio = base_de_datos().parent
+    return directorio / nombre if nombre else directorio
+
+
 def base_de_datos(config: Optional[Dict[str, Any]] = None) -> Path:
     """La memoria: entorno, luego configuración, luego el valor por defecto."""
     del_entorno = os.getenv("DATABASE_PATH", "").strip()

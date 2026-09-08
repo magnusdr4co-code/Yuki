@@ -56,6 +56,8 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
+from .rutas import salida
+
 logger = logging.getLogger("Yuki.Transparencia")
 
 # Término IPTC que declara que el material lo creó un sistema entrenado. Es el
@@ -347,7 +349,7 @@ class MediaMarker:
         return CLAVE_METADATO.encode("latin-1") in cabeza
 
 
-def audit_directory(root: str = "output") -> Dict[str, Any]:
+def audit_directory(root: Optional[str] = None) -> Dict[str, Any]:
     """
     Qué hay generado y qué no está marcado.
 
@@ -355,6 +357,10 @@ def audit_directory(root: str = "output") -> Dict[str, Any]:
     que Yuki ya produjo siguen ahí, sin marca, y alguien tiene que poder verlos
     en una lista en vez de descubrirlos de uno en uno.
     """
+    # Sin esto, la auditoría de conformidad miraba `output/` fijo mientras los
+    # medios se escribían donde dijera `YUKI_OUTPUT_DIR`: material sintético
+    # sin marcar que el auditor no puede ver.
+    root = root or str(salida())
     base = Path(root)
     marcados, sin_marcar = [], []
     if base.is_dir():

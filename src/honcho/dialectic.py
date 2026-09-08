@@ -9,6 +9,8 @@ import json
 import time
 from typing import Dict, Any, Optional
 
+from ..core.rutas import datos
+
 class HonchoDialecticClient:
     def __init__(
         self,
@@ -19,7 +21,7 @@ class HonchoDialecticClient:
         self.api_key = api_key or os.getenv("HONCHO_API_KEY", "mock_key")
         self.api_url = api_url
         self.app_id = app_id
-        self.local_cache_path = "data/honcho_profile.json"
+        self.local_cache_path = str(datos("honcho_profile.json"))
         self._local_profile = self._load_local_profile()
 
     def _load_local_profile(self) -> Dict[str, Any]:
