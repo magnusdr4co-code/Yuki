@@ -4,11 +4,11 @@
 
 agent:
   name: "Yuki"
-  display_name: "Yuki (雪)"
+  display_name: "Yuki (雪)"   # no se lee: sólo documental
   version: "2.5.0"
-  harness: "hermes-agent"
-  default_language: "es-ES"
-  fallback_language: "en-US"
+  harness: "hermes-agent"   # no se lee: sólo documental
+  default_language: "es-ES"   # no se lee: el idioma sale de SOUL.md y del prompt
+  fallback_language: "en-US"   # no se lee: el idioma sale de SOUL.md y del prompt
   model:
     provider: "openrouter" # o "anthropic", "google", "openai", "nous"
     # Solar Pro 4 ofrece buena calidad general a un coste muy bajo en OpenRouter.
@@ -254,21 +254,21 @@ model_armor:
   timeout_seconds: 10
 
 memory:
-  backend: "sqlite_fts5"
+  backend: "sqlite_fts5"   # no se lee: sólo documental: el motor es FTS5 y no es intercambiable
   database_path: "data/yuki_memory.db"
   memory_md_path: "MEMORY.md"
   soul_md_path: "SOUL.md"
   fts:
-    tokenizer: "unicode61 remove_diacritics 2"
+    tokenizer: "unicode61 remove_diacritics 2"   # no se lee: el tokenizador se fija al crear la tabla FTS5
     bm25_weights:
       title: 5.0
       content: 2.0
       tags: 3.0
-    max_retrieved_memories: 5
-    min_score_threshold: 0.15
+    max_retrieved_memories: 5   # no se lee: el límite lo pone cada llamada a search()
+    min_score_threshold: 0.15   # no se lee: el ranking es BM25 y no se filtra por umbral
   decay:
     enabled: true
-    half_life_days: 30
+    half_life_days: 30   # no se lee: la semivida vive en fts5_memory.py, no aquí
 
   # Ciclo de sueño: consolidar, soñar y olvidar. Una memoria que sólo acumula
   # no es una memoria larga, es un archivo que se vuelve lento y turbio.
@@ -324,12 +324,12 @@ honcho:
   api_url: "https://api.honcho.dev/v1"
   app_id: "yuki-digital-diva"
   user_id: "producer_manager"
-  session_sync_interval_messages: 5
-  auto_profile_update: true
+  session_sync_interval_messages: 5   # no se lee: la sincronización no está implementada
+  auto_profile_update: true   # no se lee: la sincronización no está implementada
 
 nous_portal:
   base_url: "https://api.nousportal.com/v1"
-  auth_mode: "oauth_bearer"
+  auth_mode: "oauth_bearer"   # no se lee: sólo documental
   workspace_output_paths:
     art: "./output/art"
     voice: "./output/voice"
@@ -337,19 +337,19 @@ nous_portal:
     posts: "./output/posts"
   frontier_engines:
     vision:
-      default_provider: "gemini_image" # "gemini_image", "seedream", "flux_pro"
+      default_provider: "gemini_image" # "gemini_image", "seedream", "flux_pro"   # no se lee: el modelo lo fija vertex_ai.media
       models:
         gemini_image: "gemini-2.5-flash-image"
         seedream: "bytedance/seedream-v2.5-hd"
         flux_pro: "fal-ai/flux-pro/v1.1-ultra"
     music:
-      default_engine: "lyria-3-pro-preview" # "lyria-3-pro-preview", "lyria-3-clip-preview", "midi_only"
+      default_engine: "lyria-3-pro-preview" # "lyria-3-pro-preview", "lyria-3-clip-preview", "midi_only"   # no se lee: el modelo lo fija vertex_ai.media
       models:
-        lyria_pro: "lyria-3-pro-preview"
-        lyria_clip: "lyria-3-clip-preview"
+        lyria_pro: "lyria-3-pro-preview"   # no se lee: el modelo lo fija vertex_ai.media
+        lyria_clip: "lyria-3-clip-preview"   # no se lee: el modelo lo fija vertex_ai.media
         midi_only: "local.midi"
     voice:
-      default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"
+      default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"   # no se lee: el modelo lo fija vertex_ai.media
       voice_id: "yuki_serene_alto"
       cadence_pause_ms: 350
     web_search:
@@ -399,16 +399,16 @@ scheduler:
 adapters:
   telegram:
     enabled: true
-    poll_mode: "webhook"
-    webhook_path: "/webhook/telegram"
-    send_voice_notes: true
-    send_images: true
+    poll_mode: "webhook"   # no se lee: Telegram sigue simulado
+    webhook_path: "/webhook/telegram"   # no se lee: Telegram sigue simulado
+    send_voice_notes: true   # no se lee: Telegram sigue simulado
+    send_images: true   # no se lee: Telegram sigue simulado
   discord:
     enabled: true
-    guild_id: ""
-    announce_channel_id: ""
-    canvas_enabled: true
+    guild_id: ""   # no se lee: manda DISCORD_ALLOWED_GUILD_ID
+    announce_channel_id: ""   # no se lee: manda DISCORD_ALLOWED_CHANNEL_ID
+    canvas_enabled: true   # no se lee: el Canvas se sirve siempre desde el Salón
   serverless:
-    framework: "modal"
-    idle_timeout_seconds: 120
-    memory_mb: 512
+    framework: "modal"   # no se lee: no hay despliegue serverless activo
+    idle_timeout_seconds: 120   # no se lee: no hay despliegue serverless activo
+    memory_mb: 512   # no se lee: no hay despliegue serverless activo
