@@ -18,8 +18,14 @@ def cmd_brake(nivel=None, soltar=False, minutos=None, motivo="", as_json=False):
 
     freno = Brake()
 
+    # `--json` vale también al poner y soltar, no sólo al leer. Lo ignoraba en
+    # las dos rutas que escriben, que son justamente las que automatiza quien
+    # responde a un incidente: pedía JSON y recibía prosa, en silencio.
     if soltar:
         estado = freno.release(actor="cli", motivo=motivo)
+        if as_json:
+            print(json.dumps(estado.to_dict(), ensure_ascii=False, indent=2))
+            return estado
         print(f"{GREEN}✓ Freno soltado.{RESET} {freno.describe()}")
         if estado.activo:
             print(f"{YELLOW}⚠ Sigue frenada desde {estado.origen}: eso no lo suelta el CLI.{RESET}")
@@ -29,8 +35,14 @@ def cmd_brake(nivel=None, soltar=False, minutos=None, motivo="", as_json=False):
         try:
             estado = freno.engage(nivel, motivo=motivo, actor="cli", minutos=minutos)
         except ValueError as exc:
+            if as_json:
+                print(json.dumps({"error": str(exc)}, ensure_ascii=False, indent=2))
+                return None
             print(f"{RED}✗ {exc}{RESET}")
             return None
+        if as_json:
+            print(json.dumps(estado.to_dict(), ensure_ascii=False, indent=2))
+            return estado
         print(f"{YELLOW}🛑 {freno.describe()}{RESET}")
         return estado
 
@@ -119,11 +131,23 @@ def cmd_state(exportar=None, olvidar=None, motivo="", as_json=False):
         return datos
 
     if olvidar:
+        # `--json` también aquí. Antes esta rama imprimía la línea «Olvido
+        # ejecutado» **y luego** el recibo, así que la salida no se podía
+        # analizar; y el rechazo salía sólo en prosa. Quien automatiza una
+        # supresión —que es lo que hace quien atiende una solicitud de verdad—
+        # pedía JSON y recibía otra cosa, en silencio.
         try:
             recibo = registro.subject_forget(olvidar, actor="cli", reason=motivo)
         except ValueError as exc:
+            if as_json:
+                print(json.dumps({"error": str(exc), "sujeto": olvidar},
+                                 ensure_ascii=False, indent=2))
+                return None
             print(f"{RED}✗ {exc}{RESET}")
             return None
+        if as_json:
+            print(json.dumps(recibo, ensure_ascii=False, indent=2))
+            return recibo
         print(f"{GREEN}✓ Olvido ejecutado{RESET}")
         print(json.dumps(recibo, ensure_ascii=False, indent=2))
         return recibo

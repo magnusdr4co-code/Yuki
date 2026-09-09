@@ -42,7 +42,15 @@ ignore = [
 
 [tool.coverage.run]
 source = ["src"]
-omit = ["src/serverless/*"]
+omit = [
+    "src/serverless/*",
+    # Conversación, Salón, daemon, benchmark y comprobación de proveedores. La
+    # suite no debe ejecutarlos: arrancan servidores, salen a la red o gastan
+    # crédito. `tests/test_cli.py` guarda su superficie ejecutándolos como
+    # subproceso —lo fiel— y la cobertura no puede ver dentro de un subproceso,
+    # así que contarlos aquí sólo añadiría un cero que no significa nada.
+    "src/cli/operacion.py",
+]
 
 [tool.coverage.report]
 # El umbral es el que hay hoy, no una aspiración: sirve para que la cobertura no

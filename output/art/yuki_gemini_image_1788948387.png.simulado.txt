@@ -1,0 +1,2 @@
+/* YUKI ART ASSET (SIMULADO - gemini_image): masterpiece, ethereal composition, cinematic lighting, japanese aesthetic, subtle elegance, soft haze, sunlight filtering through bamboo leaves, gentle natural hazes, industrial metallic undertone: Album single cover for track 'El Río'. Concept: niebla y metal. Seasonal motif: despedida de aves. Traditional shamisen meets modern industrial minimalism. */
+/* Marcador simulado. El medio real se habría llamado: output/art/yuki_gemini_image_1788948387.png */
