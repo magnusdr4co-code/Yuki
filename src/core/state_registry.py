@@ -8,13 +8,18 @@ Y propone leer cada pieza de estado por seis ejes —autoridad, alcance,
 mutabilidad, procedencia, recuperabilidad, accionabilidad— y por un ciclo de
 vida que incluye auditar, olvidar y revertir, no sólo escribir y recuperar.
 
-Yuki acumula hoy once tipos de estado durable, escritos por caminos distintos y
-en momentos distintos: memoria FTS5, canon de Biblioteca, estado vital, perfil
+Yuki acumula hoy catorce tipos de estado durable, escritos por caminos distintos
+y en momentos distintos: memoria FTS5, canon de Biblioteca, estado vital, perfil
 dialéctico, trabajos multimedia, libro de gasto, diario de agencia, ritmos
-propios, overlay de configuración, emparejamiento de Discord, registro de
-transparencia y deriva de persona. Ninguno tenía inventario, y de la parte que
-habla de personas concretas no había forma de responder a dos preguntas
-elementales: *¿qué sabes de mí?* y *bórralo*.
+propios, overlay de configuración, emparejamiento de Discord, bitácora de actos,
+registro de transparencia, deriva de persona y freno de mano. Ninguno tenía
+inventario, y de la parte que habla de personas concretas no había forma de
+responder a dos preguntas elementales: *¿qué sabes de mí?* y *bórralo*.
+
+La bitácora se declaró tarde: llevaba meses siendo estado durable de pleno
+derecho —la cadena que permite reconstruir qué hizo Yuki— sin figurar en el
+inventario. Entraba en la copia diaria, sí, pero no en lo que la instancia dice
+de sí misma cuando se le pregunta qué guarda.
 
 Esto no es sólo higiene de ingeniería. Yuki conversa con personas en la UE y
 guarda lo que le cuentan; los derechos de acceso y supresión del RGPD no son
@@ -195,6 +200,19 @@ def build_registry() -> List[StateItem]:
             mutability="mutable", provenance="DM del Productor, CLI o variable de entorno",
             recoverability="soltarlo es inmediato; la variable de entorno manda sobre el fichero",
             actionability="ALTA: mientras esté puesto, Yuki no emprende ni gasta",
+        ),
+        StateItem(
+            id="bitacora", path=str(datos / "bitacora.jsonl"),
+            description="Cadena encadenada de sus actos: qué hizo, cuándo y a instancias de quién",
+            authority=SISTEMA, scope="todo acto con consecuencias",
+            mutability="append-only; cualquier edición rompe la cadena y se ve",
+            provenance="el propio código, en el momento de actuar",
+            recoverability="viaja en la copia diaria, y su precinto va en el manifiesto",
+            actionability="no dispara nada; es lo que permite reconstruir qué pasó",
+            # No guarda contenido, sólo el acto: por eso no lleva datos personales
+            # y por eso `subject_forget` no la toca. Borrar de la bitácora sería
+            # borrar la prueba de que se borró algo.
+            holds_personal_data=False,
         ),
         StateItem(
             id="transparencia", path=str(datos / "transparency.json"),

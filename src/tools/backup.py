@@ -157,6 +157,11 @@ class BackupManager:
             self.data_dir / "honcho_profile.json",
             self.data_dir / "vital_state.json",
             self.data_dir / "runtime_overrides.json",
+            # Los ritmos propios: una propuesta suya más una decisión del
+            # Productor. El inventario prometía que la copia diaria los salvaba y
+            # no era verdad, así que perder el disco borraba lo único de su
+            # conducta que alguien había aprobado a mano.
+            self.data_dir / "runtime_rituals.json",
             self.data_dir / "discord_pairing.json",
             self.data_dir / "spend_ledger.json",
             self.data_dir / "media_jobs",

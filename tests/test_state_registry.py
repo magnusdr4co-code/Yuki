@@ -11,6 +11,7 @@ import json
 import os
 import sqlite3
 import sys
+from pathlib import Path
 
 import pytest
 
@@ -163,3 +164,50 @@ def test_tambien_se_borra_el_registro_de_haberle_declarado(memoria, tmp_path, mo
     quedan = json.loads(ruta.read_text(encoding="utf-8"))["declaraciones"]
     assert recibo["declaraciones_borradas"] == 1
     assert list(quedan) == ["direct_message:seguidor_2"]
+
+
+def test_lo_que_la_copia_considera_irremplazable_esta_declarado(monkeypatch, tmp_path):
+    """
+    Dos listas que tienen que coincidir, escritas en sitios distintos.
+
+    `backup._piezas()` decide qué se salva; `build_registry()` decide qué dice
+    la instancia que guarda. Una pieza en la copia y fuera del inventario no
+    aparece cuando alguien pregunta qué se sabe de él; una en el inventario y
+    fuera de la copia se pierde con el disco. La bitácora estuvo meses en el
+    primer caso: entraba en la copia y no figuraba en el inventario.
+    """
+    from src.core.state_registry import build_registry
+    from src.tools.backup import BackupManager
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "data" / "yuki_memory.db"))
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "output"))
+
+    declarados = {Path(pieza.path).name for pieza in build_registry()}
+    gestor = BackupManager.from_config({})
+    copiados = {Path(pieza).name for pieza in gestor._piezas()} | {gestor.db_path.name}
+
+    sin_declarar = copiados - declarados
+    assert not sin_declarar, (
+        f"la copia salva piezas que el inventario no declara: {sorted(sin_declarar)}")
+
+
+def test_lo_irremplazable_del_inventario_entra_en_la_copia(monkeypatch, tmp_path):
+    """
+    Al revés: lo que se declara recuperable «por la copia diaria» tiene que
+    estar de verdad en ella. Prometer una recuperación que no ocurre es la
+    misma clase de mentira que una alerta muda.
+    """
+    from src.core.state_registry import build_registry
+    from src.tools.backup import BackupManager
+
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "data" / "yuki_memory.db"))
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path / "output"))
+
+    gestor = BackupManager.from_config({})
+    copiados = {Path(p).name for p in gestor._piezas()} | {gestor.db_path.name}
+
+    prometidos = {Path(pieza.path).name for pieza in build_registry()
+                  if "copia diaria" in pieza.recoverability}
+
+    fuera = prometidos - copiados
+    assert not fuera, f"el inventario promete copia para piezas que no viajan: {sorted(fuera)}"
