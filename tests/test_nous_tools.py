@@ -126,14 +126,25 @@ class TestMediosSimulados(unittest.TestCase):
 
         asyncio.run(_run())
 
-    def test_voice_synthesis_produces_an_ogg_path(self):
+    def test_la_voz_simulada_no_se_hace_pasar_por_un_ogg(self):
+        """
+        Antes esto comprobaba que el resultado simulado terminara en `.ogg`, es
+        decir: cristalizaba la mentira. Un marcador de texto con extensión de
+        medio es un nombre que engaña aunque el contenido diga SIMULADO, y la
+        auditoría del Artículo 50 lo contaba como material sin marcar.
+
+        Lo que sí tiene que cumplirse es que se declare simulado, que el fichero
+        exista de verdad y que diga cómo se habría llamado el medio real.
+        """
         async def _run():
             portal = portal_sin_vertex()
             creator = MediaCreatorTool(portal)
 
             voice = await creator.generate_voice_reply("La paciencia es el espacio entre dos notas.")
             self.assertGreater(voice["duration"], 0)
-            self.assertTrue(voice["audio_url"].endswith(".ogg"))
+            self.assertFalse(voice["audio_url"].endswith(".ogg"),
+                             "un marcador no puede hacerse pasar por un audio")
+            self.assertTrue(voice["audio_url"].endswith(".simulado.txt"))
 
         asyncio.run(_run())
 
@@ -571,3 +582,33 @@ class TestPropagacionDeEstado(unittest.TestCase):
 
         with sdk_de_google_simulado():
             asyncio.run(_run())
+
+
+def test_los_marcadores_no_ensucian_la_auditoria_del_articulo_50(tmp_path, monkeypatch):
+    """
+    Una comprobación de conformidad en rojo permanente es peor que no tenerla.
+
+    Los marcadores eran ficheros de texto con extensión `.png`/`.mp3`, así que
+    la auditoría los contaba como material sintético sin marcar. Cada pasada
+    dejaba cinco, la comprobación de humo fallaba siempre, y la única salida
+    razonable para quien la mirase era aprender a ignorar ese rojo — que es
+    exactamente lo que no puede pasar con el Artículo 50.
+    """
+    import asyncio
+
+    from src.core.transparency import audit_directory
+
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(tmp_path))
+    portal = portal_sin_vertex()
+
+    asyncio.run(portal.generate_image_frontier("Niebla"))
+    asyncio.run(portal.generate_music_flow("El Río", "shamisen"))
+    asyncio.run(portal.synthesize_voice_tts("Una frase."))
+    asyncio.run(portal.generate_video_frontier("Niebla que avanza"))
+
+    auditoria = audit_directory(str(tmp_path))
+
+    assert not auditoria["sin_marcar"], (
+        f"los marcadores simulados ensucian la conformidad: {auditoria['sin_marcar']}")
+    # Y siguen existiendo de verdad: no se ha ganado el verde escondiéndolos.
+    assert list(tmp_path.rglob("*.simulado.txt")), "no escribió ningún marcador"

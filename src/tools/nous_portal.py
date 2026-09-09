@@ -92,19 +92,30 @@ class NousPortalClient:
 
         No lleva `image_url`/`audio_url` de un CDN inventado: la única
         referencia es el fichero de texto que existe de verdad en disco.
+
+        Y ese fichero **no se llama `.png` ni `.mp3`**. Antes sí: un marcador de
+        texto con extensión de medio es un nombre que miente aunque el contenido
+        diga SIMULADO, y además la auditoría del Artículo 50 lo contaba como
+        material sintético sin marcar —una comprobación de conformidad en rojo
+        permanente por ficheros que ni siquiera son medios, que es la forma más
+        segura de que alguien aprenda a ignorar ese rojo—.
         """
-        with open(path, "w", encoding="utf-8") as f:
+        # El nombre pretendido se conserva dentro, que es donde no engaña.
+        ruta = f"{path}.simulado.txt"
+        with open(ruta, "w", encoding="utf-8") as f:
             f.write(f"/* {descripcion} */\n")
+            f.write(f"/* Marcador simulado. El medio real se habría llamado: {path} */\n")
 
         logger.warning(
-            f"Medio simulado (Vertex no configurado): {path}. "
+            f"Medio simulado (Vertex no configurado): {ruta}. "
             "Declara VERTEX_PROJECT_ID para generar medios reales."
         )
         return {
             "status": "simulated",
             "simulated": True,
-            "local_path": path,
-            "local_uri": local_uri(path),
+            "local_path": ruta,
+            "local_uri": local_uri(ruta),
+            "intended_path": path,
             "note": ("Marcador de texto, no un medio real. Configura VERTEX_PROJECT_ID "
                      "para que Yuki genere imagen, vídeo y voz de verdad."),
             "created_at": time.time(),
