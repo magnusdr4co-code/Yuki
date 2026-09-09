@@ -54,6 +54,8 @@ src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 media_jobs, web_search
 src/adapters/   Discord (el que importa), Telegram (aún simulado)
 src/web/        Salón + /metrics
+src/cli/        los comandos por temas (gobierno, mente, operacion); `cli.py`
+                en la raíz sólo declara argumentos y reparte
 scripts/        smoke_check, chaos_drill, restore_drill, simulate_day,
                 virtualize_instance; `_consola.py` es el armazón común
                 (paleta, fila de informe, sobre --json, código de salida)
