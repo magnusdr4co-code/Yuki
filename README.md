@@ -290,7 +290,7 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - ⏰ [Planificador Cron y Rutinas Autónomas 24/7 (`docs/AUTONOMOUS_CRON.md`)](docs/AUTONOMOUS_CRON.md)
 - 🚀 [Guía de Despliegue en VPS y Serverless (`docs/DEPLOYMENT_GUIDE.md`)](docs/DEPLOYMENT_GUIDE.md)
 - ☁️ [Despliegue en Google Cloud (`docs/GCP_DEPLOYMENT.md`)](docs/GCP_DEPLOYMENT.md)
-- 🛰️ [Runbook: aterrizar Yuki en un proyecto real de GCloud (`docs/RUNBOOK_GCLOUD.md`)](docs/RUNBOOK_GCLOUD.md) — encargo autocontenido para un agente con acceso a `gcloud`
+- 🛰️ [Runbook: aterrizar Yuki en un proyecto real de GCloud (`docs/RUNBOOK_GCLOUD.md`)](docs/historico/RUNBOOK_GCLOUD.md) — encargo autocontenido para un agente con acceso a `gcloud`
 - 🧪 [Virtualización de la instancia, limitadores y mejoras (`docs/VIRTUALIZACION_Y_MEJORAS.md`)](docs/VIRTUALIZACION_Y_MEJORAS.md) — réplica local, gemelo virtual y hoja de ruta
 - 🌱 [El libre albedrío de Yuki (`docs/LIBRE_ALBEDRIO.md`)](docs/LIBRE_ALBEDRIO.md) — carácter configurable, refuerzo de la iniciativa y ritmos propios
 - ⚖️ [Transparencia y Artículo 50 (`docs/TRANSPARENCIA_AI_ACT.md`)](docs/TRANSPARENCIA_AI_ACT.md) — declaración de naturaleza y marcado de origen sintético

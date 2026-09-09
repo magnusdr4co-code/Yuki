@@ -1,10 +1,16 @@
 # 🏗️ Implementación de Infraestructura — Yuki
 
+> **Histórico.** Es la propuesta de infraestructura y su plan por fases, tal
+> como se decidió. No describe la instancia de hoy: la arquitectura que
+> acabó adoptándose está en [`../ARCHITECTURE.md`](../ARCHITECTURE.md), y lo
+> que la instancia puede y no puede, en
+> [`../VIRTUALIZACION_Y_MEJORAS.md`](../VIRTUALIZACION_Y_MEJORAS.md).
+
 *Propuesta de infraestructura para Yuki: **Nous Portal** como pasarela única de modelos y herramientas, **OpenRouter** como respaldo y capa de razonamiento nuclear, **Google Cloud** como hogar del contenedor Hermes, y el inventario mínimo de cuentas del proyecto.*
 
 > **Estado: propuesta cerrada (v1.0) — lista para ejecutar.**
 > Las decisiones de §0 se dan por tomadas y son la base del plan de §3. Los tres supuestos que aún dependen del productor (región, música y presupuesto) están fijados con un valor por defecto reversible en §8. La revisión final añadió los detalles operativos de §2.4 y el bloque de cumplimiento de §6.bis; la lista de verificación de cierre está en §9.
-> Fecha de investigación: agosto 2026 · Documentos relacionados: [`ARCHITECTURE.md`](ARCHITECTURE.md) · [`DEPLOYMENT_GUIDE.md`](DEPLOYMENT_GUIDE.md) · [`NOUS_PORTAL_TOOLS.md`](NOUS_PORTAL_TOOLS.md)
+> Fecha de investigación: agosto 2026 · Documentos relacionados: [`ARCHITECTURE.md`](../ARCHITECTURE.md) · [`DEPLOYMENT_GUIDE.md`](../DEPLOYMENT_GUIDE.md) · [`NOUS_PORTAL_TOOLS.md`](../NOUS_PORTAL_TOOLS.md)
 
 ---
 

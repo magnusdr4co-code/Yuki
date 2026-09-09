@@ -45,15 +45,18 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 | Tema | Documento |
 |---|---|
 | Google Cloud, de cero | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) |
-| Runbook con `gcloud` en la mano | [RUNBOOK_GCLOUD.md](RUNBOOK_GCLOUD.md) |
-| Otras opciones (VPS, Docker, Modal) | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) |
+| Otras opciones (VPS, Docker, Modal) | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — alternativas estudiadas; **la instancia real corre en GCE**, no en ninguna de ellas |
 
-## Registro de decisiones (histórico: describen lo que se decidió, no lo que hay hoy)
+## Registro de decisiones
 
-| Tema | Documento |
-|---|---|
-| Propuesta de infraestructura y su plan por fases | [INFRASTRUCTURE_IMPLEMENTATION.md](INFRASTRUCTURE_IMPLEMENTATION.md) |
-| Por qué el crédito de Google Cloud no se consumía | [INFORME_CREDITO_GCLOUD.md](INFORME_CREDITO_GCLOUD.md) |
+Vive aparte, en [`historico/`](historico/README.md), y ya no en esta lista: un
+documento que describe una decisión de su día no debería aparecer junto a los
+que se pueden seguir al pie de la letra hoy. La tabla de allí dice, para cada
+uno, **qué lo sustituye** — un histórico sin puntero al presente es un callejón.
+
+Están la propuesta de infraestructura y su plan por fases, el encargo de
+aterrizar Yuki en Google Cloud y el informe que respondió por qué el crédito no
+se consumía.
 
 ---
 

@@ -323,7 +323,7 @@ gcloud run services update yuki-salon --region="$REGION" \
 ### Qué modelo poner
 
 > **¿Vas a delegar este paso en un agente con acceso a `gcloud`?** Hay un
-> encargo autocontenido en [`docs/RUNBOOK_GCLOUD.md`](RUNBOOK_GCLOUD.md): lista
+> encargo autocontenido en [`docs/RUNBOOK_GCLOUD.md`](historico/RUNBOOK_GCLOUD.md): lista
 > los supuestos sin verificar, cómo comprobar cada uno y qué corregir. No
 > presupone conocimiento de este repositorio.
 

@@ -60,7 +60,10 @@ scripts/        smoke_check, chaos_drill, restore_drill, simulate_day,
                 virtualize_instance; `_consola.py` es el armazón común
                 (paleta, fila de informe, sobre --json, código de salida)
 docs/           una guía por subsistema; el mapa está en docs/README.md
-                y lo urgente, en OPERACION.md
+                y lo urgente, en OPERACION.md. `docs/historico/` guarda lo que
+                describe una decisión de su día y ya no se puede seguir al pie
+                de la letra: cada uno lo advierte en su cabecera y dice qué lo
+                sustituye
 ```
 
 ## Convenciones de código

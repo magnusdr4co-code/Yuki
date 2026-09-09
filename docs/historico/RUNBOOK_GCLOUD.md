@@ -1,5 +1,10 @@
 # 🛰️ Runbook: aterrizar Yuki en un proyecto real de Google Cloud
 
+> **Histórico.** Este encargo se ejecutó y su respuesta está en
+> [`INFORME_CREDITO_GCLOUD.md`](INFORME_CREDITO_GCLOUD.md). El procedimiento
+> vigente para desplegar es [`../GCP_DEPLOYMENT.md`](../GCP_DEPLOYMENT.md):
+> seguir los pasos de aquí al pie de la letra ya no lleva a ninguna parte.
+
 *Encargo para un agente con acceso a `gcloud`. Autocontenido: no presupone conocimiento de este repositorio ni del arnés Hermes.*
 
 ---

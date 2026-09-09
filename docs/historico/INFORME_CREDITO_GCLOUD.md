@@ -1,5 +1,9 @@
 # Informe: por qué el crédito de Google Cloud no se estaba consumiendo
 
+> **Histórico.** Es el informe de un día concreto, con lo observado entonces.
+> Lo que se cambió por su causa —`vertex_ai.location`— ya está en
+> `config.yaml`; las cifras de gasto de aquí no son las de hoy.
+
 **Fecha:** 2026-09-06
 **Rama:** `claude/yuki-gcloud-credits-alignment-0oso2d`
 **Encargo:** `docs/RUNBOOK_GCLOUD.md` §9 pide este informe con lo *observado*, no con lo esperado. Eso es lo que hay aquí.
