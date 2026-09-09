@@ -1,6 +1,7 @@
 # Estado de producción — Yuki
 
-**Verificado:** 2026-09-07 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)  
+**Verificado:** 2026-09-09 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)
+
 **Proyecto:** `yuki-prod`  
 **Instancia:** `yuki-agent` · Compute Engine `e2-small` · `europe-southwest1-a`
 
@@ -9,13 +10,52 @@
 | Campo | Valor |
 |---|---|
 | Repositorio | `europe-southwest1-docker.pkg.dev/yuki-prod/yuki/yuki-agent` |
-| Digest desplegado | `sha256:2cd2e807bf0a96f9d188b34d52b9b1fa7afa89c93db8e767807ae3f2569c6810` |
-| Commit de código | `b6e4d65` — ruta explícita de producción multimedia por DM |
-| Build de Cloud Build | `c86e82ab-95d3-4801-957b-cf8586a281c1` |
+| Digest desplegado | `sha256:dfb83f5860613b230b9549e808870090ea31ea24a3ad7c166a8422081c6691e9` |
+| Commit de código | `a8a7378` — mejoras de virtualización, autonomía, memoria y operación |
+| Build de Cloud Build | `3a5b0a48-8b8b-4da7-9407-4a3822a9e0ae` |
 
 La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto inmutable
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
 arranque los obtiene de Secret Manager y elimina el fichero temporal de runtime al acabar.
+
+## Actualización del 9 de septiembre
+
+- Incorporada por avance directo la rama remota
+  `claude/virtualizacion-mejoras-proyecto-dik9gg`, descendiente de `f4e2f22`.
+  No hubo conflictos ni modificaciones locales que reconciliar.
+- Construcción desde un archivo limpio de Git: no se subieron memoria, pairing,
+  overlays ni creaciones del checkout local. El commit documental posterior no
+  cambia el código ejecutable identificado arriba.
+- Validación local aislada (Python 3.14): Ruff correcto, **735 pruebas aprobadas,
+  2 omitidas**, 12 simulacros de fallo y circuito de copia/restauración correctos.
+  La prueba de humo de CI pasa sobre el archivo limpio del commit. Sobre el
+  checkout de trabajo detecta 166 artefactos antiguos sin marca; no se borraron.
+- Copia previa de SQLite mediante su API de backup, más archivo de estado y
+  creaciones en `data/deploy-backups/20260909-a8a7378/` del disco persistente.
+  Integridad SQLite `ok`, 63 recuerdos y archivo de estado legible.
+- Despliegue mediante el script de arranque existente, sin reiniciar la VM ni
+  cambiar IAM, secretos o volúmenes. Ambos contenedores ejecutan el digest de
+  esta tabla. Se conservan pairing y overlay de configuración.
+- Comprobados: salud HTTP, conexión Discord, intención multimedia por DM,
+  integridad de los 63 recuerdos y dependencias de FluidSynth disponibles.
+  El daemon registra ocho rutinas, incluidas REM y olvido semanal.
+
+### Hallazgos de la sonda sobre el estado heredado
+
+La prueba de humo de producción **no queda completamente en verde**: detecta
+26 archivos antiguos sin marca de origen y, al arrancar, un `last_updated`
+heredado de hace 8,8 horas. La sonda de pulso interpreta ese dato como `ausente`,
+aunque los contenedores y la conexión Discord están activos. Esa marca se
+actualiza en el camino conversacional; no equivale a un heartbeat continuo del
+planificador. No se reescribe artificialmente para silenciar la alerta.
+El ciclo normal de agencia de las 16:20 (Europe/Madrid) creó y persistió
+`agency_ledger.json` en la VM; confirma que el planificador ejecuta tareas,
+aunque la lectura de pulso siga diciendo `ausente` por la marca conversacional.
+
+El inventario detecta 21 capacidades reales, 5 simuladas y 1 inactiva, con seis
+limitadores abiertos y ninguno clasificado como bloqueante. Es una inspección
+de configuración y binarios, **no** una prueba pagada de todos los proveedores.
+La copia automática fuera de la instancia sigue pendiente de `BACKUP_GCS_BUCKET`.
 
 ## Servicios y conectividad
 
