@@ -30,7 +30,8 @@ from .circadian import CircadianClock
 from ..tools.web_search import describe_origin
 from .spark import WillQueue, EchoRitual, AgencyLoop, Impulse
 from .agency import AgencyLedger, AgencyPolicy
-from .rituals import ACCIONES_DE_RITMO, RitualStore, proponer_desde_experiencia
+from .rituals import (ACCIONES_DE_RITMO, RitualStore,
+                      proponer_ajuste_desde_experiencia, proponer_desde_experiencia)
 from .transparency import DisclosureLedger, MediaMarker, TransparencyPolicy
 from .inner_monologue import InnerMonologue
 from .growth_journal import GrowthJournal
@@ -304,13 +305,19 @@ class YukiAgent:
         datos suficientes, porque proponer sin experiencia sería adivinar.
         """
         try:
-            propuesta = proponer_desde_experiencia(self.agency_ledger, self.rituals)
+            # Primero mira lo que ya tiene: mover un ritmo que no está
+            # funcionando vale más que añadir otro, y además no gasta cupo. Sólo
+            # si no hay nada que reordenar, propone uno nuevo.
+            propuesta = proponer_ajuste_desde_experiencia(self.agency_ledger, self.rituals)
+            if propuesta is None:
+                propuesta = proponer_desde_experiencia(self.agency_ledger, self.rituals)
         except Exception as exc:
             logger.warning("No se pudo formular la propuesta de ritmo: %s", exc)
             return None
         if propuesta is None:
             return None
-        logger.info("Yuki propone un ritmo: %s", propuesta.name)
+        logger.info("Yuki propone %s: %s",
+                    "mover un ritmo" if propuesta.reemplaza else "un ritmo nuevo", propuesta.name)
         return propuesta.to_dict()
 
     async def _narrar_dormida(self, instruccion: str, material: str) -> str:

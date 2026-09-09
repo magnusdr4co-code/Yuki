@@ -558,7 +558,7 @@ class DiscordAdapter:
         """
         Ritmos: los del proyecto, los propios de Yuki y lo que espera respuesta.
 
-        `!ritmos` los lista; `!ritmo aprobar|rechazar|retirar <id>` decide. La
+        `!ritmos` los lista; `!ritmo aprobar|rechazar|retirar|mover <id>` decide. La
         decisión es siempre del Productor: Yuki propone y aquí se le contesta.
         """
         from ..core.rituals import RitualError
@@ -587,7 +587,15 @@ class DiscordAdapter:
             try:
                 if accion in ("aprobar", "aprueba", "si", "sí"):
                     ritmo = self.agent.rituals.approve(ritual_id, actor=author_name, nota=nota)
+                    # Un ajuste retira el ritmo viejo al aprobarse, así que el
+                    # planificador se rehace entero: si sólo se añadiera el
+                    # nuevo, el viejo seguiría sonando a su hora hasta el
+                    # siguiente arranque.
                     registrados = self.agent.register_own_rituals()
+                    if ritmo.reemplaza:
+                        return (f"✅ Ritmo **{ritmo.name}** movido a `{ritmo.cron}`. "
+                                f"El anterior queda retirado. Ritmos propios activos: "
+                                f"{registrados}.")
                     return (f"✅ Ritmo **{ritmo.name}** aprobado y en el planificador "
                             f"(`{ritmo.cron}`). Ritmos propios activos: {registrados}.")
                 if accion in ("rechazar", "rechaza", "no"):
@@ -597,11 +605,26 @@ class DiscordAdapter:
                     ritmo = self.agent.rituals.retire(ritual_id, actor=author_name, nota=nota)
                     self.agent.cron.jobs.pop(f"propio_{ritmo.name}", None)
                     return f"📴 Ritmo **{ritmo.name}** retirado del planificador."
+                if accion in ("mover", "ajustar"):
+                    # `!ritmo mover <id> "0 8 * * *" [motivo]`: cambia la hora sin
+                    # matar el ritmo, que era la única forma que había de moverlo
+                    # —y perdía su historia, que es lo que dice si merecía la pena—.
+                    if len(partes) < 4:
+                        return ('Uso: `!ritmo mover <id> "<cron>" [motivo]`, '
+                                'por ejemplo `!ritmo mover a1b2 "0 8 * * *" nadie contesta de noche`.')
+                    cron = partes[3].strip('"\'')
+                    motivo = " ".join(partes[4:]) or f"ajuste pedido por {author_name}"
+                    ajuste = self.agent.rituals.propose_adjustment(
+                        ritual_id, cron, motivo, origin="productor")
+                    return (f"🕯️ Ajuste propuesto para **{ajuste.name}**: `{ajuste.cron}`.\n"
+                            f"Sigue sonando a la hora vieja hasta que lo apruebes: "
+                            f"`!ritmo aprobar {ajuste.id}`.")
             except RitualError as exc:
                 return f"❌ {exc}"
 
         return ("Uso: `!ritmos` para verlos · "
-                "`!ritmo aprobar|rechazar|retirar <id> [motivo]` para decidir.")
+                "`!ritmo aprobar|rechazar|retirar <id> [motivo]` para decidir · "
+                '`!ritmo mover <id> "<cron>" [motivo]` para cambiarlo de hora.')
 
     def _handle_agency_command(self, content: str, author_id: str) -> str:
         """

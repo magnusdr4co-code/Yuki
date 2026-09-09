@@ -102,6 +102,12 @@ class RitualProposal:
     decided_by: Optional[str] = None
     decision_note: Optional[str] = None
     runs: int = 0
+    # Id del ritmo aprobado al que sustituye, si es un ajuste y no un ritmo
+    # nuevo. Faltaba: se podía proponer y retirar, pero no **cambiar de hora**,
+    # y para mover un ritmo había que matarlo y empezar de cero perdiendo su
+    # historia —cuántas veces sonó, qué eco tuvo—, que es justo lo que dice si
+    # merece la pena moverlo.
+    reemplaza: Optional[str] = None
 
     @property
     def caducada(self) -> bool:
@@ -183,7 +189,7 @@ class RitualStore:
     # -- Propuesta -------------------------------------------------------
 
     def propose(self, name: str, cron: str, action: str, reason: str,
-                origin: str = "yuki") -> RitualProposal:
+                origin: str = "yuki", reemplaza: Optional[str] = None) -> RitualProposal:
         """
         Registra una propuesta ya validada. Un motivo inválido levanta `RitualError`.
 
@@ -218,23 +224,64 @@ class RitualStore:
                 f"Ya hay {len(vivas)} propuestas esperando respuesta; espera a que el Productor "
                 "las atienda antes de pedir otra."
             )
-        if len([p for p in propuestas if p.status == APROBADO]) >= MAXIMOS_RITMOS_PROPIOS:
+        # Un ajuste no añade un ritmo: mueve uno. Contarlo contra el techo dejaría
+        # a Yuki sin poder cambiar de hora justo cuando tiene el cupo lleno, que
+        # es cuando más razones tiene para reordenar los que ya tiene.
+        if (reemplaza is None
+                and len([p for p in propuestas if p.status == APROBADO]) >= MAXIMOS_RITMOS_PROPIOS):
             raise RitualError(
                 f"Ya tienes {MAXIMOS_RITMOS_PROPIOS} ritmos propios activos: retira alguno antes "
                 "de proponer otro."
             )
-        if any(p.name == nombre and p.status in (PROPUESTO, APROBADO) for p in propuestas):
+        # Y por lo mismo puede repetir el nombre del ritmo que sustituye: es él.
+        if any(p.name == nombre and p.status in (PROPUESTO, APROBADO)
+               and p.id != reemplaza for p in propuestas):
             raise RitualError(f"Ya existe un ritmo llamado '{nombre}'.")
 
         propuesta = RitualProposal(
             id=uuid.uuid4().hex[:8], name=nombre, cron=cron.strip(),
             action=action, reason=reason.strip()[:400], origin=origin,
+            reemplaza=reemplaza,
         )
         propuestas.append(propuesta)
         self._guardar(propuestas)
         logger.info("Ritmo propuesto: %s (%s, %s) — %s", propuesta.name, propuesta.cron,
                     propuesta.action, propuesta.id)
         return propuesta
+
+    def propose_adjustment(self, ritual_id: str, nuevo_cron: str, reason: str,
+                           origin: str = "yuki") -> RitualProposal:
+        """
+        Pide mover un ritmo suyo a otra hora, conservando su nombre y su acción.
+
+        Cambia **sólo la hora**: si además cambiara la acción sería otro ritmo, y
+        entonces lo honesto es proponerlo como tal en vez de colar una cosa
+        distinta bajo un nombre ya aprobado.
+
+        El ritmo original sigue sonando mientras el ajuste espera respuesta. Si
+        se aprueba, se retira en el mismo acto; si se rechaza, no pasa nada y
+        todo sigue igual.
+        """
+        propuestas = self._todas()
+        original = next((p for p in propuestas if p.id == ritual_id), None)
+        if original is None:
+            raise RitualError(f"No existe el ritmo '{ritual_id}'.")
+        if original.status != APROBADO:
+            raise RitualError(
+                f"Sólo se ajusta un ritmo aprobado; '{ritual_id}' está en '{original.status}'.")
+        if nuevo_cron.strip() == original.cron:
+            raise RitualError("Ese ajuste deja el ritmo a la misma hora.")
+        if any(p.reemplaza == ritual_id and p.status == PROPUESTO and not p.caducada
+               for p in propuestas):
+            raise RitualError(f"Ya hay un ajuste esperando respuesta para '{ritual_id}'.")
+
+        # Se delega en `propose` para no duplicar la validación —cron legible,
+        # techo de disparos, propuestas vivas—, declarando a quién sustituye:
+        # con eso conserva el nombre y no cuenta contra el techo de ritmos.
+        ajuste = self.propose(name=original.name, cron=nuevo_cron, action=original.action,
+                              reason=reason, origin=origin, reemplaza=ritual_id)
+        logger.info("Ajuste propuesto para %s: %s → %s", ritual_id, original.cron, nuevo_cron)
+        return ajuste
 
     # -- Decisión --------------------------------------------------------
 
@@ -255,7 +302,26 @@ class RitualStore:
         return objetivo
 
     def approve(self, ritual_id: str, actor: str, nota: str = "") -> RitualProposal:
-        return self._decidir(ritual_id, APROBADO, actor, nota)
+        """
+        Aprueba una propuesta. Si es un ajuste, retira el ritmo que sustituye.
+
+        En el mismo acto, y no en dos: aprobar el ajuste y olvidarse de retirar
+        el viejo dejaría a Yuki con el ritmo sonando dos veces, a la hora vieja
+        y a la nueva. Eso no se le puede pedir a quien aprueba desde un DM.
+        """
+        aprobada = self._decidir(ritual_id, APROBADO, actor, nota)
+        if aprobada.reemplaza:
+            propuestas = self._todas()
+            anterior = next((p for p in propuestas if p.id == aprobada.reemplaza), None)
+            if anterior is not None and anterior.status == APROBADO:
+                anterior.status = RETIRADO
+                anterior.decided_at = time.time()
+                anterior.decided_by = actor
+                anterior.decision_note = f"sustituido por el ajuste {aprobada.id}"
+                self._guardar(propuestas)
+                logger.info("Ritmo %s retirado: lo sustituye el ajuste %s",
+                            anterior.id, aprobada.id)
+        return aprobada
 
     def reject(self, ritual_id: str, actor: str, nota: str = "") -> RitualProposal:
         return self._decidir(ritual_id, RECHAZADO, actor, nota)
@@ -315,3 +381,63 @@ def proponer_desde_experiencia(ledger: Any, store: RitualStore,
     )
     return store.propose(name=nombre, cron=f"0 {hora} * * *", action=accion_ritmo,
                          reason=motivo, origin="yuki")
+
+
+def proponer_ajuste_desde_experiencia(ledger: Any, store: RitualStore,
+                                      minimo_ejecuciones: int = 5) -> Optional[RitualProposal]:
+    """
+    El ritmo que ya tiene y que no le está funcionando: pedir moverlo.
+
+    Es la otra mitad de `proponer_desde_experiencia`. Aquélla funda un ritmo
+    nuevo en los datos; ésta mira los que ya suenan y, si uno lleva bastantes
+    ejecuciones en una franja que responde mal mientras otra responde bien,
+    propone moverlo ahí con la cifra delante.
+
+    Sólo mueve la hora, y sólo con `minimo_ejecuciones` a la espalda: una franja
+    juzgada por dos días es una corazonada, no una experiencia. Devuelve `None`
+    en cuanto falta cualquiera de las dos cosas — proponer sin datos sería
+    adivinar, que es exactamente de lo que este mecanismo saca a Yuki.
+    """
+    activos = [r for r in store.aprobados() if r.runs >= minimo_ejecuciones]
+    if not activos:
+        return None
+
+    franjas = ledger.snapshot().get("franjas", {})
+    def tasa(franja: str) -> Optional[float]:
+        datos = franjas.get(franja)
+        if not datos or datos.get("intentos", 0) < 3:
+            return None
+        return (datos["ecos"] + 1) / (datos["intentos"] + 2)
+
+    medibles = {f: t for f in franjas if (t := tasa(f)) is not None}
+    if len(medibles) < 2:
+        return None
+
+    mejor = max(medibles, key=lambda f: medibles[f])
+    hora_mejor = int(mejor.rstrip("h"))
+
+    for ritmo in activos:
+        try:
+            hora_actual = int(ritmo.cron.split()[1])
+        except (IndexError, ValueError):
+            continue        # un cron con comodín en la hora no se mueve así
+        franja_actual = f"{(hora_actual // 4) * 4:02d}h"
+        actual = medibles.get(franja_actual)
+        if actual is None or hora_actual == hora_mejor:
+            continue
+        # Un margen ancho a propósito: mover un ritmo por una diferencia de dos
+        # puntos sería ruido con ceremonia.
+        if medibles[mejor] - actual < 0.25:
+            continue
+        motivo = (
+            f"'{ritmo.name}' lleva {ritmo.runs} ejecuciones a las {hora_actual:02d}h, "
+            f"donde lo que hago recibe respuesta {actual:.0%} de las veces. En la franja "
+            f"de las {hora_mejor:02d}h es {medibles[mejor]:.0%}. Quiero moverlo ahí."
+        )
+        try:
+            return store.propose_adjustment(ritmo.id, f"0 {hora_mejor} * * *", motivo)
+        except RitualError:
+            # Ya hay un ajuste vivo para ése, o el cron no pasa: se prueba el
+            # siguiente en vez de quedarse sin proponer nada.
+            continue
+    return None

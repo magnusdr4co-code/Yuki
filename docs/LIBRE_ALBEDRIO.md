@@ -108,6 +108,34 @@ Los ritmos propios viven en `data/runtime_rituals.json`, **no** en `config.yaml`
 los del proyecto siguen siendo del proyecto, y los que Yuki gana se pueden
 retirar de un plumazo sin que se pierda su historia.
 
+
+### Y ajustarlos, que faltaba
+
+Se podía proponer un ritmo y retirarlo, pero no **cambiarlo de hora**. Para
+moverlo había que matarlo y empezar de cero, perdiendo cuántas veces sonó y qué
+eco tuvo — que es justo lo que dice si merecía la pena moverlo.
+
+Un ajuste conserva el nombre, la acción y la historia, y sólo cambia la hora: si
+además cambiara la acción sería otro ritmo, y entonces lo honesto es proponerlo
+como tal en vez de colar una cosa distinta bajo un nombre ya aprobado. El ritmo
+viejo sigue sonando mientras el ajuste espera respuesta, y al aprobarlo se retira
+**en el mismo acto** — acordarse de retirarlo a mano no se le puede pedir a quien
+aprueba desde un DM a las once de la noche. Tampoco cuenta contra el techo de
+cuatro ritmos: un ajuste no añade uno, mueve uno, y contarlo dejaría a Yuki sin
+poder reordenar lo que ya tiene justo cuando lo tiene lleno.
+
+Lo puede pedir el Productor (`!ritmo mover`) o **ella**, con la cifra delante:
+`proponer_ajuste_desde_experiencia()` mira los ritmos que ya suenan y, si uno
+lleva bastantes ejecuciones en una franja que responde mal mientras otra
+responde bien, propone moverlo. «*'versos_de_la_tarde' lleva 8 ejecuciones a las
+20h, donde lo que hago recibe respuesta el 17% de las veces. En la franja de las
+08h es el 83%. Quiero moverlo ahí.*» Con eso delante, la decisión del Productor
+deja de ser una corazonada contra otra.
+
+Sólo con cinco ejecuciones a la espalda y una diferencia de veinticinco puntos:
+una franja juzgada por dos días es una corazonada, y mover un ritmo por dos
+puntos sería ruido con ceremonia.
+
 ## 6. Por qué no actuó: el censo de ciclos
 
 Cada veinte minutos el bucle decide. Durante mucho tiempo, cuando decidía que
@@ -253,6 +281,7 @@ Por DM del Productor emparejado:
 !ritmo aprobar <id> [motivo]    aceptar una propuesta suya
 !ritmo rechazar <id> [motivo]   decir que no, con constancia del porqué
 !ritmo retirar <id>             apagar un ritmo propio ya activo
+!ritmo mover <id> "<cron>"      cambiarlo de hora sin matarlo ni perder su historia
 ```
 
 ## 9. Lo que sigue sin poder hacer

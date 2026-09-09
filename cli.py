@@ -868,7 +868,7 @@ def cmd_backup(as_json=False, ensayar=False):
         import shutil
         import tempfile
 
-        from scripts.restore_drill import restaurar
+        from src.tools.backup import restaurar
 
         destino = Path(tempfile.mkdtemp(prefix="yuki-restauracion-"))
         try:

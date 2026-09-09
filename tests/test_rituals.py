@@ -254,3 +254,228 @@ def test_sin_adaptador_la_propuesta_no_se_pierde(tmp_path):
 
     assert entregado is False
     assert store.pendientes()[0].id == propuesta.id
+
+
+# --- Ajustar un ritmo, no sólo proponerlo o matarlo ---
+
+def _aprobado(store, nombre="hora_azul", cron="0 21 * * *"):
+    propuesta = store.propose(nombre, cron, "escribir", "porque a esa hora escribe mejor")
+    return store.approve(propuesta.id, actor="productor")
+
+
+def test_un_ritmo_se_puede_mover_de_hora_sin_perder_su_historia(tmp_path):
+    """
+    Faltaba: se podía proponer y retirar, pero no **cambiar de hora**.
+
+    Para mover un ritmo había que matarlo y empezar de cero, perdiendo cuántas
+    veces sonó y qué eco tuvo — que es justo lo que dice si merece la pena
+    moverlo.
+    """
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    original = _aprobado(store)
+    store.registrar_ejecucion(original.id)
+    store.registrar_ejecucion(original.id)
+
+    ajuste = store.propose_adjustment(original.id, "0 6 * * *",
+                                      "a las nueve de la noche nunca contesta nadie")
+
+    assert ajuste.reemplaza == original.id
+    assert ajuste.name == original.name, "un ajuste conserva el nombre del ritmo"
+    assert ajuste.action == original.action
+    # Y mientras espera respuesta, el ritmo viejo sigue sonando.
+    assert [r.id for r in store.aprobados()] == [original.id]
+
+
+def test_aprobar_el_ajuste_retira_el_viejo_en_el_mismo_acto(tmp_path):
+    """
+    Si no, el ritmo sonaría dos veces: a la hora vieja y a la nueva.
+
+    Acordarse de retirar el original a mano no se le puede pedir a quien aprueba
+    desde un DM a las once de la noche.
+    """
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    original = _aprobado(store)
+    ajuste = store.propose_adjustment(original.id, "0 6 * * *", "nadie contesta a esa hora")
+
+    store.approve(ajuste.id, actor="productor")
+
+    activos = store.aprobados()
+    assert [r.id for r in activos] == [ajuste.id]
+    assert activos[0].cron == "0 6 * * *"
+    retirado = store.get(original.id)
+    assert retirado.status == "retirado"
+    assert "ajuste" in (retirado.decision_note or ""), "queda dicho por qué se retiró"
+
+
+def test_rechazar_el_ajuste_deja_todo_como_estaba(tmp_path):
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    original = _aprobado(store)
+    ajuste = store.propose_adjustment(original.id, "0 6 * * *", "probemos por la mañana")
+
+    store.reject(ajuste.id, actor="productor", nota="me gusta a esa hora")
+
+    activos = store.aprobados()
+    assert [r.id for r in activos] == [original.id]
+    assert activos[0].cron == "0 21 * * *"
+
+
+def test_se_puede_ajustar_con_el_cupo_de_ritmos_lleno(tmp_path):
+    """
+    El caso en que más falta hace, y el que se rompía al reutilizar `propose`.
+
+    Un ajuste no añade un ritmo: mueve uno. Contarlo contra el techo dejaba a
+    Yuki sin poder reordenar lo que ya tiene justo cuando lo tiene todo lleno.
+    """
+    from src.core.rituals import MAXIMOS_RITMOS_PROPIOS
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmos = [_aprobado(store, f"ritmo_{i}", f"0 {8 + i} * * *")
+              for i in range(MAXIMOS_RITMOS_PROPIOS)]
+
+    with pytest.raises(RitualError, match="retira alguno"):
+        store.propose("uno_mas", "0 20 * * *", "escribir", "otro más")
+
+    ajuste = store.propose_adjustment(ritmos[0].id, "30 7 * * *", "media hora antes")
+    assert ajuste.reemplaza == ritmos[0].id
+
+
+def test_no_se_ajusta_lo_que_no_es_un_ritmo_vivo(tmp_path):
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    propuesta = store.propose("sin_aprobar", "0 21 * * *", "escribir", "aún sin respuesta")
+
+    with pytest.raises(RitualError, match="Sólo se ajusta un ritmo aprobado"):
+        store.propose_adjustment(propuesta.id, "0 6 * * *", "moverlo")
+    with pytest.raises(RitualError, match="No existe"):
+        store.propose_adjustment("noexiste", "0 6 * * *", "moverlo")
+
+
+def test_un_ajuste_no_puede_cambiar_la_accion_a_escondidas(tmp_path):
+    """
+    Cambia sólo la hora. Si además cambiara la acción sería otro ritmo, y lo
+    honesto es proponerlo como tal en vez de colar una cosa distinta bajo un
+    nombre ya aprobado.
+    """
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    original = _aprobado(store)
+
+    ajuste = store.propose_adjustment(original.id, "0 6 * * *", "más temprano")
+
+    assert ajuste.action == original.action
+
+
+def test_solo_un_ajuste_vivo_por_ritmo(tmp_path):
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    original = _aprobado(store)
+    store.propose_adjustment(original.id, "0 6 * * *", "más temprano")
+
+    with pytest.raises(RitualError, match="ya hay un ajuste|Ya hay un ajuste"):
+        store.propose_adjustment(original.id, "0 7 * * *", "o quizá a las siete")
+
+
+def test_mover_a_la_misma_hora_no_es_un_ajuste(tmp_path):
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    original = _aprobado(store, cron="0 21 * * *")
+
+    with pytest.raises(RitualError, match="misma hora"):
+        store.propose_adjustment(original.id, "0 21 * * *", "igual pero distinto")
+
+
+# --- Que el ajuste lo pida ella, con la cifra delante ---
+
+class _DiarioFalso:
+    def __init__(self, franjas):
+        self._franjas = franjas
+
+    def snapshot(self):
+        return {"franjas": self._franjas, "acciones": {}, "recientes": []}
+
+
+def test_pide_mover_un_ritmo_que_no_le_funciona(tmp_path):
+    """
+    La otra mitad de proponer: mirar lo que ya suena y ver que no responde.
+
+    Con el motivo verificable delante —«lleva 8 ejecuciones a las 20h, donde me
+    responden el 20%; a las 08h es el 80%»— la decisión del Productor deja de
+    ser una corazonada contra otra.
+    """
+    from src.core.rituals import proponer_ajuste_desde_experiencia
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = _aprobado(store, "versos_de_la_tarde", "0 20 * * *")
+    for _ in range(8):
+        store.registrar_ejecucion(ritmo.id)
+
+    diario = _DiarioFalso({"20h": {"intentos": 10, "ecos": 1},
+                           "08h": {"intentos": 10, "ecos": 9}})
+
+    ajuste = proponer_ajuste_desde_experiencia(diario, store)
+
+    assert ajuste is not None
+    assert ajuste.reemplaza == ritmo.id
+    assert ajuste.cron == "0 8 * * *"
+    assert "8 ejecuciones" in ajuste.reason and "%" in ajuste.reason
+
+
+def test_no_mueve_nada_sin_experiencia_suficiente(tmp_path):
+    """Una franja juzgada por dos días es una corazonada, no una experiencia."""
+    from src.core.rituals import proponer_ajuste_desde_experiencia
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = _aprobado(store, "recien_nacido", "0 20 * * *")
+    store.registrar_ejecucion(ritmo.id)   # una sola vez
+
+    diario = _DiarioFalso({"20h": {"intentos": 10, "ecos": 1},
+                           "08h": {"intentos": 10, "ecos": 9}})
+
+    assert proponer_ajuste_desde_experiencia(diario, store) is None
+
+
+def test_no_mueve_por_una_diferencia_pequena(tmp_path):
+    """Mover un ritmo por dos puntos sería ruido con ceremonia."""
+    from src.core.rituals import proponer_ajuste_desde_experiencia
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = _aprobado(store, "casi_igual", "0 20 * * *")
+    for _ in range(8):
+        store.registrar_ejecucion(ritmo.id)
+
+    diario = _DiarioFalso({"20h": {"intentos": 10, "ecos": 5},
+                           "08h": {"intentos": 10, "ecos": 6}})
+
+    assert proponer_ajuste_desde_experiencia(diario, store) is None
+
+
+def test_la_noche_prefiere_reordenar_a_acumular(tmp_path, monkeypatch):
+    """
+    Que la capacidad llegue a ejercerse, no sólo a existir.
+
+    La síntesis nocturna sólo sabía proponer ritmos nuevos, así que ajustar
+    habría quedado construido y fuera de su alcance — el mismo patrón que dejó
+    `execute_autonomous_will` sin probar y `last_sleep_cycle` sin escritor.
+    Y prefiere mover antes que añadir: arreglar lo que ya tiene vale más que
+    acumular, y además no gasta cupo.
+    """
+    import asyncio
+
+    from src.core.agent import YukiAgent
+    from src.core.rituals import proponer_ajuste_desde_experiencia
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = _aprobado(store, "versos_de_la_tarde", "0 20 * * *")
+    for _ in range(8):
+        store.registrar_ejecucion(ritmo.id)
+    diario = _DiarioFalso({"20h": {"intentos": 10, "ecos": 1},
+                           "08h": {"intentos": 10, "ecos": 9}})
+
+    # Se comprueba contra el agente real, no reimplementando su lógica.
+    agente = YukiAgent.__new__(YukiAgent)
+    agente.rituals = store
+    agente.agency_ledger = diario
+
+    propuesta = asyncio.run(YukiAgent.propose_own_ritual(agente))
+
+    assert propuesta is not None
+    assert propuesta["reemplaza"] == ritmo.id, "propuso uno nuevo en vez de mover el que falla"
+    # Y la función suelta dice lo mismo: no hay dos caminos que puedan divergir.
+    assert proponer_ajuste_desde_experiencia(diario, RitualStore(
+        path=str(tmp_path / "otro.json"))) is None

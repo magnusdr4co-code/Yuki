@@ -95,7 +95,9 @@ docs/           una guía por subsistema; el mapa está en docs/README.md
 - Docstring en las que protegen algo no obvio, contando el fallo que evitan.
 - Nada de red ni de proveedores: se inyectan dobles. Una prueba que gaste
   crédito se deja de ejecutar.
-- Todo estado va a `tmp_path` — `conftest.py` ya redirige las ocho variables.
+- Todo estado va a `tmp_path` — `conftest.py` redirige todas las variables de
+  reubicación, `DATABASE_PATH` incluida. Si añades una, aíslala ahí: es lo que
+  faltaba el día que la suite dejó 887 recuerdos en la base de la instancia.
 
 ```bash
 make todo        # linter + suite + simulacro + humo, lo mismo que la CI

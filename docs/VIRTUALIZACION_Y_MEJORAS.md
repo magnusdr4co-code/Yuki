@@ -176,14 +176,18 @@ de la e2-small. Coste: prácticamente nulo en inactividad.
 de medios de Vertex: vídeo, imagen, música y voz consultan el presupuesto antes
 de llamar al proveedor, y el consumo de texto se anota con los `input_tokens` /
 `output_tokens` que las pasarelas ya devolvían y nadie acumulaba. Ver la ficha de
-L8. Queda pendiente el complemento que no depende del código: la alerta de
-facturación en el proyecto.
+L8. Del lado del repositorio hay además dos alertas —`GastoDiarioAnomalo`, que
+compara con la media de la semana, y `PresupuestoDeVideoCasiAgotado`— en
+`deploy/alertas-prometheus.yml`. Sigue pendiente lo que no depende del código:
+**la alerta de facturación en el propio proyecto de Google Cloud**, que es la
+única que salta cuando el gasto ocurre fuera de las rutas que el presupuesto
+vigila.
 
-### M3 · Copia de la memoria y del canon fuera de la instancia — **hecho el mecanismo**
+### M3 · Copia de la memoria y del canon fuera de la instancia — **hecho, y comprobada**
 *Mitiga L7 en cuanto se declare el bucket.* `src/tools/backup.py` empaqueta lo
 irremplazable —base, Biblioteca, estado vital, perfil dialéctico, pairing,
-trabajos y libro de gasto— tras la síntesis diaria, que es el momento en que la
-memoria del día está completa.
+trabajos, libro de gasto, bitácora y ritmos propios— tras la síntesis diaria,
+que es el momento en que la memoria del día está completa.
 
 Dos detalles deciden si una copia sirve: la base **no** se copia como fichero
 (un `tar` de un SQLite en WAL restaura corrupto justo cuando hace falta) sino con
@@ -192,9 +196,30 @@ por `integrity_check` antes de darla por buena. Sin `BACKUP_GCS_BUCKET` el
 archivo queda en el mismo disco que el original y el resultado **lo dice** en vez
 de sugerir que está a salvo.
 
-Falta lo que no depende del código: declarar el bucket en producción y **probar
-una restauración completa al menos una vez**. Una copia sin restaurar no está
-comprobada. Manual: `python3 cli.py backup`.
+**La restauración ya está probada, y no una vez.** Esto era lo que faltaba
+cuando se escribió este documento, y era lo más importante: una copia sin
+restaurar no está comprobada. Hoy hay tres niveles, de menos a más:
+
+- `scripts/restore_drill.py` abre la última copia real y comprueba seis cosas,
+  entre ellas que la base restaurada **tenga recuerdos dentro** —una base íntegra
+  y vacía es un desastre con buena salud— y que el precinto de la bitácora siga
+  en la cadena, que es lo único que detecta un corte por detrás.
+- `--ciclo` recorre el circuito entero contra una instancia de juguete: fabricar,
+  copiar, restaurar. Sin credenciales, así que corre en cada rama en la CI.
+- Y **cada noche la propia instancia restaura la copia que acaba de hacer**. Si
+  no sirve, el Productor lo sabe esa noche por DM. Una copia que existe y no
+  sirve es peor que no tenerla: parece que estamos a salvo.
+
+Comprobándolo aparecieron dos fallos que sólo se ven al restaurar de verdad: la
+copia moría con `FileNotFoundError` una de cada treinta y cinco veces —los
+ficheros `-wal`/`-shm` de SQLite seguían vivos al listar el directorio y ya no al
+empaquetarlo— y, en una instancia con las rutas reubicadas, el estado vital, el
+perfil dialéctico y el canon **no entraban en ninguna copia**.
+
+Sigue faltando lo que no depende del código: **declarar `BACKUP_GCS_BUCKET` en
+producción**. Sin bucket, la copia queda en el mismo disco que el original y no
+protege de perder el disco, que es el escenario de L7. Manual:
+`python3 cli.py backup --ensayar`.
 
 ### M4 · Motor musical de respaldo — **hecho**
 *Mitiga L4.* Construido con lo que ya había en casa, como se proponía: partitura
@@ -233,12 +258,18 @@ vivir en caliente.
 ## 5. Comprobación
 
 ```bash
-python3 -m pytest tests -q                     # 325 pruebas
-python3 cli.py backup                          # copia verificada de memoria y canon
+make todo                                      # linter, suite, simulacro, circuito y humo
+python3 cli.py backup --ensayar                # copia, y se restaura para darla por buena
+python3 cli.py pulso                           # ¿corre el proceso, y además vive Yuki?
 python3 cli.py spend                           # gasto de hoy contra el presupuesto
 python3 cli.py virtualize                      # limitadores del entorno actual
+python3 scripts/simulate_day.py                # su carácter, un día entero, antes de desplegarlo
 docker compose -f deploy/virtual/docker-compose.virtual.yml config   # réplica válida
 ```
+
+_(Aquí había un número de pruebas. Se ha quitado a propósito: una cifra en prosa
+envejece a la semana siguiente y acaba siendo una mentira pequeña en un documento
+que presume de no decirlas. `make todo` dice la de hoy.)_
 
 Las pruebas de `tests/test_media_delivery_resume.py` reproducen el corte real:
 generan la canción, fallan a mitad de los clips, arrancan un proceso nuevo que
