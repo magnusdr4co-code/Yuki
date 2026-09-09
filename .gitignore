@@ -48,6 +48,12 @@ output/music/*.mp3
 output/music/*.wav
 output/video/*.mp4
 output/posts/*.md
+# Marcadores de medio simulado. Se les cambió la extensión a `.simulado.txt`
+# para que un fichero de texto dejara de llamarse `.png` —el contenido decía la
+# verdad y el nombre mentía—, y al hacerlo dejaron de encajar en las reglas de
+# arriba: cinco se colaron en un commit. Siguen siendo obra falsa que no va al
+# repositorio.
+output/**/*.simulado.txt
 !output/art/.gitkeep
 !output/voice/.gitkeep
 !output/music/.gitkeep

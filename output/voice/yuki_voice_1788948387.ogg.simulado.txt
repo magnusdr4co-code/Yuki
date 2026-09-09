@@ -1,6 +1,0 @@
-/* YUKI VOICE ASSET (SIMULADO - gemini_multimodal_audio): <speak>
-  <prosody rate="94%" pitch="-1st">
-    El agua encuentra su camino.
-  </prosody>
-</speak> */
-/* Marcador simulado. El medio real se habría llamado: output/voice/yuki_voice_1788948387.ogg */

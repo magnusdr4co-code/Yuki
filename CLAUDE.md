@@ -152,3 +152,6 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
 - Añadir dependencias pesadas al camino de arranque: la instancia es una
   `e2-small` con 2 GB para todo.
 - Escribir en `output/` o `data/` desde las pruebas.
+- Versionar obra generada. Las reglas de `.gitignore` enumeran extensiones, así
+  que un formato nuevo se cuela solo: `tests/test_aislamiento.py` comprueba la
+  propiedad —en `output/` no hay nada versionado— en vez de fiarse de la lista.

@@ -259,3 +259,43 @@ def test_todo_estado_durable_se_puede_reubicar(monkeypatch, tmp_path):
 
     assert not sin_aislar, (
         f"estas variables redirigen estado y la suite no las aísla: {sin_aislar}")
+
+
+def test_el_repositorio_no_lleva_obra_generada():
+    """
+    El guardián que habría cazado el commit en que se me colaron cinco.
+
+    Al cambiar la extensión de los marcadores a `.simulado.txt` —para que un
+    fichero de texto dejara de llamarse `.png`— dejaron de encajar en las reglas
+    de `.gitignore`, que enumeran extensiones de medio. Se colaron en el
+    siguiente commit sin que nada dijera nada.
+
+    Lo que se comprueba no es una regla concreta de `.gitignore` sino la
+    propiedad: **en `output/` no hay nada versionado salvo los marcadores de
+    carpeta**. Da igual cómo se llame lo que se genere mañana.
+    """
+    import subprocess
+
+    raiz = Path(__file__).resolve().parents[1]
+    seguidos = subprocess.run(["git", "ls-files", "output/"], cwd=raiz,
+                              capture_output=True, text=True, timeout=60).stdout.split()
+
+    permitidos = {".gitkeep", "INDEX.md", "CANON.md"}
+
+    # Cuatro artefactos estaban versionados **antes** de este trabajo: una
+    # partitura con sus metadatos y una exportación de identidad. No los borro
+    # —una vez estuve a punto de borrar ese `.mid` creyéndolo basura y era obra
+    # suya— y si deben seguir ahí es decisión de quien tiene el repositorio. Se
+    # nombran aquí para que consten, no para tolerar los siguientes.
+    HEREDADOS = {
+        "output/music/cerezos_de_acero_1787764737.json",
+        "output/music/cerezos_de_acero_1787764737.mid",
+        "output/music/memoria_de_metal_y_sal_1787761122.json",
+        "output/yuki_identity_export_1787762950.zip",
+    }
+
+    colados = [f for f in seguidos
+               if Path(f).name not in permitidos and "/Biblioteca/" not in f
+               and f not in HEREDADOS]
+
+    assert not colados, f"obra generada versionada en el repositorio: {colados}"

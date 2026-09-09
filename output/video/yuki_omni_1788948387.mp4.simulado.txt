@@ -1,2 +1,0 @@
-/* YUKI VIDEO ASSET (SIMULADO - gemini-omni): Niebla que avanza */
-/* Marcador simulado. El medio real se habría llamado: output/video/yuki_omni_1788948387.mp4 */

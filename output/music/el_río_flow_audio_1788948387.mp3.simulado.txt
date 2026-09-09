@@ -1,2 +1,0 @@
-/* YUKI MUSIC TRACK (SIMULADO - flow_audio): El Río | Prompt: shamisen bajo la lluvia | BPM: 84 | Scale: Insen */
-/* Marcador simulado. El medio real se habría llamado: output/music/el_río_flow_audio_1788948387.mp3 */
