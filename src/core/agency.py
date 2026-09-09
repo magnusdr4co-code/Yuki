@@ -49,7 +49,6 @@ Esto añade las tres piezas que faltaban:
 
 from __future__ import annotations
 
-import json
 import logging
 import math
 import os
@@ -58,6 +57,8 @@ import time
 from dataclasses import dataclass, field
 from datetime import datetime, timezone
 from pathlib import Path
+
+from . import estado_json
 from typing import Any, Dict, List, Optional, Sequence
 
 logger = logging.getLogger("Yuki.Agencia")
@@ -277,30 +278,22 @@ class AgencyLedger:
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.timezone_name = timezone_name
 
-    def _leer(self) -> Dict[str, Any]:
-        if not self.path.is_file():
-            return {"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
-                    "boredom": 0.0, "recientes": [], "ciclos": {}}
-        try:
-            datos = json.loads(self.path.read_text(encoding="utf-8"))
-            if isinstance(datos, dict):
-                datos.setdefault("acciones", {})
-                datos.setdefault("franjas", {})
-                datos.setdefault("dias", {})
-                datos.setdefault("pendientes", [])
-                datos.setdefault("recientes", [])
-                datos.setdefault("boredom", 0.0)
-                datos.setdefault("ciclos", {})
-                return datos
-        except (json.JSONDecodeError, OSError, TypeError):
-            logger.warning("Diario de agencia ilegible; se empieza uno nuevo.")
+    @staticmethod
+    def _vacio() -> Dict[str, Any]:
         return {"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
                 "boredom": 0.0, "recientes": [], "ciclos": {}}
 
+    def _leer(self) -> Dict[str, Any]:
+        datos = estado_json.leer(self.path, self._vacio, que_es="Diario de agencia")
+        # Las claves que no estaban se rellenan al vuelo: un diario escrito por
+        # una versión anterior tiene que seguir sirviendo, no obligar a empezar
+        # de cero y perder lo aprendido. `ciclos` llegó así.
+        for clave, vacio in self._vacio().items():
+            datos.setdefault(clave, vacio)
+        return datos
+
     def _escribir(self, datos: Dict[str, Any]) -> None:
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, datos)
 
     # -- Lectura ---------------------------------------------------------
 

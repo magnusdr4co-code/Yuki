@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .rutas import salida
+from . import estado_json
 
 logger = logging.getLogger("Yuki.Transparencia")
 
@@ -139,20 +140,13 @@ class DisclosureLedger:
         self.reminder_days = reminder_days
 
     def _leer(self) -> Dict[str, Any]:
-        if not self.path.is_file():
-            return {"declaraciones": {}}
-        try:
-            datos = json.loads(self.path.read_text(encoding="utf-8"))
-            if isinstance(datos, dict) and isinstance(datos.get("declaraciones"), dict):
-                return datos
-        except (json.JSONDecodeError, OSError, TypeError):
-            logger.warning("Registro de transparencia ilegible; se empieza uno nuevo.")
-        return {"declaraciones": {}}
+        datos = estado_json.leer(
+            self.path, lambda: {"declaraciones": {}},
+            valido=lambda d: isinstance(d.get("declaraciones"), dict), que_es="Registro de transparencia")
+        return datos
 
     def _escribir(self, datos: Dict[str, Any]) -> None:
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, datos)
 
     @staticmethod
     def _clave(user_id: str, channel: str) -> str:

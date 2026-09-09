@@ -28,7 +28,6 @@ sino cuando hay evidencia de que hace falta.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -36,6 +35,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
+
+from . import estado_json
 
 logger = logging.getLogger("Yuki.Persona")
 
@@ -192,21 +193,14 @@ class PersonaAnchor:
     # -- Estado ----------------------------------------------------------
 
     def _leer(self) -> Dict[str, Any]:
-        if not self.path.is_file():
-            return {"muestras": [], "anclajes": 0}
-        try:
-            datos = json.loads(self.path.read_text(encoding="utf-8"))
-            if isinstance(datos, dict) and isinstance(datos.get("muestras"), list):
-                datos.setdefault("anclajes", 0)
-                return datos
-        except (json.JSONDecodeError, OSError, TypeError):
-            logger.warning("Historial de persona ilegible; se empieza uno nuevo.")
-        return {"muestras": [], "anclajes": 0}
+        datos = estado_json.leer(
+            self.path, lambda: {"muestras": [], "anclajes": 0},
+            valido=lambda d: isinstance(d.get("muestras"), list), que_es="Historial de persona")
+        datos.setdefault("anclajes", 0)
+        return datos
 
     def _escribir(self, datos: Dict[str, Any]) -> None:
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, datos)
 
     # -- Medición y anclaje ---------------------------------------------
 

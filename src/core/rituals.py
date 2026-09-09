@@ -25,7 +25,6 @@ propios vivos, porque un calendario que se llena solo deja de ser un ritmo.
 
 from __future__ import annotations
 
-import json
 import logging
 import os
 import re
@@ -36,6 +35,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..scheduler.cron_engine import CronParseError, parse_cron_expression
+from . import estado_json
 
 logger = logging.getLogger("Yuki.Ritmos")
 
@@ -151,20 +151,13 @@ class RitualStore:
     # -- Persistencia ----------------------------------------------------
 
     def _leer(self) -> Dict[str, Any]:
-        if not self.path.is_file():
-            return {"propuestas": []}
-        try:
-            datos = json.loads(self.path.read_text(encoding="utf-8"))
-            if isinstance(datos, dict) and isinstance(datos.get("propuestas"), list):
-                return datos
-        except (json.JSONDecodeError, OSError, TypeError):
-            logger.warning("Registro de ritmos ilegible; se empieza uno nuevo.")
-        return {"propuestas": []}
+        datos = estado_json.leer(
+            self.path, lambda: {"propuestas": []},
+            valido=lambda d: isinstance(d.get("propuestas"), list), que_es="Registro de ritmos")
+        return datos
 
     def _escribir(self, datos: Dict[str, Any]) -> None:
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, datos)
 
     def _todas(self) -> List[RitualProposal]:
         return [RitualProposal.from_dict(d) for d in self._leer()["propuestas"]]

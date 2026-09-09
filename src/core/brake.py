@@ -39,6 +39,8 @@ import time
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from pathlib import Path
+
+from . import estado_json
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("Yuki.Freno")
@@ -182,9 +184,7 @@ class Brake:
             "nivel": nivel, "motivo": (motivo or "")[:240], "actor": actor,
             "desde": ahora, "hasta": (ahora + minutos * 60) if minutos else None,
         }
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, estado)
         self._anotar("freno_puesto", estado)
         logger.warning("FRENO puesto en '%s' por %s: %s", nivel, actor, motivo or "sin motivo")
         return self.state()
@@ -193,9 +193,7 @@ class Brake:
         anterior = self._del_fichero()
         estado = {"nivel": NINGUNO, "motivo": (motivo or "")[:240], "actor": actor,
                   "desde": time.time(), "hasta": None}
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(estado, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, estado)
         self._anotar("freno_soltado", {**estado, "nivel_anterior": anterior.nivel if anterior else NINGUNO})
         logger.warning("FRENO soltado por %s", actor)
         # El entorno puede seguir frenando aunque el fichero se suelte, y eso

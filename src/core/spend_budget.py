@@ -30,6 +30,8 @@ import threading
 from dataclasses import dataclass
 from datetime import datetime, timezone, timedelta
 from pathlib import Path
+
+from . import estado_json
 from typing import Any, Dict, Optional
 
 logger = logging.getLogger("Yuki.Presupuesto")
@@ -202,9 +204,7 @@ class SpendLedger:
         return {"dias": {}}
 
     def _escribir(self, datos: Dict[str, Any]) -> None:
-        temporal = self.path.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(datos, ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, self.path)
+        estado_json.escribir(self.path, datos)
 
     def _podar(self, datos: Dict[str, Any]) -> None:
         limite = (datetime.now(timezone.utc) - timedelta(days=DIAS_RETENIDOS)).strftime("%Y-%m-%d")

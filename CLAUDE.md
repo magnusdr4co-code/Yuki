@@ -46,7 +46,9 @@ Romper una de éstas es romper el proyecto, no una prueba:
 ```
 src/core/       agente, albedrío (agency, spark, rituals), identidad
                 (persona_anchor, transparency), gobierno (state_registry,
-                blackbox, brake, spend_budget, virtual_instance), salud (pulse)
+                blackbox, brake, spend_budget, virtual_instance), salud (pulse);
+                `rutas.py` decide dónde vive cada cosa y `estado_json.py` cómo
+                se guarda —atómico, y tolerante a un fichero corrupto—
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 media_jobs, web_search
@@ -83,6 +85,11 @@ docs/           una guía por subsistema; el mapa está en docs/README.md
   con `FileNotFoundError` una vez de cada treinta y tantas —los `-wal`/`-shm`
   seguían vivos al listar el directorio y ya no al empaquetarlo— y una fuga de
   descriptores en la sonda de métricas, que se lee cada minuto.
+- **El estado en JSON se lee y escribe con `estado_json`**, nunca a mano: la
+  escritura es atómica (temporal + `os.replace`, porque el proceso muere a mitad
+  justo cuando se despliega) y un fichero corrupto devuelve el esquema vacío en
+  vez de tumbar la instancia. Siete módulos tenían su propia copia de esas dos
+  líneas.
 - Cada estado durable nuevo: (1) se declara en `state_registry.build_registry`,
   (2) tiene variable de entorno para reubicarlo, (3) entra en `.gitignore` y
   `.dockerignore`, (4) se aísla en `tests/conftest.py`, (5) se añade a la copia

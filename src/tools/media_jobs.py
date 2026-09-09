@@ -26,6 +26,8 @@ import time
 import uuid
 from dataclasses import dataclass, field, asdict
 from pathlib import Path
+
+from ..core import estado_json
 from typing import Any, Dict, List, Optional
 
 logger = logging.getLogger("Yuki.MediaJobs")
@@ -181,10 +183,7 @@ class MediaJobStore:
 
     def save(self, job: MediaJob) -> None:
         job.updated_at = _ahora()
-        destino = self._path(job.id)
-        temporal = destino.with_suffix(".json.tmp")
-        temporal.write_text(json.dumps(job.to_dict(), ensure_ascii=False, indent=2), encoding="utf-8")
-        os.replace(temporal, destino)
+        estado_json.escribir(self._path(job.id), job.to_dict())
 
     def get(self, job_id: str) -> Optional[MediaJob]:
         ruta = self._path(job_id)
