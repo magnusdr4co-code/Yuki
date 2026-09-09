@@ -216,6 +216,13 @@ la base viaje dentro, ni que lo que llegue tenga algo.
 | `biblioteca` | Los medios se regeneran; lo escrito, no |
 | `precinto` | Un corte por detrás en la bitácora es coherente consigo mismo |
 
+**Y cada noche, sola.** La síntesis de las 23:30 abre la copia que acaba de
+hacer y la comprueba: hasta ahora, la copia *real* —la que haría falta el día
+del incendio— no la abría nadie, y lo único que se ensayaba era una instancia
+de juguete en la CI. No cuesta crédito ni red: es un tar y una base local. Si no
+restaura, el Productor lo sabe esa misma noche por DM, porque **una copia que
+existe y no sirve es peor que no tenerla: parece que estamos a salvo**.
+
 El modo `--ciclo` recorre el circuito entero contra una instancia de juguete
 —memoria con recuerdos, canon, bitácora—, sin credenciales y sin tocar nada
 real: es el que corre en CI, y el que delataría el día que el mecanismo de copia

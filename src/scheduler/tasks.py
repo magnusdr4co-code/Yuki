@@ -10,8 +10,9 @@ import asyncio
 import logging
 import time
 from datetime import datetime
+from typing import Any, Dict, List, Optional
 from src.tools.web_search import describe_origin
-from src.tools.backup import BackupManager
+from src.tools.backup import BackupManager, restaurar
 from src.core.spark import Impulse
 
 logger = logging.getLogger("Yuki.AutonomousTasks")
@@ -164,8 +165,14 @@ class AutonomousTasks:
         if backup.status == "success":
             logger.info("Copia diaria: %s (%s)", backup.path,
                         backup.remote_uri or backup.remote_error or "sólo local")
+            ensayo = await self._comprobar_la_copia(backup)
         else:
             logger.error("La copia diaria falló: %s", backup.error)
+            ensayo = None
+            await self._avisar_al_productor(
+                f"🗄️ La copia de esta noche **no se pudo crear**: {backup.error}\n"
+                "_Hoy no hay copia nueva. La de ayer sigue donde estaba._"
+            )
 
         # Con el día escrito, la memoria se consolida: recalcular importancia,
         # fundir lo repetido y destilar esquemas. Es el momento correcto porque
@@ -191,7 +198,51 @@ class AutonomousTasks:
             )
 
         return {"summary": daily_text, "evolution": evolution, "backup": backup.to_dict(),
-                "ritual_proposal": propuesta, "nrem": consolidacion}
+                "ritual_proposal": propuesta, "nrem": consolidacion,
+                "ensayo_de_restauracion": ensayo}
+
+    async def _comprobar_la_copia(self, backup) -> Optional[List[Dict[str, Any]]]:
+        """
+        Restaura la copia recién hecha, cada noche, en la propia instancia.
+
+        Una copia sin restaurar no está comprobada. Hasta ahora eso sólo lo
+        comprobaba la integración continua, y sobre una instancia de juguete: la
+        copia **real**, la que haría falta el día del incendio, no la abría
+        nadie. Aquí se abre entera en un temporal y se mira lo único que importa
+        —que la base viaje dentro, tenga recuerdos y pase `integrity_check`—.
+
+        No cuesta crédito ni red: es abrir un tar y leer una base local. Y si
+        falla, lo sabe el Productor esa misma noche y no el día que haga falta.
+        """
+        if not backup.path:
+            return None
+
+        import shutil
+        import tempfile
+        from pathlib import Path
+
+        destino = Path(tempfile.mkdtemp(prefix="yuki-ensayo-"))
+        try:
+            resultados = await asyncio.to_thread(restaurar, Path(backup.path), destino)
+        except Exception:
+            logger.exception("El ensayo de restauración no se pudo ejecutar")
+            return None
+        finally:
+            shutil.rmtree(destino, ignore_errors=True)
+
+        fallidas = [r for r in resultados if not r["ok"]]
+        if fallidas:
+            detalle = "\n".join(f"• **{r['prueba']}**: {r['detalle']}" for r in fallidas)
+            logger.error("La copia de esta noche NO restaura: %s", fallidas)
+            await self._avisar_al_productor(
+                "🗄️ **La copia de esta noche existe pero no restaura.**\n"
+                f"{detalle}\n\n_Hay copia y no sirve, que es peor que no tenerla: "
+                "parece que estamos a salvo._"
+            )
+        else:
+            logger.info("La copia de esta noche restaura correctamente (%d comprobaciones).",
+                        len(resultados))
+        return resultados
 
     async def _avisar_al_productor(self, texto: str) -> bool:
         """

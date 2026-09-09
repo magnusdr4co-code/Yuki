@@ -134,18 +134,30 @@ def test_la_precedencia_es_la_misma_para_las_dos_variables(monkeypatch, tmp_path
     assert str(base_de_datos({"memory": {"database_path": "otra/mem.db"}})) == str(tmp_path / "manda.db")
 
 
-def test_la_suite_no_deja_medios_sin_marcar_en_la_salida_del_repositorio():
+def test_ningun_cliente_de_medios_escribe_en_la_salida_real(monkeypatch, tmp_path):
     """
-    Cinco ficheros de medios aparecieron en `output/` del repositorio durante una
-    pasada de la suite, y la comprobación de humo los denunció como material
-    sintético sin marcar. Se comprueba que la salida real queda intacta.
+    La propiedad, no el estado del directorio.
+
+    La primera versión de esta prueba miraba si `output/` del repositorio tenía
+    material sin marcar. Cazó la fuga, pero depende del estado ambiente: falla
+    por lo que hiciera antes quien la ejecuta —a mí me falló por mis propias
+    órdenes sueltas sin la variable puesta— y eso convierte una prueba en una
+    lotería. Guardar el directorio real es trabajo de `scripts/smoke_check.py`,
+    que lo mira donde tiene sentido: en la instancia.
+
+    Aquí se comprueba lo que sí es determinista: con la variable puesta, ningún
+    cliente de medios escribe fuera de ella.
     """
-    from src.core.transparency import audit_directory
+    from src.tools.nous_portal import NousPortalClient
 
-    auditoria = audit_directory(os.path.join(os.path.dirname(__file__), "..", "output"))
+    destino = tmp_path / "salida"
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(destino))
 
-    assert not auditoria["sin_marcar"], (
-        f"hay material sin marcar en la salida real: {auditoria['sin_marcar'][:5]}")
+    portal = NousPortalClient()
+
+    for ruta in (portal.art_dir, portal.voice_dir, portal.music_dir,
+                 portal.video_dir, portal.posts_dir):
+        assert str(destino) in str(ruta), f"{ruta} escribiría fuera de la reubicación"
 
 
 def test_quien_escribe_y_quien_copia_miran_el_mismo_sitio(monkeypatch, tmp_path):

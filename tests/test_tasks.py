@@ -360,3 +360,79 @@ def test_un_adaptador_que_revienta_no_tumba_la_rutina():
     agente = _agente(discord_adapter=AdaptadorRoto())
 
     assert asyncio.run(AutonomousTasks(agente)._avisar_al_productor("hola")) is False
+
+
+def _tareas_con_avisos(agente):
+    """
+    `AutonomousTasks` con el aviso al Productor interceptado.
+
+    El doble del agente no tiene adaptador de Discord —ni debe tenerlo—, así que
+    lo que se comprueba es qué se le habría dicho, no que Discord funcione.
+    """
+    tareas = AutonomousTasks(agente)
+    avisos = []
+
+    async def interceptar(texto):
+        avisos.append(texto)
+        return True
+
+    tareas._avisar_al_productor = interceptar
+    tareas.avisos = avisos
+    return tareas
+
+def test_la_copia_de_cada_noche_se_restaura_antes_de_darla_por_buena(tmp_path, monkeypatch):
+    """
+    Una copia sin restaurar no está comprobada, y hasta ahora la copia **real**
+    no la abría nadie: sólo la CI, y sobre una instancia de juguete.
+
+    Ahora la instancia abre cada noche la copia que acaba de hacer. No cuesta
+    crédito ni red —es un tar y una base local— y si falla, se sabe esa misma
+    noche y no el día que haga falta.
+    """
+    import sqlite3
+
+    from src.tools.backup import BackupManager
+
+    datos = tmp_path / "data"
+    salida = tmp_path / "output"
+    (salida / "Biblioteca").mkdir(parents=True)
+    datos.mkdir()
+    with sqlite3.connect(datos / "yuki_memory.db") as conexion:
+        conexion.execute("CREATE TABLE memories (id INTEGER PRIMARY KEY, category TEXT)")
+        conexion.execute("INSERT INTO memories (category) VALUES ('conversation')")
+    monkeypatch.setenv("YUKI_BLACKBOX_PATH", str(datos / "bitacora.jsonl"))
+
+    copia = BackupManager(data_dir=str(datos), output_dir=str(salida),
+                          backup_dir=str(datos / "backups"), bucket="").create()
+    assert copia.status == "success"
+
+    tareas = _tareas_con_avisos(_agente())
+    informe = asyncio.run(tareas._comprobar_la_copia(copia))
+
+    assert informe and all(r["ok"] for r in informe), [r for r in informe if not r["ok"]]
+    assert tareas.avisos == [], "una copia que restaura no molesta al Productor"
+
+
+def test_una_copia_que_no_restaura_avisa_esa_misma_noche(tmp_path):
+    """
+    Hay copia y no sirve: es peor que no tenerla, porque parece que estamos a
+    salvo. Eso tiene que llegar al Productor cuando ocurre.
+    """
+    rota = tmp_path / "yuki_backup_20260908T000000.tar.gz"
+    rota.write_bytes(b"esto no es un tar")
+    copia = types.SimpleNamespace(path=str(rota), status="success")
+
+    tareas = _tareas_con_avisos(_agente())
+    informe = asyncio.run(tareas._comprobar_la_copia(copia))
+
+    assert informe and not all(r["ok"] for r in informe)
+    assert len(tareas.avisos) == 1
+    assert "no restaura" in tareas.avisos[0]
+
+
+def test_si_la_copia_ni_siquiera_se_crea_tambien_se_avisa(tmp_path):
+    """El silencio ante una copia que no existe es el peor de todos."""
+    tareas = _tareas_con_avisos(_agente())
+    fallo = types.SimpleNamespace(path=None, status="error", error="disco lleno")
+
+    assert asyncio.run(tareas._comprobar_la_copia(fallo)) is None

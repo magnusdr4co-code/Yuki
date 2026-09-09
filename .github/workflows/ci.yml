@@ -75,9 +75,12 @@ jobs:
           pip install -r requirements-dev.txt
 
       - name: Comprobación de humo (lo que no depende del entorno)
-        # Las comprobaciones de Vertex y presupuesto dependen de credenciales
-        # que una CI no tiene ni debe tener; se ejecutan en el despliegue real.
-        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,pulso,caracter
+        # Las de Vertex y presupuesto dependen de credenciales que una CI no
+        # tiene ni debe tener. `pulso` tampoco entra: pregunta si hay un proceso
+        # vivo haciendo cosas, y en una CI —o en un clon de desarrollo— por
+        # definición no lo hay. Meterla aquí sólo enseña a ignorar el rojo.
+        # Se ejecutan las tres en el despliegue real, con `make humo`.
+        run: python scripts/smoke_check.py --solo memoria,bitacora,marcado_articulo_50,caracter
 
       - name: La documentación no miente
         # Comandos, guiones, módulos y ficheros de despliegue citados en los

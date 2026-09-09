@@ -31,128 +31,15 @@ al terminar salvo que se pida conservarlo.
 import argparse
 import json
 import os
-import sqlite3
 import sys
-import tarfile
 import tempfile
-from contextlib import closing
 from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
 from scripts._consola import ROJO, TENUE, FIN, informar  # noqa: E402
-
-
-def ultima_copia(directorio: str) -> Optional[Path]:
-    copias = sorted(Path(directorio).glob("yuki_backup_*.tar.gz"))
-    return copias[-1] if copias else None
-
-
-def _rutas_seguras(archivo: tarfile.TarFile) -> Tuple[bool, str]:
-    """
-    Ninguna entrada puede escapar del destino.
-
-    Un tar con `../` o rutas absolutas dentro sobrescribe lo que quiera al
-    extraerlo. Aquí la copia la hace el propio proyecto, así que no debería
-    ocurrir nunca —y por eso mismo conviene comprobarlo: los fallos que "no
-    pueden pasar" son los que nadie mira.
-    """
-    for miembro in archivo.getmembers():
-        nombre = Path(miembro.name)
-        if nombre.is_absolute() or ".." in nombre.parts:
-            return False, f"entrada peligrosa en el archivo: {miembro.name}"
-        if miembro.issym() or miembro.islnk():
-            return False, f"enlace dentro del archivo: {miembro.name}"
-    return True, "todas las rutas quedan dentro del destino"
-
-
-def restaurar(copia: Path, destino: Path) -> List[Dict[str, Any]]:
-    """Abre la copia y comprueba lo restaurado. Devuelve el informe por prueba."""
-    resultados: List[Dict[str, Any]] = []
-
-    def anotar(nombre: str, correcto: bool, detalle: str) -> None:
-        resultados.append({"prueba": nombre, "ok": correcto, "detalle": detalle})
-
-    try:
-        with tarfile.open(copia, "r:gz") as archivo:
-            seguro, detalle = _rutas_seguras(archivo)
-            anotar("rutas_del_archivo", seguro, detalle)
-            if not seguro:
-                return resultados
-            archivo.extractall(destino)
-            nombres = archivo.getnames()
-    except (tarfile.TarError, OSError) as exc:
-        anotar("apertura", False, f"la copia no se puede abrir: {exc}")
-        return resultados
-
-    anotar("apertura", True, f"{len(nombres)} entrada(s) extraídas")
-
-    # Manifiesto
-    manifiesto_ruta = destino / "MANIFIESTO.json"
-    manifiesto: Dict[str, Any] = {}
-    if manifiesto_ruta.is_file():
-        try:
-            manifiesto = json.loads(manifiesto_ruta.read_text(encoding="utf-8"))
-            anotar("manifiesto", True,
-                   f"creado {manifiesto.get('creado')} · integridad declarada "
-                   f"'{manifiesto.get('integridad_db')}'")
-        except json.JSONDecodeError as exc:
-            anotar("manifiesto", False, f"ilegible: {exc}")
-    else:
-        anotar("manifiesto", False, "la copia no trae manifiesto")
-
-    # La memoria: lo único verdaderamente irremplazable.
-    base = next(destino.glob("*.db"), None)
-    if base is None:
-        anotar("memoria", False, "no hay base de datos en la copia")
-    else:
-        try:
-            with closing(sqlite3.connect(f"file:{base}?mode=ro", uri=True)) as conexion:
-                estado = conexion.execute("PRAGMA integrity_check").fetchone()[0]
-                recuerdos = conexion.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
-                categorias = dict(conexion.execute(
-                    "SELECT category, COUNT(*) FROM memories GROUP BY category"))
-            if estado != "ok":
-                anotar("memoria", False, f"integrity_check tras restaurar: '{estado}'")
-            elif recuerdos == 0:
-                # Una base íntegra y vacía es un desastre con buena salud.
-                anotar("memoria", False, "la base restaurada está vacía")
-            else:
-                anotar("memoria", True,
-                       f"{recuerdos} recuerdo(s) en {len(categorias)} categoría(s), integridad ok")
-        except sqlite3.Error as exc:
-            anotar("memoria", False, f"la base restaurada no abre: {exc}")
-
-    # El canon: los medios se regeneran, la obra archivada no.
-    biblioteca = destino / "Biblioteca"
-    if biblioteca.is_dir():
-        piezas = [p for p in biblioteca.rglob("*") if p.is_file()]
-        anotar("biblioteca", True, f"{len(piezas)} fichero(s) de canon restaurados")
-    else:
-        anotar("biblioteca", True, "sin Biblioteca en esta instancia (no es un fallo)")
-
-    # El precinto: lo único que detecta un corte por detrás en la bitácora.
-    precinto = manifiesto.get("precinto_bitacora")
-    if not precinto or "error" in precinto:
-        anotar("precinto", True, "la copia no trae precinto de bitácora todavía")
-    else:
-        try:
-            from src.core.blackbox import BlackBox
-
-            informe = BlackBox().verify(seal=precinto)
-            if informe["truncada"]:
-                anotar("precinto", False,
-                       "la bitácora actual no contiene el precinto de esta copia: "
-                       "alguien cortó la cadena por detrás")
-            else:
-                anotar("precinto", True,
-                       f"la cadena actual contiene el precinto ({precinto.get('entradas')} "
-                       "anotaciones entonces)")
-        except Exception as exc:
-            anotar("precinto", False, f"no se pudo contrastar: {type(exc).__name__}")
-
-    return resultados
+from src.tools.backup import restaurar, ultima_copia  # noqa: E402
 
 
 def ciclo_completo(raiz: Path) -> Tuple[Optional[Path], List[Dict[str, Any]]]:
