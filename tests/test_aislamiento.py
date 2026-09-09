@@ -16,6 +16,7 @@ nadie usa.
 
 import os
 import sys
+from pathlib import Path
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
@@ -204,3 +205,57 @@ def test_la_auditoria_del_articulo_50_mira_donde_se_escribe(monkeypatch, tmp_pat
 
     assert str(salida()) == str(tmp_path / "salida")
     assert auditoria["sin_marcar"], "el auditor no vio un fichero que sí está sin marcar"
+
+
+def test_construir_el_agente_no_deja_nada_en_el_repositorio(tmp_path):
+    """
+    El guardián que habría cazado las dos fugas de hoy, y las siguientes.
+
+    No comprueba una variable concreta —eso envejece en cuanto alguien añade
+    estado nuevo— sino la propiedad: **construir el agente entero no puede dejar
+    un solo fichero en `data/` ni en `output/` del repositorio**. Las dos fugas
+    de esta tarde, 887 recuerdos y cinco ficheros de medios, se coleron cada una
+    por una variable distinta que nadie había pensado en aislar.
+    """
+    from src.core.agent import YukiAgent
+
+    raiz = Path(__file__).resolve().parents[1]
+
+    def foto():
+        instantanea = set()
+        for carpeta in ("data", "output"):
+            base = raiz / carpeta
+            if base.is_dir():
+                instantanea |= {p.relative_to(raiz) for p in base.rglob("*") if p.is_file()}
+        return instantanea
+
+    antes = foto()
+    YukiAgent()
+    nuevos = foto() - antes
+
+    assert not nuevos, f"construir el agente dejó ficheros en el repositorio: {sorted(nuevos)}"
+
+
+def test_todo_estado_durable_se_puede_reubicar(monkeypatch, tmp_path):
+    """
+    `CLAUDE.md` lo exige: cada estado durable tiene variable para reubicarlo.
+
+    Sin eso no hay forma de aislar la suite —ni de mover la instancia— y el
+    fichero acaba escrito donde caiga, que es como empezaron las dos fugas.
+    """
+    import re
+
+    raiz = Path(__file__).resolve().parents[1]
+    fuentes = "\n".join(p.read_text(encoding="utf-8") for p in (raiz / "src").rglob("*.py"))
+    variables = set(re.findall(r'getenv\("(YUKI_[A-Z_]+_PATH|DATABASE_PATH|YUKI_OUTPUT_DIR)"',
+                               fuentes))
+
+    # Las que redirigen estado durable tienen que estar aisladas en la suite, o
+    # bien colgar de una que sí lo esté.
+    conftest = (raiz / "tests" / "conftest.py").read_text(encoding="utf-8")
+    derivadas = {"YUKI_RUNTIME_CONFIG_PATH"}  # cuelga de DATABASE_PATH vía rutas.datos()
+
+    sin_aislar = sorted(v for v in variables if v not in conftest and v not in derivadas)
+
+    assert not sin_aislar, (
+        f"estas variables redirigen estado y la suite no las aísla: {sin_aislar}")

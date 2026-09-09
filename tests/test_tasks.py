@@ -436,3 +436,26 @@ def test_si_la_copia_ni_siquiera_se_crea_tambien_se_avisa(tmp_path):
     fallo = types.SimpleNamespace(path=None, status="error", error="disco lleno")
 
     assert asyncio.run(tareas._comprobar_la_copia(fallo)) is None
+
+
+def test_cada_cron_declarado_tiene_su_metodo(monkeypatch):
+    """
+    Un cron con un nombre que nadie implementa no falla al arrancar: falla cada
+    noche, en un registro que nadie lee, y el trabajo simplemente no ocurre.
+
+    Al revés también importa: un método autónomo sin cron declarado es código
+    que se escribió para ejecutarse solo y no se ejecuta nunca.
+    """
+    import yaml
+
+    with open(os.path.join(os.path.dirname(__file__), "..", "config.yaml"),
+              encoding="utf-8") as fichero:
+        config = yaml.safe_load(fichero)
+
+    declarados = {j["name"] for j in config["scheduler"]["cron_jobs"]}
+    metodos = {n for n in dir(AutonomousTasks)
+               if not n.startswith("_") and callable(getattr(AutonomousTasks, n))
+               and n != "agent"}
+
+    assert not (declarados - metodos), f"cron sin método: {sorted(declarados - metodos)}"
+    assert not (metodos - declarados), f"método autónomo sin cron: {sorted(metodos - declarados)}"
