@@ -157,3 +157,49 @@ def test_la_simulacion_no_escribe_en_el_diario_de_verdad(tmp_path, monkeypatch):
 
 def test_el_informe_serializa_para_comparar_calibraciones():
     assert json.dumps(simular(AgencyPolicy(), dias=1, semilla=4))
+
+
+def test_el_mundo_contesta_y_el_refuerzo_aprende():
+    """
+    El límite que tenía el simulador y que lo hacía decir menos de lo que
+    parecía: sin eco, ninguna franja y ninguna acción salían de su tasa inicial,
+    así que el refuerzo —la mitad del mecanismo— no se ejercitaba nunca. Medía
+    el pulso de su día y no lo único que decide si ese pulso mejora.
+    """
+    informe = simular(AgencyPolicy(), dias=7, semilla=7)
+
+    assert informe["ecos"] > 0, "nadie contestó en siete días"
+    pesos = informe["pesos_aprendidos"]
+    assert any(abs(p - 0.5) > 0.05 for p in pesos.values()), (
+        f"los pesos no se movieron de su tasa inicial: {pesos}")
+
+
+def test_hablar_al_vacio_le_baja_la_expectativa_de_todo():
+    """
+    El contrapeso, y no dice lo que yo esperaba: con nadie al otro lado los
+    pesos no se quedan en su tasa inicial, **caen**. Es correcto y es lo que se
+    quiere: la tasa suavizada de Laplace tiende a cero cuando hay muchos
+    intentos y ningún eco, así que Yuki aprende que no está llegando a nadie.
+
+    La primera versión de esta prueba afirmaba que se quedaban cerca de 0.5.
+    Estaba mal la prueba, no el código.
+    """
+    mudo = simular(AgencyPolicy(), dias=7, semilla=7,
+                   mundo={hora: 0.0 for hora in range(24)})
+    contestado = simular(AgencyPolicy(), dias=7, semilla=7)
+
+    assert mudo["ecos"] == 0
+    assert all(p < 0.3 for p in mudo["pesos_aprendidos"].values()), mudo["pesos_aprendidos"]
+    # Y con alguien al otro lado, lo contrario.
+    assert max(contestado["pesos_aprendidos"].values()) > max(mudo["pesos_aprendidos"].values())
+
+
+def test_el_mundo_se_puede_describir_por_horas():
+    from scripts.simulate_day import MUNDO_POR_DEFECTO, _mundo
+
+    perfil = _mundo("20:0.9,3:0.0")
+
+    assert perfil[20] == 0.9 and perfil[3] == 0.0
+    # Las horas no nombradas conservan el perfil: describir las veinticuatro
+    # para mover una sería una ceremonia que nadie repite.
+    assert perfil[9] == MUNDO_POR_DEFECTO[9]

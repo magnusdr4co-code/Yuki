@@ -368,12 +368,19 @@ class AgencyLoop:
         if impulse is None:
             return Decision(SIN_DESEOS, detalle="el refuerzo no eligió ninguno")
 
-        umbral = self.policy.umbral_efectivo(aburrimiento)
+        # La franja pesa en *si* actuar ahora, no en *qué* hacer: es una
+        # propiedad del momento, igual para todos los candidatos, así que en la
+        # elección no cambiaría a quién elige. Aquí sí: donde la ha escuchado
+        # baja el listón, donde habló al vacío lo sube. El efecto se acota a
+        # ±20% a propósito —el refuerzo ya se muerde la cola bastante— para que
+        # una racha de silencio no la encierre en una sola hora del día.
+        franja = self.model.peso_franja()
+        umbral = self.policy.umbral_efectivo(aburrimiento) * (1.0 + 0.4 * (0.5 - franja))
         if impulse.current_intensity < umbral:
             self.ledger.acumular_aburrimiento(self.policy.boredom_gain, self.policy.boredom_cap)
             return Decision(BAJO_UMBRAL,
                             detalle=f"{impulse.tool_hint} a {impulse.current_intensity:.2f}, "
-                                    f"umbral {umbral:.2f}")
+                                    f"umbral {umbral:.2f} (franja {franja:.2f})")
 
         energia = float(getattr(self.vital_state, "energy", 1.0) or 0.0)
         coste = self._coste(impulse.tool_hint)

@@ -345,7 +345,3 @@ class Pulse:
         except Exception:
             return None
 
-
-def leer_pulso(config: Optional[Dict[str, Any]] = None) -> Lectura:
-    """Atajo para las sondas: una lectura, sin construir nada."""
-    return Pulse(config).read()

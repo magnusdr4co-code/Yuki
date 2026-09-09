@@ -35,7 +35,7 @@ import types
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1]))
 
@@ -73,8 +73,35 @@ def _amanece(diario) -> None:
     diario._escribir(datos)
 
 
+# Un mundo por defecto: la gente responde de día y calla de madrugada. No
+# pretende ser exacto —nadie tiene esa curva medida— sino **no ser plano**: con
+# eco uniforme el refuerzo no tiene nada que aprender, y una simulación sin nada
+# que aprender no dice nada del mecanismo que existe para aprender.
+MUNDO_POR_DEFECTO = {0: 0.02, 1: 0.02, 2: 0.02, 3: 0.02, 4: 0.05, 5: 0.10,
+                     6: 0.20, 7: 0.35, 8: 0.55, 9: 0.60, 10: 0.55, 11: 0.50,
+                     12: 0.45, 13: 0.40, 14: 0.40, 15: 0.45, 16: 0.50, 17: 0.55,
+                     18: 0.65, 19: 0.70, 20: 0.75, 21: 0.60, 22: 0.35, 23: 0.15}
+
+
+def _mundo(descripcion: str) -> Dict[int, float]:
+    """
+    `--mundo "20:0.9,3:0.0"` describe quién contesta y a qué hora.
+
+    Las horas no nombradas conservan el perfil por defecto: describir las
+    veinticuatro para mover una sería una ceremonia que nadie va a repetir.
+    """
+    perfil = dict(MUNDO_POR_DEFECTO)
+    for trozo in (descripcion or "").split(","):
+        if not trozo.strip():
+            continue
+        hora, _, probabilidad = trozo.partition(":")
+        perfil[int(hora) % 24] = max(0.0, min(1.0, float(probabilidad)))
+    return perfil
+
+
 def simular(politica, dias: int = 1, fallos: float = 0.0,
-            semilla: int = None, energia: float = 0.9) -> Dict[str, Any]:
+            semilla: int = None, energia: float = 0.9,
+            mundo: Optional[Dict[int, float]] = None) -> Dict[str, Any]:
     """
     Recorre los ciclos de `dias` días con el bucle real. No toca nada durable.
 
@@ -102,6 +129,8 @@ def simular(politica, dias: int = 1, fallos: float = 0.0,
     )
     bucle = AgencyLoop(WillQueue(), vital, policy=politica, ledger=diario, rng=azar)
 
+    perfil = mundo if mundo is not None else dict(MUNDO_POR_DEFECTO)
+    ecos = 0
     actos: List[Dict[str, Any]] = []
     por_hora: Counter = Counter()
     por_tipo: Counter = Counter()
@@ -122,6 +151,14 @@ def simular(politica, dias: int = 1, fallos: float = 0.0,
                          if fallo else {"status": "completed"})
             bucle.record_action(decision.impulso, resultado)
 
+            # Y el mundo contesta, o no. Sin esto el refuerzo no aprende nunca:
+            # todas las franjas y todas las acciones se quedan en su tasa
+            # inicial, y la simulación mide el pulso de su día pero no lo único
+            # que decide si ese pulso mejora.
+            if not fallo and azar.random() < perfil.get(minuto // 60, 0.0):
+                diario.registrar_eco(ventana_horas=6.0)
+                ecos += 1
+
             if primer_acto_ciclos is None:
                 primer_acto_ciclos = ciclos
             actos.append({"dia": dia + 1, "hora": f"{minuto // 60:02d}:{minuto % 60:02d}",
@@ -141,6 +178,9 @@ def simular(politica, dias: int = 1, fallos: float = 0.0,
         "por_hora": dict(por_hora),
         "por_tipo": dict(por_tipo),
         "censo": censo,
+        "ecos": ecos,
+        "pesos_aprendidos": {a: round(bucle.model.peso(a, diario.snapshot()), 3)
+                             for a in politica.allowed_actions},
         "ciclos_hasta_el_primer_acto": primer_acto_ciclos,
         "incoherencias": politica.incoherencias(),
     }

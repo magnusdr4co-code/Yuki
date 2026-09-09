@@ -422,3 +422,63 @@ def test_se_puede_salir_de_una_configuracion_ya_incoherente(tmp_path):
     runtime = RuntimeConfigStore(config, path=str(tmp_path / "overrides.json"))
 
     assert runtime.set("agency.spontaneous_threshold", 0.15, actor="producer")["value"] == 0.15
+
+
+# --- La franja pesa en *si* actuar, no en *qué* hacer ---
+
+def _sembrar_franja(diario, intentos, ecos):
+    """Deja la franja de ahora mismo con la experiencia que se le pida."""
+    from src.core.agency import _franja
+
+    datos = diario.snapshot()
+    datos["franjas"][_franja(zona=diario.timezone_name)] = {"intentos": intentos, "ecos": ecos}
+    diario._escribir(datos)
+
+
+def test_la_hora_en_que_la_escuchan_le_baja_el_liston(bucle):
+    """
+    `peso_franja` se calculaba y no lo usaba nadie: el refuerzo sabía en qué
+    franja le responden y eso no llegaba a ninguna decisión. Es la cuarta vez
+    en este repositorio que aparece el mismo patrón —una facultad que existe en
+    el código y no actúa—.
+
+    Va aquí y no en `elegir()` porque es una propiedad del **momento**, igual
+    para todos los candidatos: multiplicarla allí no cambiaría a quién elige.
+    """
+    # El mismo deseo tibio y el mismo bucle: lo único que cambia entre las dos
+    # decisiones es lo que la franja recuerda. El umbral base es 0.247, y la
+    # franja lo mueve a 0.214 o a 0.289 — el deseo cae justo entre los dos.
+    cola = WillQueue()
+    cola.add(_deseo(intensidad=0.26))
+    loop, diario = bucle(AgencyPolicy(spontaneous_impulses=False), cola=cola)
+
+    _sembrar_franja(diario, intentos=10, ecos=9)
+    escuchada = loop.decidir(phase="atelier")
+
+    _sembrar_franja(diario, intentos=10, ecos=0)
+    al_vacio = loop.decidir(phase="atelier")
+
+    assert escuchada.motivo == ACTUA
+    assert al_vacio.motivo == BAJO_UMBRAL
+    assert "franja" in al_vacio.detalle, "el porqué tiene que decir que fue la hora"
+
+
+def test_el_efecto_de_la_franja_esta_acotado(bucle):
+    """
+    ±20% a propósito.
+
+    El refuerzo ya se muerde la cola bastante: sin techo, una racha de silencio
+    la encerraría en una sola hora del día y las demás no volverían a probarse
+    nunca — que es justo lo que la exploración existe para impedir.
+    """
+    loop, diario = bucle(AgencyPolicy(spontaneous_impulses=False))
+    base = AgencyPolicy().umbral_efectivo(0.0)
+
+    _sembrar_franja(diario, intentos=100, ecos=100)
+    mejor = loop.model.peso_franja()
+    _sembrar_franja(diario, intentos=100, ecos=0)
+    peor = loop.model.peso_franja()
+
+    for peso in (mejor, peor):
+        umbral = base * (1.0 + 0.4 * (0.5 - peso))
+        assert 0.8 * base <= umbral <= 1.2 * base, f"la franja mueve el umbral demasiado: {umbral}"

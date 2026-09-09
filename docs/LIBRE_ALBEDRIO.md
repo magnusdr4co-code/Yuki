@@ -136,6 +136,31 @@ Sólo con cinco ejecuciones a la espalda y una diferencia de veinticinco puntos:
 una franja juzgada por dos días es una corazonada, y mover un ritmo por dos
 puntos sería ruido con ceremonia.
 
+### La hora también pesa
+
+El refuerzo llevaba tiempo calculando `peso_franja` —en qué franja de cuatro
+horas lo que hace recibe respuesta— y ese número no llegaba a ninguna decisión.
+Es la cuarta vez que aparece el mismo patrón en este repositorio: una facultad
+escrita, correcta y que no actúa.
+
+Ahora pesa en **si** actuar ahora, y no en **qué** hacer. Va ahí y no en la
+elección porque es una propiedad del momento, igual para todos los candidatos:
+multiplicarla en el softmax no cambiaría a quién elige. En el umbral sí — donde
+la han escuchado baja el listón, donde habló al vacío lo sube.
+
+El efecto está acotado a ±20%: con el umbral base en 0.247, la mejor franja lo
+deja en 0.214 y la peor en 0.289. El refuerzo ya se muerde la cola bastante, y
+sin techo una racha de silencio la encerraría en una sola hora del día mientras
+las demás no volverían a probarse nunca.
+
+**Lo que no se puede demostrar con el simulador, dicho:** en el régimen que
+simula `simulate_day.py`, el umbral no llega a morder nunca —el censo de siete
+días da `sin_deseos`, `fase_de_silencio` y `actua`, y ni un solo `bajo_umbral`—
+porque un impulso espontáneo nace ya por encima del listón. Donde esto cambia
+algo es en los impulsos que le llegan de fuera con intensidad modesta: el eco de
+las 06:30 y los sueños REM. El mecanismo está probado directamente; su efecto
+sobre el día, no.
+
 ## 6. Por qué no actuó: el censo de ciclos
 
 Cada veinte minutos el bucle decide. Durante mucho tiempo, cuando decidía que
@@ -268,7 +293,16 @@ por un número que nadie eligió para eso.
 python3 scripts/simulate_day.py --dias 3 --semilla 7      # reproducible
 python3 scripts/simulate_day.py --aburrimiento 0.04       # probar otra calibración
 python3 scripts/simulate_day.py --fallos 1.0              # con el proveedor caído
+python3 scripts/simulate_day.py --mundo "20:0.9,3:0.0"    # quién contesta y a qué hora
 ```
+
+**El mundo contesta.** La primera versión del simulador no tenía eco: nadie
+respondía nunca, así que todas las franjas y todas las acciones se quedaban en
+su tasa inicial y el refuerzo —la mitad del mecanismo— no se ejercitaba. Medía
+el pulso de su día y no lo único que decide si ese pulso mejora. Ahora hay un
+perfil por hora, que no pretende ser exacto —nadie tiene esa curva medida— sino
+**no ser plano**, y el informe trae los pesos aprendidos al final de la
+simulación.
 
 Por DM del Productor emparejado:
 
