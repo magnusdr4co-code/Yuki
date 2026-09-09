@@ -17,6 +17,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 | Todo verde y no hace nada | [OPERACION.md §8](OPERACION.md) (signos vitales) y [LIBRE_ALBEDRIO.md §6](LIBRE_ALBEDRIO.md) (censo de ciclos) |
 | Qué puede y qué no puede esta instancia | [VIRTUALIZACION_Y_MEJORAS.md](VIRTUALIZACION_Y_MEJORAS.md) — gemelo virtual y limitadores L1–L11 |
 | En qué estado está producción | [PRODUCTION_STATUS.md](PRODUCTION_STATUS.md) |
+| La copia no sale de la máquina | [PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md](PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md) — **pendiente**: los pasos para declarar `BACKUP_GCS_BUCKET`, que es lo único de la copia que no depende del código |
 
 ## Cómo funciona por dentro
 

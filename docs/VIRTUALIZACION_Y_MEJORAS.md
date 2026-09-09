@@ -217,7 +217,8 @@ empaquetarlo— y, en una instancia con las rutas reubicadas, el estado vital, e
 perfil dialéctico y el canon **no entraban en ninguna copia**.
 
 Sigue faltando lo que no depende del código: **declarar `BACKUP_GCS_BUCKET` en
-producción**. Sin bucket, la copia queda en el mismo disco que el original y no
+producción**, con los pasos concretos en
+[`PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md`](PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md). Sin bucket, la copia queda en el mismo disco que el original y no
 protege de perder el disco, que es el escenario de L7. Manual:
 `python3 cli.py backup --ensayar`.
 

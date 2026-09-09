@@ -311,3 +311,4 @@ responde.
 | Tras un despliegue | `scripts/smoke_check.py --url <salón>` |
 | Todo en verde y ella no hace nada | `cli.py pulso` — es catatonia, y `/health` no la ve |
 | ¿La copia de anoche sirve? | `scripts/restore_drill.py` — restaurarla es la única respuesta |
+| La copia no sale de la máquina | Está pendiente declarar el bucket: [PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md](PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md) |
