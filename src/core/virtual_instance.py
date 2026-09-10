@@ -251,8 +251,17 @@ class VirtualInstance:
             REAL if _clave_util("DISCORD_BOT_TOKEN") else INACTIVO,
             f"Guilds autorizados: {_env('DISCORD_ALLOWED_GUILD_ID') or 'ninguno declarado'}",
         )
-        self._cap("presencia.telegram", "Presencia", SIMULADO,
-                  "El adaptador registra en log; no usa `python-telegram-bot`")
+        # La salida ya es real; la entrada no existe y se declara. Antes esto
+        # decía «simulado» a secas mientras el adaptador escribía «Bot de
+        # Telegram de Yuki iniciado» en el log: las dos cosas a la vez.
+        telegram_listo = _clave_util("TELEGRAM_BOT_TOKEN") and bool(_env("TELEGRAM_DEFAULT_CHAT_ID"))
+        self._cap(
+            "presencia.telegram", "Presencia", REAL if telegram_listo else INACTIVO,
+            ("Salida real por la API HTTP (difusión con marca y freno); la entrada "
+             "—polling— no está implementada" if telegram_listo else
+             "Salida sin credenciales: falta TELEGRAM_BOT_TOKEN o TELEGRAM_DEFAULT_CHAT_ID; "
+             "la entrada —polling— no está implementada"),
+        )
         salon_protegido = bool(_env("SALON_API_TOKEN"))
         self._cap(
             "presencia.salon", "Presencia", REAL,

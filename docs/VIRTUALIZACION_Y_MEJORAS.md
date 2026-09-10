@@ -285,7 +285,7 @@ presupuesto para todo lo demás—; no entran en `describe()`, que es la línea 
 DM y no un informe; y no se emiten en `gasto_hoy`, que multiplicaría sus series
 por cada ruta y rompería la comparación con los límites.
 
-### M6 · Cerrar los canales simulados — *búsqueda hecha, quedan Telegram y Honcho*
+### M6 · Cerrar los canales simulados — *búsqueda y Telegram hechos, queda Honcho*
 *Cierra L5, L6 y L9.* Tres piezas del diagrama no servían tráfico real. La
 búsqueda ya está: `src/tools/web_search.py` llama a Firecrawl de verdad cuando
 hay `FIRECRAWL_API_KEY`, y sin ella devuelve pistas de introspección marcadas
@@ -294,9 +294,29 @@ inventados que la reflexión de las 03:00 citaba como corrientes del mundo. El
 origen viaja en el propio prompt (`describe_origin`), así que Yuki no puede
 atribuir al mundo algo que no salió de él.
 
-Quedan Telegram —registra en log, no llega a ningún seguidor— y Honcho —perfil
-en JSON local—. Cada uno admite dos salidas honestas: implementarlo o retirarlo
-del diagrama; lo que no se sostiene es dejarlo dibujado como si funcionara.
+**Telegram: la salida ya es real; la entrada no existe y se dice.** Era peor de
+lo que esta ficha describía. `start_polling` escribía «Bot de Telegram de Yuki
+iniciado» con un token configurado y no iniciaba nada, y `broadcast_drop`
+registraba `📢 [TELEGRAM BROADCAST]` con el texto del lanzamiento y devolvía
+`None`, así que la tarea de las 07:30 daba el día por difundido. Nadie recibía
+nada y nada fallaba.
+
+Ahora la difusión sale de verdad contra la API HTTP de Telegram, **con la
+biblioteca estándar**: `multipart` son veinte líneas que no envejecen y la
+instancia es una `e2-small` con 2 GB para todo. Cumple las tres reglas que la
+hacen publicable: el freno se consulta **antes** de tocar la red, la obra se
+marca **antes** de entregarla y cada mensaje lleva la declaración visible, y
+nada se da por entregado sin la confirmación del servidor —un `chat not found`
+no es una difusión—. El resultado dice `entregado` y, si no, por qué; la tarea
+matutina lo conserva y lo registra en vez de descartarlo.
+
+La **entrada** (un bucle de `getUpdates` con su desplazamiento persistido) no
+está implementada, y `start_polling` lo dice en el arranque en vez de fingirlo.
+Anunciarla a medias es exactamente lo que hacía el código anterior.
+
+Queda **Honcho** —perfil en JSON local—, con las dos salidas honestas de
+siempre: implementarlo o retirarlo del diagrama; lo que no se sostiene es
+dejarlo dibujado como si funcionara.
 
 ### M7 · El Salón como panel de estado — **hecho**
 *Reduce la dependencia del DM.* `/api/trabajos` publica el estado de cada
