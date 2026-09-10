@@ -98,7 +98,12 @@ def _adaptador(monkeypatch, tmp_path, canal):
     return adaptador, creador, portal, biblioteca
 
 
-async def _respuesta(user_id, user_name, message, channel_type=None, active_role=None):
+RUTAS_PEDIDAS = []
+
+
+async def _respuesta(user_id, user_name, message, channel_type=None, active_role=None,
+                     route=None):
+    RUTAS_PEDIDAS.append(route)
     return f"texto sobre: {message[:120]}"
 
 
@@ -107,6 +112,7 @@ async def _no_adjunta(channel, path, caption):
 
 
 def _producir(adaptador, pedido, canal):
+    RUTAS_PEDIDAS.clear()
     asyncio.run(adaptador._run_discord_production(
         author_id="42", author_name="Productor", content=pedido, origin_channel=canal))
 
@@ -181,3 +187,18 @@ def test_el_tema_es_el_tercer_entrecomillado_no_el_canal():
     assert extract_production_theme('"Dev Server" "salon" "Cerezos de acero"') == "Cerezos de acero"
     assert extract_production_theme('"Dev Server" "salon"') == ""
     assert extract_production_theme("sin comillas") == ""
+
+
+def test_la_letra_sale_por_la_ruta_de_composicion_musical(tmp_path, monkeypatch):
+    """
+    `music_composition` llevaba declarada en `config.yaml` desde el principio y
+    no la leía nadie: un dial que no gira engaña a quien lo ajusta y no falla
+    nunca. Escribir la letra de una canción es exactamente su tarea.
+    """
+    canal = CanalDoble()
+    adaptador, _creador, _portal, _biblioteca = _adaptador(monkeypatch, tmp_path, canal)
+
+    _producir(adaptador, 'crea el canal "Dev Server" "salon" "Cerezos de acero" en discord', canal)
+
+    assert "music_composition" in RUTAS_PEDIDAS, \
+        "la letra salía con la configuración general, no con su ruta"

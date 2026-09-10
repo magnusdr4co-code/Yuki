@@ -182,7 +182,7 @@ def cmd_state(exportar=None, olvidar=None, motivo="", as_json=False):
 def cmd_spend(as_json=False):
     """Gasto de hoy contra el presupuesto diario, sin tocar la red."""
     import yaml
-    from src.core.spend_budget import SpendLedger
+    from src.core.spend_budget import PREFIJO_RUTA, SpendLedger
 
     with open("config.yaml", "r", encoding="utf-8") as f:
         config = yaml.safe_load(f)
@@ -192,6 +192,7 @@ def cmd_spend(as_json=False):
         print(json.dumps({"consumo": libro.today(), "limites": libro.limits,
                           "usd_estimado": libro.usd_today(),
                           "usd_por_dia": libro.usd_per_day,
+                          "por_ruta": libro.por_ruta(),
                           "habilitado": libro.enabled}, ensure_ascii=False, indent=2))
         return libro
 
@@ -203,6 +204,8 @@ def cmd_spend(as_json=False):
     if not consumo:
         print(f"{GREEN}Sin gasto registrado hoy.{RESET}")
     for unidad in sorted(set(consumo) | set(libro.limits)):
+        if unidad.startswith(PREFIJO_RUTA):
+            continue  # tienen su propia tabla, abajo
         usado = consumo.get(unidad, 0)
         limite = libro.limits.get(unidad)
         if limite is None:
@@ -211,6 +214,17 @@ def cmd_spend(as_json=False):
         agotado = usado >= limite
         color = RED if agotado else GREEN
         print(f"  {unidad}: {color}{usado:g}/{limite:g}{RESET}")
+    # El enrutado por tarea manda un resumen de feed a un modelo barato y una
+    # síntesis a uno caro. Sin este desglose no había forma de ver si servía.
+    por_ruta = libro.por_ruta()
+    if por_ruta:
+        print(f"\n{BOLD}Texto por tarea{RESET}")
+        for nombre in sorted(por_ruta, key=lambda n: -por_ruta[n]["usd"]):
+            fila = por_ruta[nombre]
+            print(f"  {nombre}: {DIM}{fila['entrada']:g} entrada · {fila['salida']:g} salida"
+                  f"{RESET} → ${fila['usd']:.4f}")
+    else:
+        print(f"\n{DIM}Sin texto anotado por tarea hoy.{RESET}")
     print(f"\n{DIM}Estimación: ${libro.usd_today():.2f}"
           + (f" de ${libro.usd_per_day:.2f}" if libro.usd_per_day is not None else "")
           + " · la música no se cotiza: no hay precio de referencia registrado.{}".format(RESET))

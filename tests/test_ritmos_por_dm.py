@@ -18,7 +18,7 @@ from types import SimpleNamespace
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from src.core.producer_harness import TOOLS, ProducerHarness  # noqa: E402
+from src.core.producer_harness import RUTA, TOOLS, ProducerHarness  # noqa: E402
 from src.core.rituals import RitualStore  # noqa: E402
 from src.core.runtime_config import RuntimeConfigStore  # noqa: E402
 from src.tools.creation_library import CreationLibrary  # noqa: E402
@@ -32,7 +32,11 @@ def _llamada(name, arguments=None):
 
 def _agente(tmp_path, turnos):
     class Router:
-        def generate_with_tools(self, messages, tools):
+        def generate_with_tools(self, messages, tools, route=None):
+            # `route` no es opcional en el arnés: sale siempre con la
+            # ruta declarada. Un doble más estrecho que la firma real
+            # deja pasar el cambio que rompe producción.
+            assert route == RUTA
             return turnos.pop(0)
 
     armor = SimpleNamespace(sanitize_user_prompt=lambda text: SimpleNamespace(allowed=True, text=text))

@@ -147,6 +147,7 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         from ..core.spark import MOTIVOS
         from ..core.rituals import RitualStore
         from ..core.spend_budget import (
+            PREFIJO_RUTA,
             IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, TOKENS_ENTRADA, TOKENS_SALIDA,
             VIDEO_SEGUNDOS, VOZ_CARACTERES, SpendLedger,
         )
@@ -180,6 +181,11 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         unidades = (VIDEO_SEGUNDOS, IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS,
                     VOZ_CARACTERES, TOKENS_ENTRADA, TOKENS_SALIDA)
         for unidad in sorted(set(unidades) | set(consumo) | set(libro.limits)):
+            # El desglose por tarea va en su propia familia: mezclarlo aquí
+            # multiplicaría las series de `gasto_hoy` por cada ruta declarada y
+            # rompería la comparación con los límites, que son del total.
+            if unidad.startswith(PREFIJO_RUTA):
+                continue
             metrica("gasto_hoy", "Consumo del día por unidad", consumo.get(unidad, 0),
                     etiquetas=f'unidad="{unidad}"')
         for unidad, limite in sorted(libro.limits.items()):
@@ -187,6 +193,16 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
                     etiquetas=f'unidad="{unidad}"')
         metrica("gasto_usd_estimado", "Coste estimado de hoy en USD (música no cotizada)",
                 libro.usd_today())
+        # Coste por tarea. El enrutado mandaba un resumen de feed a un modelo
+        # barato y una síntesis a uno caro, y el gasto caía todo en el mismo
+        # montón: no había forma de ver si la separación servía de algo.
+        for ruta, fila in sorted(libro.por_ruta().items()):
+            metrica("gasto_texto_usd_por_ruta", "Coste estimado de hoy en USD por tarea de texto",
+                    fila["usd"], etiquetas=f'ruta="{ruta}"')
+            metrica("gasto_tokens_por_ruta", "Tokens de hoy por tarea y sentido",
+                    fila["entrada"], etiquetas=f'ruta="{ruta}",sentido="entrada"')
+            metrica("gasto_tokens_por_ruta", "Tokens de hoy por tarea y sentido",
+                    fila["salida"], etiquetas=f'ruta="{ruta}",sentido="salida"')
 
         # Albedrío: cuánta iniciativa está teniendo, y con cuánta tensión.
         politica = AgencyPolicy.from_config(config)

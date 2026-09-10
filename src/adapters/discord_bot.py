@@ -1589,6 +1589,10 @@ class DiscordAdapter:
                 ),
                 channel_type="discord_channel",
                 active_role="producer",
+                # `music_composition` estaba declarada en `config.yaml` desde el
+                # principio y no la leía nadie: un dial que no gira. Escribir la
+                # letra de una canción es exactamente su tarea.
+                route="music_composition",
             )
             await self._send_long(channel, f"### Poema / letra — {tema}\n{poem}")
             await asyncio.to_thread(self.agent.creation_library.save_text, tema, poem,

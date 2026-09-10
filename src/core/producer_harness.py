@@ -11,6 +11,11 @@ logger = logging.getLogger("Yuki.ProducerHarness")
 MAX_TOOL_ROUNDS = 8
 MAX_TOOL_CALLS = 16
 
+# Ruta declarada en `provider_routing.routes`. El arnés salía siempre con
+# `agent.model`: el enrutado por tarea se aplicaba a los crons y no al único
+# camino donde Yuki ejecuta de verdad.
+RUTA = "producer_tools"
+
 
 def spec(name, description, properties=None, required=None):
     return {"type": "function", "function": {"name": name, "description": description,
@@ -110,7 +115,8 @@ class ProducerHarness:
                     "ritual_adjust": self._ritual_adjust}
         try:
             for _ in range(MAX_TOOL_ROUNDS):
-                turn = await asyncio.to_thread(self.agent.llm_router.generate_with_tools, messages, TOOLS)
+                turn = await asyncio.to_thread(
+                    self.agent.llm_router.generate_with_tools, messages, TOOLS, RUTA)
                 calls = turn.get("tool_calls", [])
                 if not calls:
                     answer = turn.get("content") or "No he obtenido una respuesta final."

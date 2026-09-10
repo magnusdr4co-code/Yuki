@@ -565,7 +565,10 @@ class YukiAgent:
         como último recurso cuando no hay red ni claves configuradas.
         """
         response = self.llm_router.generate(system_prompt, user_message, route=route)
-        self.spend_ledger.record_llm(response.input_tokens, response.output_tokens)
+        # El gasto se anota también por tarea: el enrutado mandaba un resumen de
+        # feed a un modelo barato y una síntesis a uno caro, pero todo caía en el
+        # mismo montón y no había forma de ver si separarlas servía de algo.
+        self.spend_ledger.record_llm(response.input_tokens, response.output_tokens, route=route)
 
         if response.simulated:
             logger.info(f"Respuesta simulada por la pasarela '{response.provider}' (sin generación real).")

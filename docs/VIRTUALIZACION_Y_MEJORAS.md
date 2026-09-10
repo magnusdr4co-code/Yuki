@@ -254,12 +254,36 @@ recetas coinciden, no fue terquedad del modelo, se pidió lo mismo.
 Queda pendiente lo que ningún código resuelve: contratar un segundo motor que
 **cante**, para que el canto no dependa de una sola preview.
 
-### M5 · Extender el enrutado por tarea al resto del sistema
-*Amplía lo hecho.* `provider_routing.routes` ya se aplica: las rutas del cron
-(`feed_summary`, `social_formatting`, `dialectic_synthesis`) salen con su modelo,
-su temperatura y su techo, en vez de que un resumen de feed cueste lo mismo que
-una síntesis dialéctica. Falta llevarlo al arnés del Productor y a
-`music_composition`, y publicar el coste por ruta cuando exista M2.
+### M5 · Extender el enrutado por tarea al resto del sistema — **hecho**
+*Amplía lo hecho.* Las rutas del cron ya salían con su modelo, su temperatura y
+su techo. Faltaban tres cosas y están las tres.
+
+**El arnés del Productor.** `generate_with_tools` ignoraba el enrutado por
+completo: el único camino donde Yuki **ejecuta** de verdad salía siempre con
+`agent.model`. Ahora usa `producer_tools`, con una diferencia deliberada
+respecto a `generate`: ahí el `max_tokens` de la ruta **sube** el techo, nunca lo
+baja. Un turno de herramientas que se corta por longitud no da una respuesta más
+corta, da un `finish_reason == "length"` y se descarta entero.
+
+**`music_composition`.** Estaba declarada en `config.yaml` desde el principio y
+no la leía nadie —un dial que no gira, la regla 6 de `CLAUDE.md`—. Escribir la
+letra de una canción es exactamente su tarea, y es lo que la usa ahora. Hay una
+prueba que recorre `provider_routing.routes` y exige que **cada ruta declarada
+tenga un lector**, para que la siguiente no vuelva a quedarse suelta.
+
+**El coste por ruta.** El enrutado mandaba un resumen de feed a un modelo barato
+y una síntesis a uno caro, pero el gasto caía todo en el mismo montón: no había
+forma de comprobar si separarlas servía de algo. `record_llm` anota ahora también
+por tarea y `por_ruta()` lo devuelve con su coste estimado. Se ve en `cli.py
+spend` (tabla «Texto por tarea») y en `/metrics`
+(`yuki_gasto_texto_usd_por_ruta`, `yuki_gasto_tokens_por_ruta`).
+
+Tres decisiones que evitan que el desglose estorbe: las unidades por ruta llevan
+prefijo y **no tienen límite propio** —un techo diario se pone al total; acotar
+una tarea sola dejaría a Yuki sin poder resumir un feed mientras le sobra
+presupuesto para todo lo demás—; no entran en `describe()`, que es la línea del
+DM y no un informe; y no se emiten en `gasto_hoy`, que multiplicaría sus series
+por cada ruta y rompería la comparación con los límites.
 
 ### M6 · Cerrar los canales simulados — *búsqueda hecha, quedan Telegram y Honcho*
 *Cierra L5, L6 y L9.* Tres piezas del diagrama no servían tráfico real. La
