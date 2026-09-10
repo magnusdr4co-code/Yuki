@@ -1,14 +1,18 @@
 """Biblioteca persistente: copias verificadas, canon e índice por tipo/estado."""
 import hashlib
 import json
+import logging
 import shutil
 import threading
 import time
 from ..core.rutas import salida
+from . import receta as _receta
 from pathlib import Path
 
 KINDS = ("sonora", "visual", "palabra", "audiovisual")
 STATES = ("semilla", "en-desarrollo", "terminado")
+logger = logging.getLogger("Yuki.Biblioteca")
+
 EXTENSIONS = {
     ".mid": "sonora", ".midi": "sonora", ".mp3": "sonora",
     ".wav": "sonora", ".ogg": "sonora", ".flac": "sonora",
@@ -116,8 +120,10 @@ class CreationLibrary:
                     data = path.read_bytes()
                     if not data or any(marker in data[:512].upper() for marker in (b"SIMULADO", b"SIMULATED", b"MOCK", b"PLACEHOLDER")):
                         continue
-                    self._store(data, EXTENSIONS[path.suffix.lower()], "en-desarrollo",
-                                path.suffix.lower(), str(path.relative_to(self.output)), path.stem)
+                    item = self._store(data, EXTENSIONS[path.suffix.lower()], "en-desarrollo",
+                                       path.suffix.lower(), str(path.relative_to(self.output)),
+                                       path.stem)
+                    self._adjuntar_receta(path, item)
                     imported += 1
             self._commit(self._load())
             return {"checked_files": imported, "total": len(self._load()), "errors": errors,
@@ -163,12 +169,40 @@ class CreationLibrary:
         with self._lock:
             return self._store(content.encode("utf-8"), "palabra", state, ".md", source, title)
 
+    def _adjuntar_receta(self, origen, item):
+        """
+        La receta viaja con la obra al archivarla.
+
+        Si se queda en `output/` se pierde en la primera limpieza, y con ella la
+        única forma de rehacer una pista que salió bien. No se importa como obra
+        aparte —no lo es— sino como acompañante de la suya, igual que el
+        manifiesto del Artículo 50 acompaña al fichero marcado.
+        """
+        fuente = origen.parent / f"{origen.name}{_receta.SUFIJO}"
+        if not fuente.is_file():
+            return
+        relativa = f"{item['path']}{_receta.SUFIJO}"
+        try:
+            self._path(relativa).write_bytes(fuente.read_bytes())
+        except OSError as exc:
+            logger.warning("No pude archivar la receta de %s: %s", origen.name, type(exc).__name__)
+            return
+        entries = self._load()
+        if item["id"] in entries:
+            entries[item["id"]]["receta"] = relativa
+            self._commit(entries)
+
     def read_entry(self, entry_id):
         with self._lock:
             item = self._load()[entry_id]
             result = dict(item)
             if item["kind"] == "palabra":
                 result["content"] = self._path(item["path"]).read_text(encoding="utf-8")[:8000]
+            if item.get("receta"):
+                # Con qué se hizo, para poder rehacerla. Vacío si la receta se
+                # perdió: decir que no está es mejor que devolver media.
+                result["receta_datos"] = _receta.leer(
+                    str(self._path(item["receta"])).removesuffix(_receta.SUFIJO))
             return result
 
     def set_status(self, entry_id, state):

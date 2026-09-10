@@ -223,6 +223,12 @@ class VirtualInstance:
         )
         self._cap("medios.midi", "Medios", REAL,
                   "Partituras locales por `src/tools/midi_generator.py`, sin proveedor")
+        # Se declara porque durante meses no existía: lo único que sobrevivía a
+        # una generación era el manifiesto del Artículo 50, que recorta el
+        # prompt a 500 caracteres porque su trabajo es otro.
+        self._cap("medios.receta", "Medios", REAL,
+                  "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
+                  "parámetros, y la receta se archiva con ella en Biblioteca")
         pendientes = self.pending_media_jobs()
         self._cap(
             "medios.cola", "Medios", REAL,

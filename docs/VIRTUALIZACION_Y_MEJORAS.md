@@ -232,10 +232,27 @@ protege de perder el disco, que es el escenario de L7. Manual:
 
 ### M4 · Motor musical de respaldo — **hecho**
 *Mitiga L4.* Construido con lo que ya había en casa, como se proponía: partitura
-propia, FluidSynth y ffmpeg. Ver la ficha de L4. Queda pendiente lo que ningún
-código resuelve: contratar un segundo motor que **cante**, para que el canto no
-dependa de una sola preview, y archivar en Biblioteca el prompt y los parámetros
-de cada pista para poder rehacerla igual.
+propia, FluidSynth y ffmpeg. Ver la ficha de L4.
+
+**La receta de cada obra ya se archiva.** Era la segunda mitad de esta ficha y
+faltaba: lo único que sobrevivía a una generación era el manifiesto del Artículo
+50, y ése no es una receta —guarda el prompt recortado a 500 caracteres dentro
+de un campo llamado `abstract`, porque su trabajo es declarar el origen, no
+reproducir la obra—. Con la letra de una canción dentro, eso es perderla entera.
+
+Ahora cada fichero generado —imagen, música, vídeo, voz y también el respaldo
+local— deja un `<fichero>.receta.json` al lado con el prompt íntegro y los
+parámetros que de verdad cambian el resultado: motor, duración, bpm, escala,
+relación de aspecto, imagen de partida. Al inventariar, la receta **viaja con la
+obra** a Biblioteca; si se quedara en `output/` se perdería en la primera
+limpieza. No se archiva como pieza aparte: no es obra, es lo que explica una.
+
+`receta.diferencias()` responde además la pregunta que nadie podía contestar
+cuando el Productor decía «me has devuelto exactamente lo mismo»: si las dos
+recetas coinciden, no fue terquedad del modelo, se pidió lo mismo.
+
+Queda pendiente lo que ningún código resuelve: contratar un segundo motor que
+**cante**, para que el canto no dependa de una sola preview.
 
 ### M5 · Extender el enrutado por tarea al resto del sistema
 *Amplía lo hecho.* `provider_routing.routes` ya se aplica: las rutas del cron

@@ -32,6 +32,7 @@ from typing import Any, Dict, List, Optional
 
 from ..core.transparency import MediaMarker
 from ..core.rutas import salida
+from . import receta
 from .midi_generator import YukiMIDIGenerator
 
 logger = logging.getLogger("Yuki.MusicFallback")
@@ -176,6 +177,11 @@ class LocalMusicEngine:
 
         recitada = bool(voice_path and Path(voice_path).is_file())
         marca = self.marker.mark(destino, model=self.name, prompt=title, kind="sonora")
+        # También el respaldo local deja receta: si una maqueta sale bien, poder
+        # rehacerla no puede depender de qué motor la hizo.
+        receta.escribir(destino, motor=self.name, prompt=title, bpm=bpm, escala=scale,
+                        duration_seconds=duration_seconds, recitada=recitada, midi=Path(midi_path).name
+                        if midi_path else None)
         return {
             "marking": marca,
             "status": "success",

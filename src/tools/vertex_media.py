@@ -27,6 +27,7 @@ import time
 import base64
 import asyncio
 import logging
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from ..core.spend_budget import (
@@ -36,6 +37,7 @@ from ..core.spend_budget import (
 from ..core.brake import Brake
 from ..core.rutas import salida
 from ..core.transparency import MediaMarker
+from . import receta
 
 logger = logging.getLogger("Yuki.VertexMedia")
 
@@ -319,6 +321,7 @@ class VertexMediaClient:
 
         logger.info(f"🎨 Imagen real generada con {model}: {destino}")
         marca = self.marker.mark(destino, model=model, prompt=prompt, kind="visual")
+        receta.escribir(destino, motor=model, prompt=prompt, aspect_ratio=aspect_ratio)
         return {
             "marking": marca,
             "status": "success",
@@ -393,6 +396,10 @@ class VertexMediaClient:
         # dejan constancia del volumen aunque no haya precio que aplicarles.
         self.budget.record(MUSICA_SEGUNDOS, duration_seconds)
         marca = self.marker.mark(destino, model=model, prompt=prompt, kind="sonora")
+        # El manifiesto del Artículo 50 guarda el prompt recortado a 500
+        # caracteres: con una letra entera dentro, eso no permite rehacer nada.
+        receta.escribir(destino, motor=model, prompt=prompt,
+                        duration_seconds=duration_seconds)
         return {
             "marking": marca,
             "status": "success",
@@ -551,6 +558,9 @@ class VertexMediaClient:
         # Ya está anotado por la reserva; aquí sólo se informa.
         coste = duration_seconds * PRECIO_VIDEO_POR_SEGUNDO
         marca = self.marker.mark(destino, model=model, prompt=prompt, kind="audiovisual")
+        receta.escribir(destino, motor=model, prompt=prompt,
+                        duration_seconds=duration_seconds, aspect_ratio=aspect_ratio,
+                        imagen_de_partida=(Path(image_path).name if image_path else None))
         logger.info(f"🎬 Vídeo real generado con {model}: {destino} (≈${coste:.2f}); "
                     f"presupuesto de hoy → {self.budget.describe()}")
         return {
@@ -642,6 +652,10 @@ class VertexMediaClient:
             f.write(audio)
 
         marca = self.marker.mark(destino, model=model, prompt=text[:200], kind="voz")
+        # La marca recorta el texto a 200; la receta lo guarda entero, que es
+        # lo que hace falta para volver a decir exactamente lo mismo.
+        receta.escribir(destino, motor=model, prompt=text, voz=voice,
+                        estilo=style_prompt, idioma=language_code)
         logger.info(f"🎙️ Nota de voz real generada con {model}: {destino}")
         return {
             "status": "success",
