@@ -281,3 +281,33 @@ def test_un_encargo_que_no_cabe_hoy_se_dice_al_empezar(tmp_path, monkeypatch):
     acuse = _lanzar(adaptador, "hazme dos segmentos de vídeo")
 
     assert "No cabe hoy" in acuse
+
+
+def test_ofrecer_el_salon_recibe_respuesta(tmp_path, monkeypatch):
+    """«Envíamelo por Salón o por aquí» quedó sin respuesta: ni se usó ni se mencionó."""
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+    monkeypatch.setenv("SALON_API_TOKEN", "clave")
+
+    acuse = _lanzar(adaptador, "hazme la canción y mándamela por el Salón o por aquí")
+
+    assert "/api/outputs/" in acuse
+
+
+def test_sin_credencial_el_salon_se_declara_incapaz(tmp_path, monkeypatch):
+    """Prometer una entrega que el Salón no puede hacer es aparentar una capacidad."""
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+    monkeypatch.delenv("SALON_API_TOKEN", raising=False)
+
+    acuse = _lanzar(adaptador, "hazme la canción y mándamela por el Salón")
+
+    assert "Por el Salón no puedo" in acuse
+    assert "SALON_API_TOKEN" in acuse
+
+
+def test_sin_mencionar_el_salon_no_se_habla_del_salon(tmp_path, monkeypatch):
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+
+    assert "Salón" not in _lanzar(adaptador, "hazme la canción")

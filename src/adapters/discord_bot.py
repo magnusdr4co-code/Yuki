@@ -811,8 +811,25 @@ class DiscordAdapter:
             "⚡ Producción multimedia iniciada como trabajo `" + job.id + "`. Voy a producir: "
             + plan.resumen() + ". " + self._coste_previsto(plan) + " Sólo confirmaré y adjuntaré "
             "archivos reales en este DM. Si el proceso se reinicia, el trabajo se reanuda desde "
-            "el último paso verificado."
+            "el último paso verificado." + self._nota_del_salon(content)
         )
+
+    def _nota_del_salon(self, pedido: str) -> str:
+        """
+        Qué puede el Salón cuando lo ofrecen como canal de entrega.
+
+        «Envíamelo por Salón o por aquí» quedó sin respuesta: el Salón ni se usó
+        ni se mencionó. Ahora se contesta, y con lo que hay: sirve la obra sólo
+        si la instancia tiene `SALON_API_TOKEN`, porque servir bytes a quien
+        alcance el puerto no se enciende en silencio.
+        """
+        if "salon" not in _fold(pedido or ""):
+            return ""
+        if os.getenv("SALON_API_TOKEN", "").strip():
+            return ("\nY sí, por el Salón también: lo que quede en `output/` se baja de "
+                    "`/api/outputs/<categoría>/<nombre>` con la credencial.")
+        return ("\nPor el Salón no puedo mandártelo: sin `SALON_API_TOKEN` declarado sólo "
+                "enumera nombres, no sirve el fichero. Aquí sí va como adjunto.")
 
     # Frases con las que el Productor manda repetir a sabiendas. Sin ellas, un
     # pedido idéntico al de hace un rato es casi siempre que lo anterior no

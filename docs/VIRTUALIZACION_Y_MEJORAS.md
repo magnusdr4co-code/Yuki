@@ -95,6 +95,14 @@ abiertas, para no tumbar un despliegue en marcha—, pero el arranque lo avisa y
 el gemelo virtual lo reporta como limitador abierto. Cerrarlo es declarar la
 variable en la instancia y, mejor aún, restringir el puerto en el cortafuegos.
 
+Con una excepción, y va en la otra dirección: `/api/outputs/<categoría>/<nombre>`
+—que sirve el fichero de una obra, no su nombre— **exige credencial siempre**,
+también cuando el resto de `/api` está abierto. Enumerar nombres es una fuga
+menor; servir los bytes a quien alcance el puerto es otra cosa, y encenderla en
+silencio cambiaría la exposición de una instancia en marcha. Sin token, responde
+403 diciendo por qué, y el listado declara que la descarga está desactivada en
+vez de callarlo.
+
 ### L4 — El canto dependía de una sola preview (mitigado)
 
 `generate_music_flow` sólo producía audio real por `lyria-3-pro-preview`. Una

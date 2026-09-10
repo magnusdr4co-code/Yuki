@@ -251,8 +251,10 @@ class VirtualInstance:
         self._cap(
             "presencia.salon", "Presencia", REAL,
             f"Servidor web multihilo con /health en el puerto {_env('PORT') or '8080'}; "
-            + ("rutas /api con credencial" if salon_protegido else
-               "rutas /api ABIERTAS (sin SALON_API_TOKEN), con techo de 20 peticiones/5 min"),
+            + ("rutas /api con credencial; sirve obra en /api/outputs/<categoría>/<nombre>"
+               if salon_protegido else
+               "rutas /api ABIERTAS (sin SALON_API_TOKEN), con techo de 20 peticiones/5 min; "
+               "no sirve obra, sólo enumera nombres"),
         )
         trabajos = (self.config.get("scheduler", {}) or {}).get("cron_jobs", []) or []
         activos = [j for j in trabajos if j.get("enabled")]

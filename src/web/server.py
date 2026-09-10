@@ -9,6 +9,7 @@ de arranque y atiende peticiones concurrentes.
 """
 
 import hmac
+import mimetypes
 import os
 import sys
 import json
@@ -18,8 +19,9 @@ import asyncio
 import logging
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
 from typing import Any, Dict, List
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 # Asegurar path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -33,6 +35,10 @@ DEFAULT_PORT = 8080
 # Rutas que responden sin credencial: la sonda de la plataforma y la página.
 # Todo lo demás toca memoria, perfil dialéctico o gasto de modelo.
 RUTAS_ABIERTAS = ("/health", "/healthz", "/_ah/health", "/", "/index.html", "/salon")
+
+# Las categorías de obra que el Salón sirve. Es una lista cerrada a propósito:
+# `salida()` acepta cualquier nombre y un directorio de datos no es obra.
+CATEGORIAS_DE_OBRA = ("music", "art", "voice", "posts", "video")
 
 # `/metrics` NO está abierta: el gasto, la deriva de persona y los ritmos dicen
 # bastante de la instancia. Una sonda externa se configura con el token.
@@ -345,17 +351,75 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         elif path == "/api/outputs":
             from ..core.rutas import salida
 
-            outputs = {"music": [], "art": [], "voice": [], "posts": []}
+            outputs = {cat: [] for cat in CATEGORIAS_DE_OBRA}
             for cat in outputs.keys():
                 dir_path = str(salida(cat))
                 if os.path.exists(dir_path):
                     for fname in os.listdir(dir_path):
                         if not fname.startswith("."):
                             outputs[cat].append(fname)
-            self._send_json(outputs)
+            # Enumerar sin decir cómo traerse el fichero es lo que había, y por
+            # eso «envíamelo por el Salón» no llevaba a ninguna parte.
+            self._send_json({
+                **outputs,
+                "descarga": ("/api/outputs/<categoria>/<nombre>" if token_configurado()
+                             else None),
+                "nota": ("Descarga con credencial." if token_configurado() else
+                         "Descarga desactivada: sin SALON_API_TOKEN sólo se enumeran nombres."),
+            })
+
+        # 6. Descarga de una obra concreta. `/api/outputs` enumeraba nombres y no
+        #    había forma de traerse el fichero, así que «envíamelo por el Salón»
+        #    no era posible y nadie lo decía. Exige credencial **siempre**, aun
+        #    cuando el resto de `/api` esté abierto: enumerar nombres es una
+        #    fuga menor; servir los bytes de la obra a quien alcance el puerto
+        #    es otra cosa, y encenderla en silencio sería cambiar la exposición
+        #    de una instancia en marcha.
+        elif path.startswith("/api/outputs/"):
+            self._servir_obra(path[len("/api/outputs/"):])
 
         else:
             self.send_error(404, "Ruta no encontrada")
+
+    def _servir_obra(self, resto: str) -> None:
+        from ..core.rutas import salida
+
+        if not token_configurado():
+            self._send_json({"error": "Descarga desactivada: declara SALON_API_TOKEN para servir obra."},
+                            status_code=403)
+            return
+        partes = unquote(resto).split("/")
+        if len(partes) != 2:
+            self._send_json({"error": "Ruta de obra no válida."}, status_code=404)
+            return
+        categoria, nombre = partes
+        if categoria not in CATEGORIAS_DE_OBRA:
+            self._send_json({"error": "Categoría no servida."}, status_code=404)
+            return
+        raiz = Path(str(salida(categoria))).resolve()
+        try:
+            destino = (raiz / nombre).resolve()
+        except OSError:
+            self._send_json({"error": "Ruta de obra no válida."}, status_code=404)
+            return
+        # `..` en el nombre saldría del directorio de obra. Se comprueba sobre
+        # la ruta ya resuelta, que es lo único que no se puede disfrazar.
+        if not destino.is_relative_to(raiz) or not destino.is_file():
+            self._send_json({"error": "Esa obra no existe."}, status_code=404)
+            return
+        datos = destino.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", mimetypes.guess_type(destino.name)[0]
+                         or "application/octet-stream")
+        self.send_header("Content-Length", str(len(datos)))
+        # Artículo 50: quien se lleve el fichero se lleva la declaración de
+        # origen con él, sin tener que abrirlo. En ASCII a propósito: las
+        # cabeceras HTTP se codifican en latin-1 y una raya larga aquí reventaba
+        # la descarga entera con `UnicodeEncodeError`.
+        self.send_header("X-Generated-By", "IA (Yuki): contenido sintetico")
+        self.send_header("Content-Disposition", f'attachment; filename="{destino.name}"')
+        self.end_headers()
+        self.wfile.write(datos)
 
     def do_POST(self):
         parsed = urlparse(self.path)

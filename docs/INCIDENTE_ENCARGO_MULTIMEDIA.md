@@ -41,7 +41,7 @@ se repite el mes que viene.
 | D11 | Tres generaciones idénticas: ~96 s de vídeo facturado por segundo para entregar tres veces lo mismo, consumiendo además tope diario. | **corregido**: un pedido idéntico dentro de 90 min no se repite; se dice qué hay ya y qué hace falta para que salga distinto |
 | D12 | El Productor abrió con «dispones de créditos, quince días» y ella planificó sin consultar el presupuesto ni mencionarlo. | **corregido**: el acuse del encargo dice el coste previsto y el presupuesto de hoy, y avisa si no cabe |
 | D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | **corregido**: el arnés del DM tiene `ritual_list`, `ritual_propose` y `ritual_adjust` |
-| D14 | «Envíamelo por Salón o por aquí»: el Salón ni se usó ni se mencionó. | abierto |
+| D14 | «Envíamelo por Salón o por aquí»: el Salón ni se usó ni se mencionó. | **corregido**: el Salón sirve obra (con credencial) y el acuse contesta si puede o no |
 
 ## Lo que sí funcionó
 
@@ -170,5 +170,27 @@ cerrar así cada párrafo. Con ella, aquel turno cae a 0.00 y su voz se queda en
 encargo era sobre herrumbre y agua, y el crédito por vocabulario propio no puede
 rescatar un turno escrito en modo asistente sólo porque hable de metal mojado.
 
-Queda abierto A3 —no retractarse de un diagnóstico refutado— y D14 (el Salón no
-se usó ni se mencionó).
+**D14 — el Salón no podía entregar nada.** No fue un descuido de redacción:
+`/api/outputs` enumeraba nombres de ficheros y no había forma de traerse
+ninguno, así que la petición no llevaba a ninguna parte y nadie lo dijo. Ahora
+`/api/outputs/<categoría>/<nombre>` sirve la obra, con tres cautelas:
+
+- **Credencial siempre**, aunque el resto de `/api` esté abierto. Enumerar
+  nombres es una fuga menor; servir los bytes a quien alcance el puerto es otra
+  cosa, y encenderla en silencio cambiaría la exposición de una instancia en
+  marcha. Sin `SALON_API_TOKEN`, la ruta responde 403 diciendo por qué.
+- **Sin salir del directorio de obra**: lista cerrada de categorías —`salida()`
+  acepta cualquier nombre, y `salida("..")` sale de `output/`— y comprobación
+  sobre la ruta **ya resuelta**, que es lo único que un enlace simbólico no
+  puede disfrazar.
+- **Con la declaración de origen en la cabecera**, en ASCII: las cabeceras HTTP
+  van en latin-1 y una raya larga ahí reventaba la descarga entera. Lo encontró
+  la prueba, no producción.
+
+Y el acuse del encargo contesta cuando el pedido nombra el Salón: dice cómo
+bajarlo si hay credencial, y dice que no puede si no la hay. Prometer una
+entrega que el Salón no sabe hacer sería aparentar una capacidad.
+
+Queda abierto A3 —no retractarse de un diagnóstico refutado—: es lo único de
+esta lista que no tiene forma de comprobación mecánica, y prefiero dejarlo
+anotado a fingir que un marcador de texto lo resuelve.
