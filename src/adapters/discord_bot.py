@@ -20,6 +20,7 @@ import discord
 from .discord_intents import (
     channel_slug as _channel_slug,
     extract_production_target as _extract_production_target,
+    extract_production_theme as _extract_production_theme,
     fold as _fold,
     looks_like_discord_production_request as _looks_like_discord_production_request,
     looks_like_media_delivery_request as _looks_like_media_delivery_request,
@@ -45,6 +46,13 @@ MEDIA_STORYBOARD = (
     "Interior: la intérprete respira y el poema encuentra su estribillo entre cuerdas tensas.",
     "Salida: agua, niebla y una luz contenida sobre el metal; final pausado, sin corte brusco.",
 )
+
+# El encargo por defecto del Salón, cuando la petición no nombra otro. Es un
+# valor por defecto y no una constante escondida: antes la letra, la partitura,
+# las tres imágenes y el vídeo estaban escritos a mano sobre este título, así
+# que abrir un Salón para otra cosa producía igualmente ésta.
+TEMA_POR_DEFECTO = "Herrumbre y Escarcha"
+IMAGINARIO_POR_DEFECTO = "agua, hierro, muelle, invierno y una esperanza contenida"
 
 # Pasos facturables del encargo, ya no fijos: los deriva `encargo.leer_encargo`
 # del texto del pedido, porque una tupla constante era la razón de que pedir una
@@ -747,9 +755,14 @@ class DiscordAdapter:
         )
         self._workflow_tasks.add(task)
         task.add_done_callback(self._workflow_tasks.discard)
+        tema = _extract_production_theme(content) or TEMA_POR_DEFECTO
+        # Qué obra y a cuánto sale, antes de empezar. Este camino gastaba en
+        # canción, tres imágenes y vídeo sin mencionar el presupuesto ni el
+        # título, que además estaba escrito a mano.
         return (
-            "⚡ He iniciado la producción en el canal de Discord. "
-            "Iré publicando allí cada resultado y dejaré explícitos los medios "
+            f"⚡ He iniciado la producción de «{tema}» en el canal de Discord. "
+            + self._linea_de_presupuesto("1 pista, 3 imágenes y 6 s de vídeo", segundos_de_video=6)
+            + " Iré publicando allí cada resultado y dejaré explícitos los medios "
             "que el proyecto todavía no pueda generar."
         )
 
@@ -914,17 +927,25 @@ class DiscordAdapter:
         encargo se planificó sin mirar el presupuesto ni mencionarlo. Cuesta una
         línea y evita descubrir el tope a mitad.
         """
+        segundos = plan.segmentos * 8 if plan.video else 0
+        piezas = (f"{segundos} s de vídeo"
+                  + (", 1 pista" if plan.cancion else "")
+                  + (", 1 imagen" if plan.portada else ""))
+        return self._linea_de_presupuesto(piezas, segundos_de_video=segundos)
+
+    def _linea_de_presupuesto(self, piezas: str, segundos_de_video: int = 0) -> str:
+        """
+        Lo que va a costar y lo que queda hoy. La comparten los dos caminos de
+        producción: el del DM y el de abrir un Salón, que gastaba sin decir nada.
+        """
         try:
             libro = SpendLedger.from_config(getattr(self.agent, "config", None))
             if not libro.enabled:
-                return "Sin presupuesto declarado: nada acota este gasto."
-            segundos = plan.segmentos * 8 if plan.video else 0
-            cabe = libro.check("video_segundos", segundos) if segundos else None
+                return f"💳 Coste previsto: {piezas}. Sin presupuesto declarado: nada acota este gasto."
+            cabe = libro.check("video_segundos", segundos_de_video) if segundos_de_video else None
             aviso = "" if cabe is None or cabe else f" ⚠️ No cabe hoy: {cabe.reason}."
-            return (f"💳 Coste previsto: {segundos} s de vídeo"
-                    + (", 1 pista" if plan.cancion else "")
-                    + (", 1 imagen" if plan.portada else "")
-                    + f". Presupuesto de hoy — {libro.describe()}.{aviso}")
+            return (f"💳 Coste previsto: {piezas}. "
+                    f"Presupuesto de hoy — {libro.describe()}.{aviso}")
         except Exception as exc:
             # Nunca impedir el encargo por no poder contar el dinero, pero
             # tampoco decir que cabe cuando no se ha podido comprobar.
@@ -1455,6 +1476,11 @@ class DiscordAdapter:
     ) -> None:
         """Ejecuta el encargo multimodal sólo para el productor emparejado."""
         guild_name, requested_channel_name = _extract_production_target(content)
+        # El tercer entrecomillado nombra la obra. Sin él se produce la de
+        # siempre, que es el comportamiento anterior; con él, deja de estarlo.
+        tema = _extract_production_theme(content) or TEMA_POR_DEFECTO
+        imaginario = (IMAGINARIO_POR_DEFECTO if tema == TEMA_POR_DEFECTO
+                      else f"el imaginario que evoca «{tema}»")
         guild = self._find_guild(guild_name)
 
         async def report_origin(text: str) -> None:
@@ -1558,14 +1584,14 @@ class DiscordAdapter:
                 user_name=author_name,
                 message=(
                     "Escribe la letra original de una canción de 1-2 minutos titulada "
-                    "Herrumbre y Escarcha: 3 estrofas, estribillo repetido y puente. "
-                    "Imágenes de agua, hierro, muelle, invierno y una esperanza contenida."
+                    f"{tema}: 3 estrofas, estribillo repetido y puente. "
+                    f"Imágenes de {imaginario}."
                 ),
                 channel_type="discord_channel",
                 active_role="producer",
             )
-            await self._send_long(channel, f"### Poema / letra — Herrumbre y Escarcha\n{poem}")
-            await asyncio.to_thread(self.agent.creation_library.save_text, "Herrumbre y Escarcha", poem,
+            await self._send_long(channel, f"### Poema / letra — {tema}\n{poem}")
+            await asyncio.to_thread(self.agent.creation_library.save_text, tema, poem,
                                     source=f"discord:{guild.id}/{channel.id}")
 
             music_engine = "midi_only"
@@ -1576,10 +1602,10 @@ class DiscordAdapter:
                 music_engine = getattr(vertex, "music_model", "lyria-3-pro-preview")
 
             music = await self.agent.media_creator.compose_beat_structure(
-                title="Herrumbre y Escarcha",
+                title=tema,
                 bpm=82,
                 scale="insen",
-                mood="agua, hierro, invierno y esperanza contenida",
+                mood=imaginario,
                 engine=music_engine,
             )
             await self._send_long(
@@ -1595,14 +1621,14 @@ class DiscordAdapter:
 
             visual_paths = []
             visual_prompts = [
-                "el exterior del Salón bajo lluvia y metal oxidado",
-                "el interior del Salón con té, acero y escarcha",
-                "la letra Herrumbre y Escarcha convertida en paisaje abstracto",
+                f"el exterior del Salón, con {imaginario}",
+                "el interior del Salón: té, acero y la luz contenida de la estación",
+                f"la letra de «{tema}» convertida en paisaje abstracto",
             ]
             if can_attach:
                 for index, visual_prompt in enumerate(visual_prompts, 1):
                     art = await self.agent.media_creator.create_single_cover(
-                        track_title=f"Herrumbre y Escarcha {index}",
+                        track_title=f"{tema} {index}",
                         visual_concept=visual_prompt,
                         lighting="industrial_rain" if index == 1 else "urushi",
                     )
@@ -1628,7 +1654,8 @@ class DiscordAdapter:
 
             if can_attach:
                 video = await self.agent.nous_portal.generate_video_frontier(
-                    prompt="La cámara recorre el Salón de té y acero mientras la lluvia se convierte en escarcha.",
+                    prompt=("La cámara recorre el Salón de té y acero, despacio y sin cortes bruscos, "
+                            f"con el imaginario de «{tema}»: {imaginario}."),
                     duration_seconds=6,
                     image_path=visual_paths[0] if visual_paths else None,
                 )

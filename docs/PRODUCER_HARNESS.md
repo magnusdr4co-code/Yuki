@@ -29,6 +29,14 @@ de output. El estado inicial es en-desarrollo: ni la publicación ni un éxito d
 certifican que una obra esté terminada. Guardar otro texto crea una versión por hash.
 
 El flujo específico del Salón archiva presentación y letra y avisa al DM al terminar.
+Qué obra produce sale de la petición: `crea el canal "<servidor>" "<canal>" "<obra>"` —el
+tercer entrecomillado nombra la obra y gobierna la letra, el título y el imaginario de la
+partitura, los tres conceptos visuales y el prompt del vídeo—. Sin él se produce la de
+siempre, que es el comportamiento anterior; antes todo eso estaba escrito a mano sobre un
+título concreto, así que abrir un Salón para otra cosa producía igualmente aquélla. El
+acuse dice qué obra y a cuánto sale —una pista, tres imágenes y 6 s de vídeo— con el
+presupuesto de hoy, porque este camino gastaba sin mencionar ninguna de las dos cosas.
+
 Las órdenes del Productor emparejado que solicitan crear y entregar música, audio o vídeo
 se interceptan **antes** del `ProducerHarness`: no dependen de que el LLM decida invocar
 herramientas. El adaptador confirma el inicio, recupera los recursos de Biblioteca,
