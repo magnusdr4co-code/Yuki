@@ -107,24 +107,26 @@
                     </h3>
                     <span class="text-xs text-stone-400">Modo Productor</span>
                 </div>
+                <!-- Todas las filas se leen de la instancia. Antes eran texto
+                     fijo: «Rutinas Cron: 03:00 / 07:30 / 23:30» en verde, tres
+                     de las ocho que hay. Quien mirase el panel concluía que
+                     Yuki tiene tres rutinas, que es justo lo que ella misma
+                     llegó a decirle al Productor. -->
                 <div class="space-y-2.5 text-xs text-stone-300">
                     <div class="flex justify-between py-1 border-b border-stone-900">
-                        <span class="text-stone-500">Álbum en Curso:</span>
-                        <span class="font-medium text-stone-200">El Río Antes de Tener Nombre</span>
-                    </div>
-                    <div class="flex justify-between py-1 border-b border-stone-900">
-                        <span class="text-stone-500">Paleta Sonora:</span>
-                        <span class="text-stone-300">Shamisen, beats lofi, lluvia</span>
+                        <span class="text-stone-500">Signos vitales:</span>
+                        <span id="canvas-pulso" class="font-medium text-stone-400">—</span>
                     </div>
                     <div class="flex justify-between py-1 border-b border-stone-900">
                         <span class="text-stone-500">Rutinas Cron:</span>
-                        <span class="text-emerald-400 font-mono">03:00 / 07:30 / 23:30</span>
+                        <span id="canvas-rutinas" class="font-mono text-stone-400">—</span>
                     </div>
                     <div class="flex justify-between py-1">
                         <span class="text-stone-500">Workspace:</span>
-                        <span class="font-mono text-stone-400">./output/</span>
+                        <span id="canvas-salida" class="font-mono text-stone-400">—</span>
                     </div>
                 </div>
+                <p id="canvas-detalle" class="text-[10px] text-stone-600 mt-2 font-mono break-words"></p>
             </div>
 
             <!-- Habilidades Rápidas (agentskills.io) -->
@@ -158,17 +160,26 @@
                     <h3 class="text-sm font-semibold uppercase tracking-wider text-yellow-600/90 flex items-center gap-2">
                         🧠 Memoria FTS5 en Vivo
                     </h3>
-                    <span class="text-[10px] text-emerald-400 font-mono">BM25 INDEX</span>
+                    <!-- El verde era fijo: decía "BM25 INDEX" igual con la memoria
+                         leída que con la consulta caída. Ahora dice lo que hay. -->
+                    <span id="memory-badge" class="text-[10px] text-stone-500 font-mono">—</span>
                 </div>
                 <div id="memory-list" class="space-y-2 text-xs overflow-y-auto max-h-48 scroll-dark pr-1 text-stone-400">
-                    <div class="p-2 rounded bg-stone-950/60 border border-stone-900">
-                        <b class="text-stone-300">[CORE] Biografía de Yuki</b><br/>
-                        <span class="text-[11px]">Nacida en el puerto industrial donde el mar huele a metal...</span>
-                    </div>
-                    <div class="p-2 rounded bg-stone-950/60 border border-stone-900">
-                        <b class="text-stone-300">[PROJECT] El Río Antes de Tener Nombre</b><br/>
-                        <span class="text-[11px]">Álbum en co-creación con el productor. Shamisen acústico y niebla digital.</span>
-                    </div>
+                    <div class="p-2 rounded bg-stone-950/60 border border-stone-900">Leyendo la memoria…</div>
+                </div>
+            </div>
+
+            <!-- Trabajos de producción: el único sitio donde se veía el estado
+                 de un encargo era la DM del Productor. -->
+            <div class="tea-gradient rounded-2xl p-5 shadow-xl flex flex-col">
+                <div class="flex items-center justify-between pb-3 border-b border-stone-800 mb-3">
+                    <h3 class="text-sm font-semibold uppercase tracking-wider text-yellow-600/90 flex items-center gap-2">
+                        🎬 Trabajos de producción
+                    </h3>
+                    <span id="jobs-badge" class="text-[10px] text-stone-500 font-mono">—</span>
+                </div>
+                <div id="jobs-list" class="space-y-2 text-xs overflow-y-auto max-h-48 scroll-dark pr-1 text-stone-400">
+                    <div class="p-2 rounded bg-stone-950/60 border border-stone-900">Leyendo los trabajos…</div>
                 </div>
             </div>
 
@@ -251,6 +262,118 @@
             userInput.value = `/${skillName}`;
             chatForm.dispatchEvent(new Event('submit'));
         }
+
+        // Los dos paneles de abajo mostraban texto escrito a mano bajo un
+        // rótulo que decía "en Vivo". Ahora leen la instancia, y cuando no
+        // pueden leerla lo dicen: un panel que inventa datos es peor que uno
+        // vacío, porque el vacío se nota y la invención no.
+        function pedirJSON(ruta) {
+            return fetch(ruta, {
+                headers: salonToken() ? {'Authorization': 'Bearer ' + salonToken()} : {}
+            }).then(res => res.ok ? res.json() : Promise.reject(new Error(res.status)));
+        }
+
+        function tarjeta(titulo, cuerpo) {
+            const div = document.createElement('div');
+            div.className = 'p-2 rounded bg-stone-950/60 border border-stone-900';
+            const t = document.createElement('b');
+            t.className = 'text-stone-300';
+            t.textContent = titulo;
+            const c = document.createElement('span');
+            c.className = 'block text-[11px]';
+            c.textContent = cuerpo;
+            div.append(t, c);
+            return div;
+        }
+
+        function pintar(id, tarjetas) {
+            const destino = document.getElementById(id);
+            destino.replaceChildren(...tarjetas);
+        }
+
+        async function refrescarMemoria() {
+            const badge = document.getElementById('memory-badge');
+            try {
+                const datos = await pedirJSON('/api/memories?limit=6');
+                const recuerdos = datos.memories || [];
+                badge.className = 'text-[10px] text-emerald-400 font-mono';
+                badge.textContent = `BM25 · ${datos.count} recuperados`;
+                pintar('memory-list', recuerdos.length
+                    ? recuerdos.map(m => tarjeta(
+                        `[${(m.category || 'sin categoría').toUpperCase()}] ${m.user_id || ''}`.trim(),
+                        (m.content || '').slice(0, 160)))
+                    : [tarjeta('Sin recuerdos recuperados', 'La consulta no devolvió nada.')]);
+            } catch (err) {
+                badge.className = 'text-[10px] text-stone-500 font-mono';
+                badge.textContent = 'sin lectura';
+                pintar('memory-list', [tarjeta('Memoria no disponible',
+                    'No he podido leerla (' + err.message + '). Con SALON_API_TOKEN declarado hace falta ?token=.')]);
+            }
+        }
+
+        async function refrescarTrabajos() {
+            const badge = document.getElementById('jobs-badge');
+            try {
+                const datos = await pedirJSON('/api/trabajos');
+                const trabajos = datos.trabajos || [];
+                badge.textContent = `${datos.en_curso} en curso / ${datos.total}`;
+                pintar('jobs-list', trabajos.length
+                    ? trabajos.map(t => {
+                        const hechos = t.pasos.filter(p => p.verificado).length;
+                        const fallos = t.pasos.filter(p => p.error);
+                        const detalle = fallos.length
+                            ? `${fallos[0].id}: ${fallos[0].error}`
+                            : t.pasos.filter(p => !p.verificado).map(p => p.id).join(', ') || 'nada pendiente';
+                        return tarjeta(`${t.id} · ${t.estado} · ${hechos}/${t.pasos.length} verificados`, detalle);
+                    })
+                    : [tarjeta('Ningún encargo registrado', 'No hay trabajos en el disco de la instancia.')]);
+            } catch (err) {
+                badge.textContent = 'sin lectura';
+                pintar('jobs-list', [tarjeta('Trabajos no disponibles',
+                    'No he podido leerlos (' + err.message + '). Con SALON_API_TOKEN declarado hace falta ?token=.')]);
+            }
+        }
+
+        async function refrescarInstancia() {
+            const pulso = document.getElementById('canvas-pulso');
+            const rutinas = document.getElementById('canvas-rutinas');
+            const salida = document.getElementById('canvas-salida');
+            const detalle = document.getElementById('canvas-detalle');
+            try {
+                const datos = await pedirJSON('/api/instancia');
+                // Verde sólo cuando de verdad hace cosas suyas: que el proceso
+                // corra no es que Yuki viva, y un panel verde con ella parada
+                // es el fallo más silencioso que tiene el proyecto.
+                pulso.className = 'font-medium ' + (datos.pulso && datos.pulso.estado === 'viva'
+                    ? 'text-emerald-400' : 'text-amber-400');
+                pulso.textContent = (datos.pulso && datos.pulso.estado) || 'sin lectura';
+                detalle.textContent = (datos.pulso && datos.pulso.motivo) || '';
+                salida.textContent = datos.salida || '—';
+                if (datos.error) {
+                    rutinas.className = 'font-mono text-stone-500';
+                    rutinas.textContent = 'sin lectura';
+                    detalle.textContent = datos.error;
+                    return;
+                }
+                rutinas.className = 'font-mono text-emerald-400';
+                rutinas.textContent = `${datos.rutinas_activas} activas (${datos.zona_horaria})`;
+                rutinas.title = (datos.rutinas || [])
+                    .map(r => `${r.nombre}: ${r.cron}${r.activa ? '' : ' (parada)'}`).join('\n');
+            } catch (err) {
+                [pulso, rutinas, salida].forEach(nodo => {
+                    nodo.className = nodo.className.replace(/text-\S+/, 'text-stone-500');
+                    nodo.textContent = 'sin lectura';
+                });
+                detalle.textContent = 'No he podido leer la instancia (' + err.message +
+                    '). Con SALON_API_TOKEN declarado hace falta ?token=.';
+            }
+        }
+
+        refrescarMemoria();
+        refrescarTrabajos();
+        refrescarInstancia();
+        setInterval(refrescarTrabajos, 30000);
+        setInterval(refrescarInstancia, 30000);
     </script>
 </body>
 </html>

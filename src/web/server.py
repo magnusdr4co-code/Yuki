@@ -368,6 +368,21 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
                          "Descarga desactivada: sin SALON_API_TOKEN sólo se enumeran nombres."),
             })
 
+        # 5.4. API: lo que la instancia puede decir de sí misma. El panel del
+        #      Salón afirmaba "Rutinas Cron: 03:00 / 07:30 / 23:30" en verde y
+        #      escrito a mano: tres de las ocho que hay, congeladas en el HTML.
+        #      Quien mirase el panel concluía que Yuki tiene tres rutinas.
+        elif path == "/api/instancia":
+            self._send_json(self._estado_de_la_instancia())
+
+        # 5.5. API: Trabajos de producción. El único sitio donde se veía el
+        #      estado de un encargo era la DM del Productor: si no estaba
+        #      delante de Discord, no había forma de saber si algo seguía vivo.
+        #      Va detrás de la credencial como `/metrics`: los identificadores
+        #      y los motivos de fallo dicen bastante de la instancia.
+        elif path == "/api/trabajos":
+            self._send_json(self._estado_de_los_trabajos())
+
         # 6. Descarga de una obra concreta. `/api/outputs` enumeraba nombres y no
         #    había forma de traerse el fichero, así que «envíamelo por el Salón»
         #    no era posible y nadie lo decía. Exige credencial **siempre**, aun
@@ -380,6 +395,85 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
 
         else:
             self.send_error(404, "Ruta no encontrada")
+
+    def _estado_de_la_instancia(self) -> Dict[str, Any]:
+        """
+        Rutinas reales, directorio de obra y signos vitales.
+
+        Se lee de la configuración y del disco, sin construir el agente: como
+        `/metrics` y como los trabajos, tiene que poder contestar cuando el
+        daemon no está, que es cuando alguien mira el panel para saber por qué.
+        """
+        from ..core.rutas import salida
+
+        datos: Dict[str, Any] = {"salida": str(salida())}
+        try:
+            import yaml
+
+            with open("config.yaml", "r", encoding="utf-8") as fichero:
+                config = yaml.safe_load(fichero) or {}
+        except (OSError, ValueError) as exc:
+            # No poder leer la configuración se dice; inventar rutinas es
+            # exactamente el fallo que este endpoint viene a corregir.
+            datos["error"] = f"No pude leer config.yaml: {type(exc).__name__}"
+            datos["rutinas"] = []
+            return datos
+        planificador = (config.get("scheduler", {}) or {})
+        rutinas = planificador.get("cron_jobs", []) or []
+        datos["zona_horaria"] = planificador.get("timezone", "UTC")
+        datos["rutinas"] = [{"nombre": r.get("name"), "cron": r.get("cron"),
+                             "activa": bool(r.get("enabled", True))} for r in rutinas]
+        datos["rutinas_activas"] = sum(1 for r in datos["rutinas"] if r["activa"])
+        try:
+            from ..core.pulse import Pulse
+
+            lectura = Pulse(config).read()
+            datos["pulso"] = {"estado": lectura.estado, "motivo": lectura.motivo}
+        except Exception as exc:
+            datos["pulso"] = {"estado": "sin lectura", "motivo": type(exc).__name__}
+        return datos
+
+    def _estado_de_los_trabajos(self) -> Dict[str, Any]:
+        """
+        Qué hay hecho y qué falta en cada encargo, sin promesas.
+
+        Se lee del directorio de trabajos, no del agente: la sonda tiene que
+        poder contestar aunque el daemon esté caído, que es justo cuando a
+        alguien le interesa saber en qué punto se quedó un encargo.
+        """
+        from ..tools.media_jobs import MediaJobStore
+
+        try:
+            trabajos = MediaJobStore().list_jobs()
+        except OSError as exc:
+            return {"error": f"No pude leer los trabajos: {type(exc).__name__}", "trabajos": []}
+        salida = []
+        for trabajo in sorted(trabajos, key=lambda t: t.updated_at, reverse=True)[:25]:
+            salida.append({
+                "id": trabajo.id,
+                "estado": trabajo.status,
+                "creado": trabajo.created_at,
+                "actualizado": trabajo.updated_at,
+                "reanudado": trabajo.resumed,
+                "pasos": [{
+                    "id": paso.id,
+                    "tipo": paso.kind,
+                    # `is_done()` y no `status`: un paso marcado hecho cuyo
+                    # fichero ya no está no está hecho, y el panel no puede
+                    # decir que sí donde la entrega dice que no.
+                    "verificado": paso.is_done(),
+                    "entregado": paso.delivered,
+                    "intentos": paso.attempts,
+                    "error": paso.error,
+                    "nota": paso.note,
+                } for paso in trabajo.steps],
+            })
+        return {
+            "total": len(trabajos),
+            "en_curso": sum(1 for t in trabajos if t.status == "en-curso"),
+            "trabajos": salida,
+            "nota": "Estado leído del disco. Un paso sin fichero no cuenta como hecho.",
+        }
 
     def _servir_obra(self, resto: str) -> None:
         from ..core.rutas import salida

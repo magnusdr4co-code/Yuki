@@ -257,12 +257,39 @@ Quedan Telegram —registra en log, no llega a ningún seguidor— y Honcho —p
 en JSON local—. Cada uno admite dos salidas honestas: implementarlo o retirarlo
 del diagrama; lo que no se sostiene es dejarlo dibujado como si funcionara.
 
-### M7 · El Salón como panel de estado
-*Reduce la dependencia del DM.* Hoy el único sitio donde se ve un encargo es la
-DM del Productor. Exponer en el Salón el estado de los trabajos —pasos
-verificados, fallos con su motivo, nada de promesas— permite comprobar una
-producción sin abrir Discord y da al informe de virtualización un lugar donde
-vivir en caliente.
+### M7 · El Salón como panel de estado — **hecho**
+*Reduce la dependencia del DM.* `/api/trabajos` publica el estado de cada
+encargo —pasos verificados, entregados, intentos y el motivo de cada fallo— y el
+Salón lo pinta y lo refresca cada treinta segundos. Dos decisiones que lo hacen
+útil en vez de decorativo: se lee **del disco y no del agente**, así que contesta
+también con el daemon caído, que es justo cuando alguien mira el panel para saber
+dónde se quedó algo; y «verificado» sale de `is_done()`, no del estado guardado,
+porque un paso marcado hecho cuyo fichero ya no está hay que rehacerlo y el panel
+no puede decir que sí donde la entrega dice que no. Va detrás de la credencial,
+como `/metrics`.
+
+**Y al abrirlo apareció lo de verdad grave: el panel mentía.** El aside del Salón
+era una maqueta presentada como cuadro de mandos.
+
+- «🧠 Memoria FTS5 **en Vivo**», con insignia verde `BM25 INDEX`, eran dos
+  recuerdos escritos a mano en el HTML. `/api/memories` existía desde siempre y
+  no lo llamaba nadie. La insignia era la misma con la memoria leída que con la
+  consulta caída.
+- «Rutinas Cron: 03:00 / 07:30 / 23:30», en verde y en monoespaciada: tres de las
+  ocho que hay, congeladas. Quien mirase el panel concluía que Yuki tiene tres
+  rutinas —que es exactamente lo que ella misma le dijo al Productor el 9 de
+  septiembre, y que costó una corrección aparte—.
+- «Álbum en Curso» y «Paleta Sonora» no correspondían a nada que la instancia
+  pueda leer.
+
+Ahora todas las filas se leen: `/api/instancia` da rutinas reales con su
+expresión cron y su zona, el directorio de obra resuelto y los signos vitales, y
+la fila verde del pulso sólo se enciende con `viva` —que el proceso corra no es
+que Yuki viva, y un panel verde con ella parada es el fallo más silencioso que
+tiene el proyecto—. Cuando algo no se puede leer, el panel dice «sin lectura» y
+el motivo. Si `config.yaml` no se puede abrir, la respuesta lleva el error y una
+lista de rutinas **vacía**: inventar rutinas es el fallo que este endpoint
+corrige, no uno que pueda cometer al fallar.
 
 ## 5. Comprobación
 
