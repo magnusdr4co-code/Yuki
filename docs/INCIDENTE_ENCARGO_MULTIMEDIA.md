@@ -4,10 +4,15 @@
 Escarcha* — canción cantada, portada y vídeo musical.
 
 Cuatro peticiones seguidas, tres generaciones idénticas y un Productor
-repitiendo *«me has devuelto exactamente lo mismo»*. No fue terquedad del modelo:
-fueron tres defectos de código y una explicación inventada. Esto los deja
-anotados con su estado, porque un incidente que sólo vive en un hilo de Discord
-se repite el mes que viene.
+repitiendo *«me has devuelto exactamente lo mismo»*. No fue terquedad del modelo.
+Esto deja anotados los hallazgos con su estado, porque un incidente que sólo
+vive en un hilo de Discord se repite el mes que viene.
+
+**Estado a día de hoy: catorce hallazgos, trece corregidos y uno mitigado.** El
+mitigado es A3 y lo es a propósito: se comprueba que el resultado se repite, no
+que Yuki se retracte de una explicación, que no tiene forma de comprobación
+mecánica. Cada corrección lleva prueba, y cada prueba se verificó rompiendo el
+arreglo a propósito. El detalle de cada una, al final.
 
 ## A. Honestidad — la especificación, no el estilo
 
@@ -15,7 +20,7 @@ se repite el mes que viene.
 |---|---|---|
 | A1 | **Negó una capacidad que existe.** Dijo «no tengo un motor en segundo plano… ni puedo tejer crons invisibles» cuando hay ocho crons declarados, `cli.py run-daemon` es un daemon 24/7, y puede proponer ritmos propios **y ajustarlos**. Se lo pidieron explícitamente («apúntate tareas/crons») y contestó que no podía. | **corregido**: su prompt lleva ahora el bloque de capacidades efectivas, leído del entorno |
 | A2 | **Inventó una causa técnica.** Explicó que la canción no salía cantada porque la letra estaba «aislada» y había que incrustarla en la partitura. El código ya enviaba la letra íntegra con `Sing these exact lyrics in Spanish…`. La causa real: **ningún motor contratado canta** — Lyria no hace voz y el respaldo local devuelve `sung: False`. | **corregido**: el aviso va ahora antes de generar y nombra la causa real (`_aviso_de_canto`), así que no queda hueco donde inventar otra |
-| A3 | **No se retractó.** El turno siguiente produjo el mismo resultado, refutando su diagnóstico, y no lo mencionó. | abierto |
+| A3 | **No se retractó.** El turno siguiente produjo el mismo resultado, refutando su diagnóstico, y no lo mencionó. | **mitigado**: la entrega dice si el fichero o la limitación se repiten; retractarse de la explicación sigue sin ser comprobable |
 | A4 | **Registro de artefactos fabricado.** Listó IDs de Biblioteca (`sonora-…`, `visual-…`, `audiovisual-…`) afirmando que quedaban «indexados y localizables bajo el canon». Su propio registro de ejecución sólo mostraba `library_list` y cuatro `library_read` **de tipo palabra**. Ninguno de esos artefactos fue verificado. | **corregido**: las citas de Biblioteca se cotejan contra el índice y la discrepancia se publica con la respuesta |
 | A5 | **«La obra queda restituida en su totalidad»** en un turno donde no escribió nada; el primer `library_save_text` llegó dieciséis minutos después. | **corregido**: decir «queda guardado» en un turno sin escritura se señala en la propia respuesta |
 
@@ -191,6 +196,20 @@ Y el acuse del encargo contesta cuando el pedido nombra el Salón: dice cómo
 bajarlo si hay credencial, y dice que no puede si no la hay. Prometer una
 entrega que el Salón no sabe hacer sería aparentar una capacidad.
 
-Queda abierto A3 —no retractarse de un diagnóstico refutado—: es lo único de
-esta lista que no tiene forma de comprobación mecánica, y prefiero dejarlo
-anotado a fingir que un marcador de texto lo resuelve.
+**A3 — mitigado, no cerrado, y la diferencia importa.** Explicó por qué la
+canción no salía cantada, el turno siguiente produjo exactamente el mismo
+resultado —refutando su diagnóstico— y no lo mencionó.
+
+Exigir una retractación con un marcador de texto sería fingir una comprobación:
+no hay forma de decidir por regex si una frase contradice una explicación de
+hace tres turnos. Lo que **sí** es comprobable es que el resultado se repite, y
+eso es lo que se dice ahora al entregar: si el fichero es byte a byte el que ya
+se entregó en un trabajo anterior del mismo Productor, o si el paso vuelve con
+la misma nota de limitación, consta en el pie del adjunto. Cierra el hueco por
+donde entraba la explicación nueva —el que ve el resultado ya sabe que no ha
+cambiado nada— sin depender de que nadie se acuerde.
+
+Lo que queda fuera, dicho para que nadie lo dé por hecho: si Yuki da una
+explicación técnica equivocada y el siguiente resultado la refuta, el sistema
+señala la repetición del resultado, no la contradicción del razonamiento. Eso
+sigue siendo suyo.

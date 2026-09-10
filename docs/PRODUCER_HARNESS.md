@@ -51,6 +51,14 @@ de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, 
 intento ni cerrar el encargo. Si Lyria no sirve la pista, el respaldo local entrega una
 maqueta instrumental declarada como tal: la entrega nunca llama canción a lo que no canta.
 
+Y cuando una entrega repite lo anterior, lo dice en el propio adjunto: si el
+fichero es byte a byte el ya entregado en un trabajo previo, o si el paso vuelve
+con la misma nota de limitación, el pie lo nombra. Es la mitad comprobable de un
+fallo que no lo es entero —Yuki explicó una vez por qué la canción no salía
+cantada, el turno siguiente salió igual y no lo mencionó—: el sistema puede
+señalar que el resultado no ha cambiado; retractarse de la explicación sigue
+siendo suyo.
+
 El acuse inicial dice el coste previsto —segundos de vídeo, pista, imagen— y el
 presupuesto de hoy, y avisa si el encargo no cabe: descubrir el tope a mitad
 cuesta lo ya generado. Y un pedido idéntico palabra por palabra al de un trabajo

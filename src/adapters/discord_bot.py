@@ -7,6 +7,7 @@ exclusivas para el Productor emparejado con herramientas explícitas del arnés.
 import os
 import re
 import json
+import hashlib
 import time
 import asyncio
 import logging
@@ -51,6 +52,25 @@ MEDIA_STORYBOARD = (
 def _plan_del_encargo(pedido: str):
     """Plan del pedido. Determinista sobre el mismo texto: reanudar lo recompone."""
     return leer_encargo(pedido, len(MEDIA_STORYBOARD))
+
+def _mismo_contenido(uno: str, otro: str) -> bool:
+    """
+    Si dos ficheros entregados son el mismo. Tamaño primero: leer un vídeo
+    entero para descubrir que pesa distinto es tiempo tirado en una e2-small.
+    """
+    try:
+        primero, segundo = Path(uno), Path(otro)
+        if not (primero.is_file() and segundo.is_file()):
+            return False
+        if primero.stat().st_size != segundo.stat().st_size:
+            return False
+        digest = [hashlib.sha256(ruta.read_bytes()).hexdigest() for ruta in (primero, segundo)]
+        return digest[0] == digest[1]
+    except OSError:
+        # No poder comparar no es haber comprobado que son distintos: se calla,
+        # que es lo único honesto sin la lectura hecha.
+        return False
+
 
 def _parse_id_set(raw_env: str) -> Set[str]:
     if not raw_env:
@@ -1101,6 +1121,40 @@ class DiscordAdapter:
         return (f"{cabecera} **Saldrá instrumental, no cantada**, y además sin Vertex "
                 "configurado sólo puedo darte la partitura propia sintetizada en local.")
 
+    def _paso_anterior(self, job, step_id: str):
+        """El paso del mismo nombre en el trabajo más reciente del mismo Productor."""
+        candidatos = [t for t in self.media_jobs.list_jobs()
+                      if t.id != job.id and t.requester_id == job.requester_id]
+        for anterior in sorted(candidatos, key=lambda t: t.updated_at, reverse=True):
+            paso = anterior.step(step_id)
+            if paso is not None and paso.is_done() and paso.delivered:
+                return anterior, paso
+        return None, None
+
+    async def _aviso_de_que_ya_salio_asi(self, job, paso) -> str:
+        """
+        Dice, al entregar, que esto ya salió igual la vez anterior.
+
+        El 9 de septiembre Yuki explicó por qué la canción no salía cantada, el
+        turno siguiente produjo exactamente el mismo resultado —refutando su
+        diagnóstico— y no lo mencionó. Retractarse de una explicación no es algo
+        que se pueda exigir con un marcador de texto; pero **que el resultado se
+        repite** sí es comprobable, y decirlo cierra el hueco por donde entra la
+        explicación nueva: si el fichero es el mismo, o la limitación es la
+        misma, se dice en la propia entrega y no hace falta que nadie se acuerde.
+        """
+        anterior, paso_anterior = self._paso_anterior(job, paso.id)
+        if paso_anterior is None:
+            return ""
+        if paso.path and paso_anterior.path:
+            if await asyncio.to_thread(_mismo_contenido, paso.path, paso_anterior.path):
+                return (f"\n-# ⚠️ Es el mismo archivo que ya entregué en el trabajo "
+                        f"`{anterior.id}`: no ha cambiado nada.")
+        if paso.note and paso.note == paso_anterior.note:
+            return (f"\n-# ⚠️ Vuelve a salir con la misma limitación que en `{anterior.id}`. "
+                    "No es un fallo distinto ni se arregla repitiendo el encargo.")
+        return ""
+
     async def _paso_cancion(self, job, plan, lyrics: str, lyrics_entry, report, channel) -> None:
         """Genera y entrega la canción. Idempotente: un paso verificado no se repite."""
         song_step = job.ensure_step("cancion", "cancion")
@@ -1153,8 +1207,9 @@ class DiscordAdapter:
                 self.media_jobs.save(job)
                 await report(f"⚠️ No se generó canción: {detalle}")
         if song_step.is_done() and not song_step.delivered:
-            if await self._send_file(channel, song_step.path,
-                                     song_step.note or "🎵 Pista de audio generada"):
+            pie = (song_step.note or "🎵 Pista de audio generada")
+            pie += await self._aviso_de_que_ya_salio_asi(job, song_step)
+            if await self._send_file(channel, song_step.path, pie):
                 song_step.delivered = True
                 self.media_jobs.save(job)
             else:
@@ -1203,7 +1258,8 @@ class DiscordAdapter:
                 self.media_jobs.save(job)
                 await report(f"⚠️ No se generó portada: {detalle}")
         if portada.is_done() and not portada.delivered:
-            if await self._send_file(channel, portada.path, "🎨 Portada del sencillo"):
+            pie = "🎨 Portada del sencillo" + await self._aviso_de_que_ya_salio_asi(job, portada)
+            if await self._send_file(channel, portada.path, pie):
                 portada.delivered = True
                 self.media_jobs.save(job)
             else:
@@ -1275,7 +1331,8 @@ class DiscordAdapter:
         if final_video:
             await asyncio.to_thread(self.agent.creation_library.inventory)
             if not montaje.delivered:
-                pie = f"🎬 Vídeo final — {plan.segmentos * 8} s, {plan.segmentos} segmento(s) ensamblados"
+                pie = (f"🎬 Vídeo final — {plan.segmentos * 8} s, {plan.segmentos} segmento(s) ensamblados"
+                       + await self._aviso_de_que_ya_salio_asi(job, montaje))
                 if await self._send_file(channel, final_video, pie):
                     montaje.delivered = True
                     self.media_jobs.save(job)
