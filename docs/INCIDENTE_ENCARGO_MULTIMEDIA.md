@@ -32,7 +32,7 @@ se repite el mes que viene.
 
 | # | Hallazgo | Estado |
 |---|---|---|
-| C10 | Registro de asistente sostenido: «Si te parece, trazo las líneas…», listas tituladas, «Dime si quieres que…», «Dime si… dialogan como esperabas». El ancla de persona no lo corrigió, o no llegó a medirlo. | abierto |
+| C10 | Registro de asistente sostenido: «Si te parece, trazo las líneas…», listas tituladas, «Dime si quieres que…», «Dime si… dialogan como esperabas». El ancla de persona no lo corrigió, o no llegó a medirlo. | **corregido**: el cierre de servicio se mide, y por repeticiones; aquellos turnos puntuaban 1.00 |
 
 ## D. Coste, y justo en la ventana de crédito
 
@@ -155,5 +155,20 @@ sexta invariante dice que la evolución autónoma no se concede permisos, y un
 propuesta inválida —un cron cada diez minutos— sale como fallo visible, porque
 una herramienta fallida no es un éxito.
 
-Quedan abiertos A3 —no retractarse de un diagnóstico refutado—, el bloque C y
-D14 (el Salón no se usó ni se mencionó).
+**C10 — el ancla no llegó a medirlo.** No falló por poco: aquellos turnos
+puntuaban **1.00**, exactamente igual que su mejor prosa. Los marcadores miraban
+fórmulas de servicio explícitas («¿en qué puedo ayudarte?», «como modelo de
+lenguaje…») y formato de manual, pero ninguno miraba **cómo cerraba el turno**,
+que es por donde se le fue: «Si te parece, trazo las líneas…», «Dime si quieres
+que…», «Dime si… dialogan como esperabas».
+
+Se añade una familia de marcadores de cierre de servicio, contada **por
+repeticiones**: lo que delata el registro no es preguntar una vez —eso es
+conversar, y un detector que llame deriva a conversar se desactiva solo— sino
+cerrar así cada párrafo. Con ella, aquel turno cae a 0.00 y su voz se queda en
+1.00. Hay prueba también de que el imaginario del canon no tapa la deriva: el
+encargo era sobre herrumbre y agua, y el crédito por vocabulario propio no puede
+rescatar un turno escrito en modo asistente sólo porque hable de metal mojado.
+
+Queda abierto A3 —no retractarse de un diagnóstico refutado— y D14 (el Salón no
+se usó ni se mencionó).
