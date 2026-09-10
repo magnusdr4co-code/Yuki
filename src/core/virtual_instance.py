@@ -91,6 +91,12 @@ def _env(name: str) -> str:
     return (os.getenv(name) or "").strip()
 
 
+def _recortar(texto: str, tope: int) -> str:
+    """Detalle acotado, y con la marca de que se acortó: nunca a la chita callando."""
+    texto = (texto or "").strip()
+    return texto if len(texto) <= tope else texto[:tope - 1].rstrip() + "…"
+
+
 def _clave_util(name: str) -> bool:
     return is_usable_key(_env(name))
 
@@ -294,7 +300,8 @@ class VirtualInstance:
         self._cap(
             "mente.ritmos", "Mente", REAL,
             f"{len(ritmos.aprobados())} ritmo(s) propio(s) activo(s), "
-            f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor",
+            f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor; "
+            "se proponen desde el DM, los aprueba él",
         )
 
         # El gemelo dice lo que la instancia puede saber de sí misma. Que sepa
@@ -498,7 +505,7 @@ class VirtualInstance:
             "limitadores_bloqueantes": sum(1 for lim in self.limiters if lim.severity == BLOQUEANTE),
         }
 
-    def bloque_de_capacidades(self, maximo: int = 2400) -> str:
+    def bloque_de_capacidades(self, maximo: int = 4000, por_linea: int = 150) -> str:
         """
         Lo que Yuki puede hacer ahora mismo, para que lo lea ella y no lo niegue.
 
@@ -524,7 +531,11 @@ class VirtualInstance:
             if not por_estado[estado]:
                 continue
             lineas.append(f"\n{encabezado}:")
-            lineas += [f"- {cap.id}: {cap.detail}" for cap in por_estado[estado]]
+            # Se recorta cada detalle y no la lista entera: con un tope global,
+            # lo que se pierde es la cola, y la cola es justo «lo que no puedes
+            # y por qué». Un dato largo de más vale menos que una lista completa.
+            lineas += [f"- {cap.id}: {_recortar(cap.detail, por_linea)}"
+                       for cap in por_estado[estado]]
         bloqueantes = [lim for lim in self.limiters
                        if lim.status == ABIERTO and lim.severity == BLOQUEANTE]
         if bloqueantes:

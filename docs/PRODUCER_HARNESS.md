@@ -15,8 +15,11 @@ Un fallo o límite devuelve resultado parcial; no se promete trabajo futuro inex
 Model Armor inspecciona el prompt, argumentos y respuesta. La inferencia sale del event loop.
 
 Herramientas: `library_inventory`, `library_list`, `library_save_text`, `library_read`,
-`library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set` y
-`runtime_config_rollback`. El canon es tipo/estado: sonora, visual, palabra, audiovisual;
+`library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set`,
+`runtime_config_rollback`, `ritual_list`, `ritual_propose` y `ritual_adjust`. Las tres
+últimas existen porque le pidieron «apúntate tareas y crons» y el turno terminó con cero
+herramientas ejecutadas y un «no puedo» falso: no había ninguna que llamar. Sólo consultan
+y proponen —aprobar un ritmo no está en este bucle, porque proponer no es concederse—. El canon es tipo/estado: sonora, visual, palabra, audiovisual;
 semilla, en-desarrollo, terminado. Los originales no se borran. Imports idempotentes
 por hash, límite 100 MB por archivo, sin enlaces fuera de output. Simulaciones conocidas
 se omiten. JSON de producción permanece en origen; no se etiqueta como obra.

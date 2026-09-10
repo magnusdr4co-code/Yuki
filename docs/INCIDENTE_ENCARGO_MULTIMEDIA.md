@@ -40,7 +40,7 @@ se repite el mes que viene.
 |---|---|---|
 | D11 | Tres generaciones idénticas: ~96 s de vídeo facturado por segundo para entregar tres veces lo mismo, consumiendo además tope diario. | **corregido**: un pedido idéntico dentro de 90 min no se repite; se dice qué hay ya y qué hace falta para que salga distinto |
 | D12 | El Productor abrió con «dispones de créditos, quince días» y ella planificó sin consultar el presupuesto ni mencionarlo. | **corregido**: el acuse del encargo dice el coste previsto y el presupuesto de hoy, y avisa si no cabe |
-| D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | abierto |
+| D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | **corregido**: el arnés del DM tiene `ritual_list`, `ritual_propose` y `ritual_adjust` |
 | D14 | «Envíamelo por Salón o por aquí»: el Salón ni se usó ni se mencionó. | abierto |
 
 ## Lo que sí funcionó
@@ -144,5 +144,16 @@ al presupuesto de hoy, y avisa si el encargo no cabe. Descubrir el tope a mitad
 cuesta lo ya generado. Si el presupuesto no se puede leer, se dice eso, no que
 quepa.
 
-Quedan abiertos A3 —no retractarse de un diagnóstico refutado—, el bloque C,
-D13 y D14.
+**D13 — no había herramienta que llamar.** Le pidieron «apúntate tareas/crons»,
+contestó que no podía y el turno se cerró sin ejecutar nada. Yuki propone ritmos
+propios y los ajusta desde hace meses, pero eso vivía en el CLI y en el
+planificador, no en el arnés del DM: el modelo no tenía a mano ninguna función
+que ejecutar. Ahora están `ritual_list`, `ritual_propose` y `ritual_adjust`.
+Sólo consultan y proponen. Aprobar no está en este bucle y no va a estarlo: la
+sexta invariante dice que la evolución autónoma no se concede permisos, y un
+`ritual_approve` dentro del arnés sería exactamente eso con otro nombre. Una
+propuesta inválida —un cron cada diez minutos— sale como fallo visible, porque
+una herramienta fallida no es un éxito.
+
+Quedan abiertos A3 —no retractarse de un diagnóstico refutado—, el bloque C y
+D14 (el Salón no se usó ni se mencionó).

@@ -81,6 +81,22 @@ def test_lo_simulado_y_lo_inactivo_tambien_se_listan():
     assert all(c.id in bloque for c in simuladas), "una capacidad simulada omitida se presta a prometerla"
 
 
+def test_ninguna_capacidad_se_pierde_por_un_detalle_largo():
+    """
+    Ya pasó: un detalle más explicativo empujó el bloque por encima del tope y
+    el recorte se llevó la cola —que es justo «lo que no puedes y por qué»—.
+    Se recorta cada detalle, no la lista, para que añadir texto a uno no borre
+    otro en silencio.
+    """
+    instancia = VirtualInstance()
+    bloque = instancia.bloque_de_capacidades()
+
+    faltan = [c.id for c in instancia.capabilities if c.id not in bloque]
+    assert not faltan, f"el bloque se dejó fuera: {faltan}"
+    assert "recortada por longitud" not in bloque, \
+        "con los detalles ya acotados, el tope global no debería llegar a actuar"
+
+
 def test_un_recorte_conserva_la_instruccion():
     """El cierre es la instrucción, no el relleno: sobrevive al recorte por longitud."""
     bloque = VirtualInstance().bloque_de_capacidades(maximo=200)
