@@ -3,6 +3,7 @@ import hashlib
 import json
 import shutil
 import threading
+import time
 from ..core.rutas import salida
 from pathlib import Path
 
@@ -84,8 +85,14 @@ class CreationLibrary:
             handle.write(data)
         if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
             raise IOError("Verificación de copia fallida")
+        # `created_at` faltaba, y sin él no había forma de saber cuál es la obra
+        # más reciente: el encargo multimedia cogía la primera que casara por
+        # palabra clave, así que una letra nueva nunca llegaba a usarse por más
+        # veces que se pidiera. Las entradas anteriores no lo tienen; quien
+        # ordene por recencia debe caer a la fecha del fichero.
         item = dict(id=key, kind=kind, state=state, path=relative, source=source,
-                    title=title[:200], sha256=digest, bytes=len(data))
+                    title=title[:200], sha256=digest, bytes=len(data),
+                    created_at=time.time())
         entries[key] = item
         self._commit(entries)
         return item
@@ -118,9 +125,26 @@ class CreationLibrary:
                     "canon": str(salida("Biblioteca/CANON.md"))}
 
     def list_entries(self):
+        """
+        El inventario, **lo más reciente primero**.
+
+        Importa por el recorte a cien: en el orden de inserción, pasadas las cien
+        obras el recorte se comía justo las nuevas, que son las que alguien
+        acaba de guardar y quiere usar.
+        """
         with self._lock:
-            entries = list(self._load().values())
+            entries = sorted(self._load().values(), key=self._cuando, reverse=True)
             return {"total": len(entries), "entries": entries[:100], "limited": len(entries) > 100}
+
+    def _cuando(self, item) -> float:
+        """Cuándo se archivó. Las entradas viejas no lo llevan: vale su fichero."""
+        marca = item.get("created_at")
+        if isinstance(marca, (int, float)) and marca > 0:
+            return float(marca)
+        try:
+            return self._path(item["path"]).stat().st_mtime
+        except OSError:
+            return 0.0
 
     def save_text(self, title, content, state="en-desarrollo", source="producer_dm"):
         if not content or len(content) > 100_000:

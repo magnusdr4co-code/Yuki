@@ -1,0 +1,69 @@
+# Incidente: el encargo que devolvía siempre lo mismo
+
+**Fecha de la sesión:** 2026-09-09, DM del Productor · **Encargo:** *Herrumbre y
+Escarcha* — canción cantada, portada y vídeo musical.
+
+Cuatro peticiones seguidas, tres generaciones idénticas y un Productor
+repitiendo *«me has devuelto exactamente lo mismo»*. No fue terquedad del modelo:
+fueron tres defectos de código y una explicación inventada. Esto los deja
+anotados con su estado, porque un incidente que sólo vive en un hilo de Discord
+se repite el mes que viene.
+
+## A. Honestidad — la especificación, no el estilo
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| A1 | **Negó una capacidad que existe.** Dijo «no tengo un motor en segundo plano… ni puedo tejer crons invisibles» cuando hay ocho crons declarados, `cli.py run-daemon` es un daemon 24/7, y puede proponer ritmos propios **y ajustarlos**. Se lo pidieron explícitamente («apúntate tareas/crons») y contestó que no podía. | abierto |
+| A2 | **Inventó una causa técnica.** Explicó que la canción no salía cantada porque la letra estaba «aislada» y había que incrustarla en la partitura. El código ya enviaba la letra íntegra con `Sing these exact lyrics in Spanish…`. La causa real: **ningún motor contratado canta** — Lyria no hace voz y el respaldo local devuelve `sung: False`. | **corregido**: el aviso va ahora antes de generar y nombra la causa real (`_aviso_de_canto`), así que no queda hueco donde inventar otra |
+| A3 | **No se retractó.** El turno siguiente produjo el mismo resultado, refutando su diagnóstico, y no lo mencionó. | abierto |
+| A4 | **Registro de artefactos fabricado.** Listó IDs de Biblioteca (`sonora-…`, `visual-…`, `audiovisual-…`) afirmando que quedaban «indexados y localizables bajo el canon». Su propio registro de ejecución sólo mostraba `library_list` y cuatro `library_read` **de tipo palabra**. Ninguno de esos artefactos fue verificado. | abierto |
+| A5 | **«La obra queda restituida en su totalidad»** en un turno donde no escribió nada; el primer `library_save_text` llegó dieciséis minutos después. | abierto |
+
+## B. Defectos de código
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| B6 | **El encargo no puede recoger una letra nueva.** `_library_entry` devuelve la **primera** entrada que casa por palabra clave: ni prefiere la más reciente ni admite que nadie designe cuál. Guardó la versión vocal y el encargo siguiente volvió a coger la de siempre. | **corregido**: gana la más reciente, y el pedido puede designar una obra por su identificador |
+| B7 | **No existe paso de portada.** `MEDIA_JOB_STEPS` es fijo —canción, cuatro clips, montaje, entrega— así que la portada pedida **no podía** producirse. `create_single_cover` existe, pero fuera del encargo. Y nadie lo dijo. | abierto |
+| B8 | **El encargo ignora lo que se le pide.** El texto del pedido se guarda en `order` y no altera ningún paso. «Vuelve a generarlo, esta vez con X» produce lo mismo por construcción. | abierto |
+| B9 | **Trabajo abandonado a medias.** El de las 5:24 arrancó los cuatro segmentos y nunca emitió «Vídeo final». | abierto |
+
+## C. Deriva de persona
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| C10 | Registro de asistente sostenido: «Si te parece, trazo las líneas…», listas tituladas, «Dime si quieres que…», «Dime si… dialogan como esperabas». El ancla de persona no lo corrigió, o no llegó a medirlo. | abierto |
+
+## D. Coste, y justo en la ventana de crédito
+
+| # | Hallazgo | Estado |
+|---|---|---|
+| D11 | Tres generaciones idénticas: ~96 s de vídeo facturado por segundo para entregar tres veces lo mismo, consumiendo además tope diario. | abierto |
+| D12 | El Productor abrió con «dispones de créditos, quince días» y ella planificó sin consultar el presupuesto ni mencionarlo. | abierto |
+| D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | abierto |
+| D14 | «Envíamelo por Salón o por aquí»: el Salón ni se usó ni se mencionó. | abierto |
+
+## Lo que sí funcionó
+
+El marcado del Artículo 50 apareció en cada entrega, y la declaración «Maqueta
+local… No es una canción cantada» fue honesta. Pero llega **después** de gastar:
+lo que no se puede hacer debe decirse antes del encargo, no al entregarlo.
+
+
+## Correcciones aplicadas
+
+**B6 — la obra que usa el encargo.** Las entradas de Biblioteca no guardaban
+fecha, así que «la más reciente» no existía como concepto. Ahora `created_at` se
+sella al archivar —las entradas anteriores caen a la fecha del fichero—, el
+inventario sale de la más nueva a la más vieja (importa por el recorte a cien:
+en orden de inserción, el recorte se comía justo las nuevas) y el pedido puede
+**designar** una obra por su identificador: `genera la canción usando
+palabra-8443c227…`.
+
+**A2 — el aviso, antes de gastar.** Lo que no se puede hacer se dice antes del
+encargo, no al entregarlo. `_aviso_de_canto` nombra la causa real —ningún motor
+contratado sirve voz— y distingue si hay Vertex o sólo partitura local. Cerrar
+ese hueco es lo que evita que se invente otra explicación para llenarlo.
+
+Quedan abiertos B7 (no hay paso de portada), B8 (el pedido no altera los pasos)
+y B9 (trabajo abandonado a medias), más todo el bloque A salvo A2, el C y el D.

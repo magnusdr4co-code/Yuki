@@ -5,6 +5,7 @@ exclusivas para el Productor emparejado con herramientas explícitas del arnés.
 """
 
 import os
+import re
 import json
 import time
 import asyncio
@@ -865,16 +866,44 @@ class DiscordAdapter:
             logger.warning("No pude recuperar el DM del trabajo %s: %s", job.id, type(exc).__name__)
             return None
 
-    def _library_entry(self, kind: str, keywords: tuple[str, ...]) -> Optional[Dict[str, Any]]:
-        """Selecciona una obra existente por metadatos, sin interpretar rutas del usuario."""
+    def _library_entry(self, kind: str, keywords: tuple[str, ...],
+                       pedido: str = "") -> Optional[Dict[str, Any]]:
+        """
+        Selecciona una obra existente por metadatos, sin interpretar rutas.
+
+        Dos correcciones de un incidente real —cuatro encargos seguidos que
+        devolvieron lo mismo mientras el Productor repetía «me has devuelto
+        exactamente lo mismo»—:
+
+        **Se puede designar una.** Si el pedido nombra un identificador de
+        Biblioteca (`palabra-8443c227…`), manda ése. Antes no había forma de
+        decir «usa ésta», así que reescribir la letra no servía de nada.
+
+        **Y si no, gana la más reciente.** Antes devolvía la primera que casara
+        por palabra clave, que en orden de archivo es la **más vieja**: una letra
+        nueva no llegaba a usarse por más veces que se pidiera. Eso no era
+        terquedad del modelo, era este bucle.
+        """
         library = self.agent.creation_library
         entries = library.list_entries().get("entries", [])
         candidates = [entry for entry in entries if entry.get("kind") == kind]
+        if not candidates:
+            return None
+
+        designado = re.search(rf"\b{re.escape(kind)}-[0-9a-f]{{6,}}\b", pedido or "",
+                              re.IGNORECASE)
+        if designado:
+            elegido = next((e for e in candidates
+                            if e.get("id", "").casefold() == designado.group(0).casefold()), None)
+            if elegido:
+                logger.info("Obra designada en el pedido: %s", elegido["id"])
+                return elegido
+
         for entry in candidates:
             haystack = f"{entry.get('title', '')} {entry.get('source', '')}".casefold()
             if any(word in haystack for word in keywords):
                 return entry
-        return candidates[-1] if candidates else None
+        return candidates[0]
 
     def _library_file(self, entry: Optional[Dict[str, Any]]) -> Optional[str]:
         if not entry:
@@ -906,6 +935,32 @@ class DiscordAdapter:
         finally:
             Path(listing_path).unlink(missing_ok=True)
 
+    def _aviso_de_canto(self, lyrics_entry) -> str:
+        """
+        Qué se va a generar y qué no, dicho antes de que cueste dinero.
+
+        `skills/HERRAMIENTAS.md` §1 declara que ningún motor musical contratado
+        sirve voz cantada: Lyria compone instrumental y el respaldo local
+        sintetiza la partitura y devuelve `sung: False`. No es algo que se
+        arregle reescribiendo la letra ni incrustándola en la partitura —el
+        prompt ya la manda íntegra con la orden de cantarla— y decir lo
+        contrario sería inventarse una capacidad.
+        """
+        from ..tools.vertex_media import VertexMediaClient
+
+        motor = getattr(self.agent, "media_creator", None)
+        vertex = getattr(getattr(motor, "portal", None), "vertex", None)
+        hay_vertex = isinstance(vertex, VertexMediaClient) and getattr(vertex, "enabled", False)
+
+        titulo = (lyrics_entry or {}).get("title", "la letra archivada")
+        cabecera = f"🎵 Generando desde «{titulo}»."
+        if hay_vertex:
+            return (f"{cabecera} **Saldrá instrumental, no cantada**: ningún motor musical "
+                    "contratado sirve voz. Lyria compone la base y el adjunto sólo saldrá si "
+                    "devuelve audio real; si no, oirás la partitura propia sintetizada.")
+        return (f"{cabecera} **Saldrá instrumental, no cantada**, y además sin Vertex "
+                "configurado sólo puedo darte la partitura propia sintetizada en local.")
+
     async def _run_dm_media_delivery(self, author_id: str, author_name: str, content: str, channel,
                                      job=None) -> None:
         """
@@ -926,7 +981,8 @@ class DiscordAdapter:
         job.channel_id = str(getattr(channel, "id", "")) or job.channel_id
 
         try:
-            lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema", "herrumbre"))
+            lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema", "herrumbre"),
+                                               pedido=content)
             lyrics_path = self._library_file(lyrics_entry)
             if not lyrics_entry or not lyrics_path:
                 self.media_jobs.abandon(job, "sin letra verificable en Biblioteca")
@@ -945,7 +1001,14 @@ class DiscordAdapter:
             elif song_step.exhausted():
                 await report(f"⚠️ No repito la canción: ya falló {song_step.attempts} veces ({song_step.error}).")
             else:
-                await report("🎵 Generando canción con la letra archivada. El adjunto sólo saldrá si Lyria devuelve audio real.")
+                # Lo que no se puede hacer se dice **antes** de gastar, no al
+                # entregar. En el incidente del 9 de septiembre esto se avisaba
+                # después de generar, así que el Productor pidió la misma canción
+                # cantada cuatro veces —y Yuki llegó a inventar una explicación
+                # técnica falsa para justificar por qué salía instrumental—.
+                # La causa es única y no depende del prompt: ningún motor
+                # contratado canta.
+                await report(self._aviso_de_canto(lyrics_entry))
                 song_prompt = (
                     "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
                     "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
