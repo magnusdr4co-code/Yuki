@@ -845,9 +845,17 @@ class DiscordAdapter:
             if job.requester_id not in self.paired_producer_ids:
                 self.media_jobs.abandon(job, "el solicitante ya no es un Productor emparejado")
                 continue
-            channel = await self._recover_dm_channel(job)
+            channel, definitivo = await self._recover_dm_channel(job)
             if channel is None:
-                self.media_jobs.abandon(job, "no se pudo recuperar el DM de entrega")
+                if definitivo:
+                    self.media_jobs.abandon(job, "el Productor ya no es alcanzable en Discord")
+                else:
+                    # Un 500 de Discord es de este minuto, no del trabajo. Antes
+                    # se abandonaba igual, y con él los clips ya pagados.
+                    logger.warning(
+                        "Trabajo multimedia %s en espera: Discord no devolvió el DM ahora; "
+                        "se reintenta en el próximo arranque.", job.id,
+                    )
                 continue
             job.resumed += 1
             self.media_jobs.save(job)
@@ -855,20 +863,46 @@ class DiscordAdapter:
                 "Reanudando trabajo multimedia %s (%s), reanudación nº %d",
                 job.id, describe_media_job(job), job.resumed,
             )
+            # Que un encargo se interrumpiera y se retome se dice en el DM. El
+            # Productor vio cuatro segmentos y después silencio: sin esto, la
+            # única forma de enterarse era preguntar con `!status`.
+            await self._send_long(channel, (
+                f"↩️ Retomo el trabajo `{job.id}`, interrumpido por un reinicio: "
+                f"{describe_media_job(job)}. Sigo por el primer paso sin verificar; "
+                "lo ya generado no se vuelve a pagar."
+            ))
             if self._spawn_media_job(job, job.requester_id, "productor", job.order, channel):
                 reanudados += 1
         return reanudados
 
     async def _recover_dm_channel(self, job):
-        """Recupera el DM del Productor; sin canal no hay entrega que reanudar."""
+        """
+        Recupera el DM del Productor, diciendo además si el fallo es definitivo.
+
+        Devuelve `(canal, definitivo)`. La distinción no es un lujo: antes
+        cualquier excepción abandonaba el trabajo para siempre, así que un 500
+        de Discord —que se repite bien al arranque siguiente— tiraba un encargo
+        con clips ya facturados. Definitivo es sólo que el destinatario no
+        exista: una cuenta borrada o un identificador que no es un identificador.
+        """
         try:
             user = self.client.get_user(int(job.requester_id)) or await self.client.fetch_user(int(job.requester_id))
-            if user is None:
-                return None
-            return user.dm_channel or await user.create_dm()
-        except (ValueError, AttributeError, discord.HTTPException) as exc:
+        except ValueError:
+            logger.warning("Trabajo %s con solicitante ilegible; no hay a quién entregar.", job.id)
+            return None, True
+        except discord.NotFound:
+            logger.warning("Trabajo %s: la cuenta del solicitante ya no existe.", job.id)
+            return None, True
+        except (AttributeError, discord.HTTPException) as exc:
             logger.warning("No pude recuperar el DM del trabajo %s: %s", job.id, type(exc).__name__)
-            return None
+            return None, False
+        if user is None:
+            return None, False
+        try:
+            return (user.dm_channel or await user.create_dm()), False
+        except (AttributeError, discord.HTTPException) as exc:
+            logger.warning("No pude abrir el DM del trabajo %s: %s", job.id, type(exc).__name__)
+            return None, False
 
     def _library_entry(self, kind: str, keywords: tuple[str, ...],
                        pedido: str = "") -> Optional[Dict[str, Any]]:
@@ -1235,6 +1269,16 @@ class DiscordAdapter:
                 entrega.delivered = True
                 self.media_jobs.finish(job)
                 logger.info("Trabajo multimedia cerrado: %s", describe_media_job(job))
+        except asyncio.CancelledError:
+            # `CancelledError` hereda de `BaseException`: el `except Exception`
+            # de abajo **no** la ve. Un despliegue a mitad de encargo cerraba el
+            # bucle, cancelaba la tarea y no dejaba ni una línea —el trabajo del
+            # 9 de septiembre arrancó cuatro segmentos y nunca dijo nada más—.
+            # Aquí queda constancia y el trabajo, guardado y reanudable; la
+            # cancelación se propaga, porque el proceso se está apagando.
+            self.media_jobs.save(job)
+            logger.warning("Producción multimedia cancelada a mitad: %s", describe_media_job(job))
+            raise
         except Exception:
             logger.exception("Fallo en producción multimedia por DM")
             self.media_jobs.save(job)

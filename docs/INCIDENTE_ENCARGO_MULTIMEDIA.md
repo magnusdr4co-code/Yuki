@@ -26,7 +26,7 @@ se repite el mes que viene.
 | B6 | **El encargo no puede recoger una letra nueva.** `_library_entry` devuelve la **primera** entrada que casa por palabra clave: ni prefiere la más reciente ni admite que nadie designe cuál. Guardó la versión vocal y el encargo siguiente volvió a coger la de siempre. | **corregido**: gana la más reciente, y el pedido puede designar una obra por su identificador |
 | B7 | **No existe paso de portada.** `MEDIA_JOB_STEPS` es fijo —canción, cuatro clips, montaje, entrega— así que la portada pedida **no podía** producirse. `create_single_cover` existe, pero fuera del encargo. Y nadie lo dijo. | **corregido**: los pasos los deriva `encargo.leer_encargo` del pedido, y hay paso `portada` |
 | B8 | **El encargo ignora lo que se le pide.** El texto del pedido se guarda en `order` y no altera ningún paso. «Vuelve a generarlo, esta vez con X» produce lo mismo por construcción. | **corregido**: el pedido gobierna alcance, número de segmentos y prompts (`Encargo.con_matices`) |
-| B9 | **Trabajo abandonado a medias.** El de las 5:24 arrancó los cuatro segmentos y nunca emitió «Vídeo final». | abierto |
+| B9 | **Trabajo abandonado a medias.** El de las 5:24 arrancó los cuatro segmentos y nunca emitió «Vídeo final». | **corregido**: la cancelación deja rastro, retomar se anuncia en el DM y un fallo pasajero de Discord ya no abandona el encargo |
 
 ## C. Deriva de persona
 
@@ -85,5 +85,20 @@ tupla constante, así que el texto del encargo no podía cambiar nada. Ahora
   paso salen idénticos. Si no lo fueran, un reinicio daría por «no hecho» lo ya
   pagado. Hay prueba de esa propiedad, no sólo el comentario.
 
-Quedan abiertos B9 (trabajo abandonado a medias), todo el bloque A salvo A2, el
-C y el D.
+**B9 — el encargo que se calló.** No hubo «Vídeo final» ni error, y eso tenía
+tres caminos posibles, los tres arreglados:
+
+- **La cancelación era invisible.** `asyncio.CancelledError` hereda de
+  `BaseException`, así que el `except Exception` del bucle no la veía: un
+  despliegue a mitad de encargo cerraba el bucle, cancelaba la tarea y no dejaba
+  ni una línea de log. Ahora se anota, el trabajo se guarda y la cancelación se
+  propaga —el proceso se está apagando de verdad—.
+- **Retomar era mudo.** Un trabajo interrumpido se reanudaba al arrancar sin
+  decírselo a nadie; la única forma de enterarse era preguntar con `!status`.
+  Ahora la reanudación se anuncia en el DM con lo que queda por hacer.
+- **Y un tropiezo de Discord tiraba el encargo.** Cualquier excepción al
+  recuperar el DM lo abandonaba para siempre, clips pagados incluidos. Ahora
+  sólo es definitivo que el destinatario no exista; un 500 deja el trabajo
+  esperando al arranque siguiente.
+
+Quedan abiertos todo el bloque A salvo A2, el C y el D.
