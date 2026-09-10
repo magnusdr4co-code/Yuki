@@ -38,8 +38,8 @@ se repite el mes que viene.
 
 | # | Hallazgo | Estado |
 |---|---|---|
-| D11 | Tres generaciones idénticas: ~96 s de vídeo facturado por segundo para entregar tres veces lo mismo, consumiendo además tope diario. | abierto |
-| D12 | El Productor abrió con «dispones de créditos, quince días» y ella planificó sin consultar el presupuesto ni mencionarlo. | abierto |
+| D11 | Tres generaciones idénticas: ~96 s de vídeo facturado por segundo para entregar tres veces lo mismo, consumiendo además tope diario. | **corregido**: un pedido idéntico dentro de 90 min no se repite; se dice qué hay ya y qué hace falta para que salga distinto |
+| D12 | El Productor abrió con «dispones de créditos, quince días» y ella planificó sin consultar el presupuesto ni mencionarlo. | **corregido**: el acuse del encargo dice el coste previsto y el presupuesto de hoy, y avisa si no cabe |
 | D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | abierto |
 | D14 | «Envíamelo por Salón o por aquí»: el Salón ni se usó ni se mencionó. | abierto |
 
@@ -131,4 +131,18 @@ La corrección viaja **en el mensaje**, junto al registro de ejecución: un log
 que nadie abre no corrige nada. Y la política del arnés lo avisa antes, para que
 el caso normal sea no tener que corregir. Si el cotejo falla, el turno sigue.
 
-Queda abierto A3 —no retractarse de un diagnóstico refutado—, el bloque C y el D.
+**D11 y D12 — el dinero, antes.** Un pedido idéntico palabra por palabra al de
+un trabajo terminado hace menos de noventa minutos, con sus ficheros todavía
+vivos, ya no se ejecuta: se responde con lo que existe y con qué hace falta para
+que salga distinto —otra letra, otro número de segmentos, la obra designada por
+su identificador—. Cualquier cambio del texto libera la guarda por sí solo,
+porque el pedido pasa a ser otro; la frase «de todos modos» es para la vez
+siguiente, cuando repetir un pedido ya forzado no puede volver a bloquearse.
+
+Y el acuse dice ahora el coste previsto —segundos de vídeo, pista, imagen— junto
+al presupuesto de hoy, y avisa si el encargo no cabe. Descubrir el tope a mitad
+cuesta lo ya generado. Si el presupuesto no se puede leer, se dice eso, no que
+quepa.
+
+Quedan abiertos A3 —no retractarse de un diagnóstico refutado—, el bloque C,
+D13 y D14.

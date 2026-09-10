@@ -48,6 +48,14 @@ de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, 
 intento ni cerrar el encargo. Si Lyria no sirve la pista, el respaldo local entrega una
 maqueta instrumental declarada como tal: la entrega nunca llama canción a lo que no canta.
 
+El acuse inicial dice el coste previsto —segundos de vídeo, pista, imagen— y el
+presupuesto de hoy, y avisa si el encargo no cabe: descubrir el tope a mitad
+cuesta lo ya generado. Y un pedido idéntico palabra por palabra al de un trabajo
+terminado hace menos de noventa minutos, con sus ficheros todavía vivos, no se
+ejecuta: se responde con lo que ya existe y con qué haría falta para que saliera
+distinto. Cualquier cambio del texto libera la guarda, porque el pedido pasa a
+ser otro.
+
 Qué pasos tiene el encargo lo decide el pedido, no una constante. `src/adapters/encargo.py`
 lee el texto y arma el plan: si nombra piezas —canción, portada, vídeo— se producen sólo
 ésas, y si no nombra ninguna sale el encargo completo de siempre; «sin vídeo» no encarga

@@ -26,8 +26,9 @@ from .discord_intents import (
 from .discord_text import split_discord_text
 from .encargo import leer_encargo
 from ..core.brake import Brake
+from ..core.spend_budget import SpendLedger
 from ..core.transparency import MediaMarker
-from ..tools.media_jobs import MediaJobStore, describe_job as describe_media_job
+from ..tools.media_jobs import MediaJobStore, TERMINADO, describe_job as describe_media_job
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -794,6 +795,9 @@ class DiscordAdapter:
             return (f"🛑 No genero medios ahora mismo: {frenada}. "
                     "Suéltalo con `!freno soltar` cuando quieras que siga.")
         plan = _plan_del_encargo(content)
+        repetido = self._encargo_repetido(content, author_id)
+        if repetido is not None:
+            return self._aviso_de_repeticion(repetido)
         job = self.media_jobs.create(
             requester_id=author_id,
             order=content,
@@ -805,9 +809,90 @@ class DiscordAdapter:
         # Productor tiene que enterarse ahora y no por su ausencia al final.
         return (
             "⚡ Producción multimedia iniciada como trabajo `" + job.id + "`. Voy a producir: "
-            + plan.resumen() + ". Sólo confirmaré y adjuntaré archivos reales en este DM. "
-            "Si el proceso se reinicia, el trabajo se reanuda desde el último paso verificado."
+            + plan.resumen() + ". " + self._coste_previsto(plan) + " Sólo confirmaré y adjuntaré "
+            "archivos reales en este DM. Si el proceso se reinicia, el trabajo se reanuda desde "
+            "el último paso verificado."
         )
+
+    # Frases con las que el Productor manda repetir a sabiendas. Sin ellas, un
+    # pedido idéntico al de hace un rato es casi siempre que lo anterior no
+    # sirvió, y volver a generarlo sólo quema crédito.
+    REPETIR_IGUALMENTE = ("de todos modos", "aun asi", "igualmente", "repite igual",
+                          "hazlo de nuevo igual", "aunque sea lo mismo")
+
+    # Cuánto dura la sospecha de repetición. Más allá, un pedido igual suele ser
+    # un encargo nuevo de verdad.
+    VENTANA_REPETICION_SEGUNDOS = 90 * 60
+
+    def _encargo_repetido(self, content: str, author_id: str):
+        """
+        El mismo pedido, palabra por palabra, con la entrega anterior todavía viva.
+
+        El 9 de septiembre se facturaron ~96 s de vídeo para entregar tres veces
+        lo mismo. La causa de fondo ya está arreglada —el pedido gobierna el
+        encargo—, pero un pedido idéntico sigue produciendo un resultado
+        idéntico, y eso ahora se dice antes de gastar en vez de después.
+        """
+        texto = _fold(content or "")
+        # Cualquier cambio en el texto ya libera la guarda —el pedido pasa a ser
+        # otro—, así que el consejo «añade "de todos modos"» funciona solo. Esta
+        # comprobación es para la vez siguiente: un pedido forzado repetido
+        # idéntico no puede volver a bloquearse pidiéndole que añada una frase
+        # que ya está escrita.
+        if any(frase in texto for frase in self.REPETIR_IGUALMENTE):
+            return None
+        ahora = time.time()
+        for trabajo in self.media_jobs.list_jobs():
+            if trabajo.requester_id != str(author_id) or trabajo.status != TERMINADO:
+                continue
+            if ahora - trabajo.updated_at > self.VENTANA_REPETICION_SEGUNDOS:
+                continue
+            if _fold(trabajo.order) != texto:
+                continue
+            # Sin ficheros vivos no hay nada que reutilizar: repetir es lo
+            # correcto, no un despilfarro.
+            if any(paso.is_done() and paso.path for paso in trabajo.steps):
+                return trabajo
+        return None
+
+    def _aviso_de_repeticion(self, trabajo) -> str:
+        """Lo que ya existe, y qué hace falta para que salga distinto."""
+        entregados = [Path(paso.path).name for paso in trabajo.steps
+                      if paso.is_done() and paso.path]
+        minutos = max(1, int((time.time() - trabajo.updated_at) // 60))
+        return (
+            f"↩️ Este pedido es palabra por palabra el del trabajo `{trabajo.id}`, de hace "
+            f"{minutos} minuto(s): {', '.join(entregados)}. No lo repito, porque saldría lo "
+            "mismo y el vídeo se factura por segundo.\n"
+            "Dime **qué cambia** —otra letra, otro número de segmentos, sólo la portada— o "
+            "nombra la obra por su identificador de Biblioteca. Si aun así lo quieres igual, "
+            "añade «de todos modos»."
+        )
+
+    def _coste_previsto(self, plan) -> str:
+        """
+        Lo que va a costar y lo que queda hoy, dicho antes de empezar.
+
+        El Productor abrió el hilo con «dispones de créditos, quince días» y el
+        encargo se planificó sin mirar el presupuesto ni mencionarlo. Cuesta una
+        línea y evita descubrir el tope a mitad.
+        """
+        try:
+            libro = SpendLedger.from_config(getattr(self.agent, "config", None))
+            if not libro.enabled:
+                return "Sin presupuesto declarado: nada acota este gasto."
+            segundos = plan.segmentos * 8 if plan.video else 0
+            cabe = libro.check("video_segundos", segundos) if segundos else None
+            aviso = "" if cabe is None or cabe else f" ⚠️ No cabe hoy: {cabe.reason}."
+            return (f"💳 Coste previsto: {segundos} s de vídeo"
+                    + (", 1 pista" if plan.cancion else "")
+                    + (", 1 imagen" if plan.portada else "")
+                    + f". Presupuesto de hoy — {libro.describe()}.{aviso}")
+        except Exception as exc:
+            # Nunca impedir el encargo por no poder contar el dinero, pero
+            # tampoco decir que cabe cuando no se ha podido comprobar.
+            logger.warning("No pude leer el presupuesto para el acuse: %s", type(exc).__name__)
+            return "💳 No he podido leer el presupuesto ahora mismo; no doy por hecho que quepa."
 
     def _spawn_media_job(self, job, author_id: str, author_name: str, content: str, channel) -> bool:
         """Lanza el trabajo si no hay ya una tarea viva para él. Devuelve si lo lanzó."""

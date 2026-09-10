@@ -207,3 +207,77 @@ def test_el_alcance_se_acusa_antes_de_gastar(tmp_path, monkeypatch):
     acuse = asyncio.run(_lanzar())
     assert "una portada" in acuse
     assert "segmento" not in acuse
+
+
+def _lanzar(adaptador, pedido):
+    """Acuse del lanzamiento, con la tarea cancelada: aquí interesa lo que dice, no lo que gasta."""
+    async def _correr():
+        acuse = adaptador._launch_dm_media_delivery("42", "Productor", pedido, CanalDoble())
+        for tarea in list(adaptador._workflow_tasks):
+            tarea.cancel()
+        return acuse
+
+    return asyncio.run(_correr())
+
+
+def test_el_mismo_pedido_dos_veces_no_se_paga_dos_veces(tmp_path, monkeypatch):
+    """~96 s de vídeo facturados para entregar tres veces lo mismo."""
+    adaptador, portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+    pedido = "hazme la canción y dos segmentos de vídeo"
+    _correr(adaptador, pedido)
+    gastado = len(portal.prompts_clip)
+
+    acuse = _lanzar(adaptador, pedido)
+
+    assert "palabra por palabra" in acuse
+    assert "de todos modos" in acuse, "negarse sin decir cómo seguir es dejar al Productor atascado"
+    assert len(portal.prompts_clip) == gastado, "el pedido repetido no puede volver a facturar"
+
+
+def test_repetir_a_sabiendas_sigue_siendo_posible(tmp_path, monkeypatch):
+    """
+    La guarda avisa; no decide por él.
+
+    Y el consejo que da tiene que seguir valiendo la segunda vez: un pedido
+    forzado, repetido idéntico, no puede volver a bloquearse diciéndole que
+    añada una frase que ya está escrita.
+    """
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+    pedido = "hazme la canción y dos segmentos de vídeo, de todos modos"
+    _correr(adaptador, pedido)
+
+    assert "Producción multimedia iniciada" in _lanzar(adaptador, pedido)
+
+
+def test_un_pedido_distinto_no_se_confunde_con_una_repeticion(tmp_path, monkeypatch):
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+    _correr(adaptador, "hazme la canción y dos segmentos de vídeo")
+
+    acuse = _lanzar(adaptador, "hazme la canción y dos segmentos de vídeo, con más percusión")
+
+    assert "Producción multimedia iniciada" in acuse
+
+
+def test_el_acuse_dice_lo_que_va_a_costar(tmp_path, monkeypatch):
+    """Se planificó el encargo sin mirar el presupuesto ni mencionarlo."""
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+
+    acuse = _lanzar(adaptador, "hazme la canción y dos segmentos de vídeo")
+
+    assert "16 s de vídeo" in acuse
+    assert "Presupuesto de hoy" in acuse
+
+
+def test_un_encargo_que_no_cabe_hoy_se_dice_al_empezar(tmp_path, monkeypatch):
+    """Descubrir el tope a mitad cuesta lo ya generado y una explicación incómoda."""
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
+    adaptador.agent.config = {"budget": {"enabled": True, "daily_limits": {"video_segundos": 4}}}
+
+    acuse = _lanzar(adaptador, "hazme dos segmentos de vídeo")
+
+    assert "No cabe hoy" in acuse
