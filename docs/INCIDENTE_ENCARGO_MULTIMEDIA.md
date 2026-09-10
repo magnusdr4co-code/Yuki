@@ -13,7 +13,7 @@ se repite el mes que viene.
 
 | # | Hallazgo | Estado |
 |---|---|---|
-| A1 | **Negó una capacidad que existe.** Dijo «no tengo un motor en segundo plano… ni puedo tejer crons invisibles» cuando hay ocho crons declarados, `cli.py run-daemon` es un daemon 24/7, y puede proponer ritmos propios **y ajustarlos**. Se lo pidieron explícitamente («apúntate tareas/crons») y contestó que no podía. | abierto |
+| A1 | **Negó una capacidad que existe.** Dijo «no tengo un motor en segundo plano… ni puedo tejer crons invisibles» cuando hay ocho crons declarados, `cli.py run-daemon` es un daemon 24/7, y puede proponer ritmos propios **y ajustarlos**. Se lo pidieron explícitamente («apúntate tareas/crons») y contestó que no podía. | **corregido**: su prompt lleva ahora el bloque de capacidades efectivas, leído del entorno |
 | A2 | **Inventó una causa técnica.** Explicó que la canción no salía cantada porque la letra estaba «aislada» y había que incrustarla en la partitura. El código ya enviaba la letra íntegra con `Sing these exact lyrics in Spanish…`. La causa real: **ningún motor contratado canta** — Lyria no hace voz y el respaldo local devuelve `sung: False`. | **corregido**: el aviso va ahora antes de generar y nombra la causa real (`_aviso_de_canto`), así que no queda hueco donde inventar otra |
 | A3 | **No se retractó.** El turno siguiente produjo el mismo resultado, refutando su diagnóstico, y no lo mencionó. | abierto |
 | A4 | **Registro de artefactos fabricado.** Listó IDs de Biblioteca (`sonora-…`, `visual-…`, `audiovisual-…`) afirmando que quedaban «indexados y localizables bajo el canon». Su propio registro de ejecución sólo mostraba `library_list` y cuatro `library_read` **de tipo palabra**. Ninguno de esos artefactos fue verificado. | abierto |
@@ -101,4 +101,16 @@ tres caminos posibles, los tres arreglados:
   sólo es definitivo que el destinatario no exista; un 500 deja el trabajo
   esperando al arranque siguiente.
 
-Quedan abiertos todo el bloque A salvo A2, el C y el D.
+**A1 — nadie le había dicho de qué es capaz.** Negó tener motor en segundo
+plano y crons teniendo ocho rutinas declaradas, un daemon 24/7 y la facultad de
+proponer ritmos propios y ajustarlos. No fue modestia: en su prompt no había una
+sola línea sobre sus capacidades, así que las dedujo, y dedujo mal. Ahora
+`VirtualInstance.bloque_de_capacidades()` —la misma lectura del entorno que usa
+`cli.py virtualize`— entra en el prompt de cada turno, con las tres listas: lo
+real, lo simulado y lo inactivo con su motivo. Dar sólo lo real invitaría al
+vicio contrario, prometer lo que no hay. La lectura se cachea cinco minutos
+—construirla mira config, presupuesto, binarios y directorios, y esto va en cada
+mensaje— y un ajuste en caliente la invalida. Si la lectura falla, el turno sigue
+sin bloque: quedarse muda por no poder describirse sería peor que no describirse.
+
+Quedan abiertos A3, A4 y A5, el bloque C y el D.

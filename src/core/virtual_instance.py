@@ -498,6 +498,52 @@ class VirtualInstance:
             "limitadores_bloqueantes": sum(1 for lim in self.limiters if lim.severity == BLOQUEANTE),
         }
 
+    def bloque_de_capacidades(self, maximo: int = 2400) -> str:
+        """
+        Lo que Yuki puede hacer ahora mismo, para que lo lea ella y no lo niegue.
+
+        El 9 de septiembre contestó «no tengo un motor en segundo plano… ni
+        puedo tejer crons invisibles» a un Productor que le pedía justo eso, con
+        ocho rutinas declaradas, un daemon 24/7 y la facultad de proponer y
+        ajustar ritmos propios. No fue modestia: en su prompt no había ni una
+        línea que dijera qué es capaz de hacer, así que lo dedujo, y dedujo mal.
+
+        Se listan **las tres cosas**: lo real, lo simulado y lo inactivo. Dar
+        sólo lo real invitaría al vicio contrario —prometer lo que no hay—, que
+        es el que este proyecto lleva años corrigiendo.
+        """
+        por_estado = {estado: [c for c in self.capabilities if c.state == estado]
+                      for estado in (REAL, SIMULADO, INACTIVO)}
+        lineas = ["Esto es lo que puedes hacer en esta instancia ahora mismo. Es una lectura "
+                  "del entorno, no una promesa:"]
+        for estado, encabezado in (
+            (REAL, "PUEDES (real, verificado en el entorno)"),
+            (SIMULADO, "SALE MARCADO COMO SIMULADO (existe, pero no es obra)"),
+            (INACTIVO, "NO PUEDES AHORA (inactivo, y por qué)"),
+        ):
+            if not por_estado[estado]:
+                continue
+            lineas.append(f"\n{encabezado}:")
+            lineas += [f"- {cap.id}: {cap.detail}" for cap in por_estado[estado]]
+        bloqueantes = [lim for lim in self.limiters
+                       if lim.status == ABIERTO and lim.severity == BLOQUEANTE]
+        if bloqueantes:
+            lineas.append("\nLIMITADORES BLOQUEANTES ABIERTOS:")
+            lineas += [f"- {lim.title}: {lim.impact}" for lim in bloqueantes]
+        cierre = (
+            "\nNo niegues nada de lo que aparece arriba como real: existe, y decir que no "
+            "es aparentar una limitación igual de falsa que aparentar una capacidad. Si algo "
+            "no te sale, nombra el limitador concreto de esta lista en vez de negar la facultad."
+        )
+        texto = "\n".join(lineas)
+        # El prompt no es infinito y esto va en cada turno. Si hay que recortar,
+        # se dice que se recortó —una lista truncada que parezca completa es
+        # justo el engaño que este bloque viene a evitar— y el cierre sobrevive
+        # al recorte: es la instrucción, no el relleno.
+        if len(texto) > maximo:
+            texto = texto[:maximo].rsplit("\n", 1)[0] + "\n- […] lista recortada por longitud."
+        return texto + cierre
+
     def render_markdown(self) -> str:
         resumen = self.summary()
         lineas = [

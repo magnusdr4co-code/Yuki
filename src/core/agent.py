@@ -202,9 +202,42 @@ class YukiAgent:
         """Ajustes públicos que el productor puede inspeccionar por DM."""
         return self.runtime_config.get_public()
 
+    # Cuánto vale una lectura de capacidades antes de repetirla. No es un
+    # adorno de rendimiento: la construye leyendo config, presupuesto, binarios
+    # del respaldo musical y el directorio de trabajos, y esto va en cada turno
+    # de conversación. Cinco minutos es más corto que cualquier cambio real de
+    # entorno y más largo que una ráfaga de mensajes.
+    CACHE_CAPACIDADES_SEGUNDOS = 300
+
+    def capability_block(self) -> str:
+        """
+        Qué puede hacer esta instancia, en texto, para su propio prompt.
+
+        Negó tener motor en segundo plano y crons teniendo ocho rutinas y un
+        daemon 24/7: nadie se lo había dicho nunca. Si la lectura falla, se
+        devuelve vacío y el turno sigue —quedarse muda por no poder describirse
+        sería peor que no describirse—, pero queda en el log.
+        """
+        ahora = time.time()
+        sellado, texto = getattr(self, "_capacidades_cache", (0.0, ""))
+        if sellado and ahora - sellado < self.CACHE_CAPACIDADES_SEGUNDOS:
+            return texto
+        try:
+            from .virtual_instance import VirtualInstance
+
+            texto = VirtualInstance(self.config).bloque_de_capacidades()
+        except Exception as exc:
+            logger.warning("No pude leer las capacidades para el prompt: %s", type(exc).__name__)
+            texto = ""
+        self._capacidades_cache = (ahora, texto)
+        return texto
+
     def _reload_runtime_clients(self) -> None:
         """Recarga sólo los clientes afectados por el overlay persistente."""
         self.config = self.runtime_config.effective_config()
+        # Un ajuste en caliente puede encender o apagar una capacidad; el bloque
+        # que la describe no puede seguir contando lo de hace cinco minutos.
+        self._capacidades_cache = (0.0, "")
         self.llm_router = LLMRouter(config=self.config)
         self.model_armor = ModelArmorClient.from_config(self.config)
         # El albedrío se reajusta con el resto: cambiar la espontaneidad por DM
@@ -439,7 +472,8 @@ class YukiAgent:
             active_role=active_role,
             vital_state_block=self.vital_state.to_natural_language(),
             echo_impulse=self.echo_ritual.last_echo,
-            evolution_context=self.growth_journal.get_evolution_context()
+            evolution_context=self.growth_journal.get_evolution_context(),
+            capability_block=self.capability_block(),
         )
 
         # El ancla no va en cada turno: sólo cuando hay evidencia de deriva. Se
