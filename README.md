@@ -227,6 +227,7 @@ contratar servicios de pago o de prometer una demo.
 | Copia verificada de memoria y canon | ✅ Real | `src/tools/backup.py`: instantánea coherente de SQLite + `integrity_check`, tras la síntesis diaria. Sale de la instancia sólo con `BACKUP_GCS_BUCKET`, y si no lo declara **lo dice** |
 | Presupuesto diario de gasto | ✅ Real | `src/core/spend_budget.py`: vídeo, imagen, música y voz se comprueban **antes** de llamar al proveedor; el texto se anota pero nunca se bloquea. `python3 cli.py spend` |
 | Cola durable de producción multimedia | ✅ Real | `src/tools/media_jobs.py`: cada paso facturable se persiste antes de gastar y se reanuda tras un reinicio sin regenerar lo verificado |
+| Cotejo de lo dicho con lo hecho | ✅ Real | `src/core/cotejo.py`: una cita de Biblioteca que no está en el índice, o un «queda guardado» en un turno sin escritura, se señalan en la propia respuesta del DM |
 | Sabe de qué es capaz | ✅ Real | `VirtualInstance.bloque_de_capacidades()` entra en su prompt en cada turno —real, simulado e inactivo con su motivo—: negar una capacidad que existe es tan falso como prometer una que no |
 | El pedido gobierna el encargo | ✅ Real | `src/adapters/encargo.py`: qué piezas —canción, portada, vídeo—, cuántos segmentos y qué indicaciones llegan al prompt salen del texto del pedido, no de una tupla fija |
 | Gemelo virtual de la instancia | ✅ Real | `python3 cli.py virtualize`: capacidades efectivas y limitadores, sin red. Réplica local en `deploy/virtual/` |

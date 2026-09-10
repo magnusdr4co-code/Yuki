@@ -60,6 +60,16 @@ plan es determinista sobre el mismo texto, y al reanudar el texto es el del trab
 guardado: los identificadores de paso salen idénticos y un reinicio sigue costando sólo lo
 que falta.
 
+Y la respuesta se coteja con lo ejecutado antes de salir. Si el texto cita un
+identificador de Biblioteca que no está en el índice, o dice que algo «queda
+guardado» en un turno donde no se llamó a ninguna herramienta de escritura, la
+discrepancia se publica junto a la respuesta, encima del registro de ejecución:
+los recibos ya eran honestos, pero lo que lee el Productor es la prosa. La
+resolución de identificadores es por prefijo y sobre el índice completo, no
+sobre las cien entradas que devuelve `library_list`; un cotejo con falsos
+positivos deja de leerse a los tres avisos. La política del turno lo advierte
+antes, para que el caso normal sea no tener nada que corregir.
+
 ## Ritmos y libre albedrío
 
 `!albedrio` muestra el carácter de la iniciativa —espontaneidad, audacia,

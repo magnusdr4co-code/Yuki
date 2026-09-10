@@ -136,6 +136,17 @@ class CreationLibrary:
             entries = sorted(self._load().values(), key=self._cuando, reverse=True)
             return {"total": len(entries), "entries": entries[:100], "limited": len(entries) > 100}
 
+    def known_ids(self) -> set:
+        """
+        Todos los identificadores archivados, sin el recorte de `list_entries`.
+
+        Existe para cotejar citas: con la lista recortada a cien, una obra
+        antigua citada correctamente parecería inventada, y un cotejo que da
+        falsos positivos deja de leerse a los tres avisos.
+        """
+        with self._lock:
+            return set(self._load().keys())
+
     def _cuando(self, item) -> float:
         """Cuándo se archivó. Las entradas viejas no lo llevan: vale su fichero."""
         marca = item.get("created_at")

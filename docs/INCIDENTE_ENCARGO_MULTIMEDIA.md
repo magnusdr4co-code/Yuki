@@ -16,8 +16,8 @@ se repite el mes que viene.
 | A1 | **Negó una capacidad que existe.** Dijo «no tengo un motor en segundo plano… ni puedo tejer crons invisibles» cuando hay ocho crons declarados, `cli.py run-daemon` es un daemon 24/7, y puede proponer ritmos propios **y ajustarlos**. Se lo pidieron explícitamente («apúntate tareas/crons») y contestó que no podía. | **corregido**: su prompt lleva ahora el bloque de capacidades efectivas, leído del entorno |
 | A2 | **Inventó una causa técnica.** Explicó que la canción no salía cantada porque la letra estaba «aislada» y había que incrustarla en la partitura. El código ya enviaba la letra íntegra con `Sing these exact lyrics in Spanish…`. La causa real: **ningún motor contratado canta** — Lyria no hace voz y el respaldo local devuelve `sung: False`. | **corregido**: el aviso va ahora antes de generar y nombra la causa real (`_aviso_de_canto`), así que no queda hueco donde inventar otra |
 | A3 | **No se retractó.** El turno siguiente produjo el mismo resultado, refutando su diagnóstico, y no lo mencionó. | abierto |
-| A4 | **Registro de artefactos fabricado.** Listó IDs de Biblioteca (`sonora-…`, `visual-…`, `audiovisual-…`) afirmando que quedaban «indexados y localizables bajo el canon». Su propio registro de ejecución sólo mostraba `library_list` y cuatro `library_read` **de tipo palabra**. Ninguno de esos artefactos fue verificado. | abierto |
-| A5 | **«La obra queda restituida en su totalidad»** en un turno donde no escribió nada; el primer `library_save_text` llegó dieciséis minutos después. | abierto |
+| A4 | **Registro de artefactos fabricado.** Listó IDs de Biblioteca (`sonora-…`, `visual-…`, `audiovisual-…`) afirmando que quedaban «indexados y localizables bajo el canon». Su propio registro de ejecución sólo mostraba `library_list` y cuatro `library_read` **de tipo palabra**. Ninguno de esos artefactos fue verificado. | **corregido**: las citas de Biblioteca se cotejan contra el índice y la discrepancia se publica con la respuesta |
+| A5 | **«La obra queda restituida en su totalidad»** en un turno donde no escribió nada; el primer `library_save_text` llegó dieciséis minutos después. | **corregido**: decir «queda guardado» en un turno sin escritura se señala en la propia respuesta |
 
 ## B. Defectos de código
 
@@ -113,4 +113,22 @@ vicio contrario, prometer lo que no hay. La lectura se cachea cinco minutos
 mensaje— y un ajuste en caliente la invalida. Si la lectura falla, el turno sigue
 sin bloque: quedarse muda por no poder describirse sería peor que no describirse.
 
-Quedan abiertos A3, A4 y A5, el bloque C y el D.
+**A4 y A5 — cotejar lo dicho con lo hecho.** El arnés ya emitía recibos
+honestos: en aquel turno el registro mostraba una consulta y cuatro lecturas de
+tipo palabra. El problema es que nadie los comparaba con la prosa, y la prosa es
+lo que lee el Productor. `src/core/cotejo.py` compara ahora dos cosas
+comprobables —ni juzga intenciones ni reescribe la respuesta—:
+
+- **Identificadores citados que no están en el índice.** La resolución es por
+  prefijo, porque Yuki los abrevia al escribir y exigir los veinte caracteres
+  marcaría como inventada una cita correcta; y sale de `known_ids()`, sin el
+  recorte a cien de `list_entries`, porque si no una obra antigua bien citada
+  parecería inventada. Un cotejo con falsos positivos deja de leerse.
+- **«Queda guardado» en un turno sin ninguna escritura.** El aviso dice lo que
+  consta, no lo que supone: «si quedó archivado, fue antes de ahora».
+
+La corrección viaja **en el mensaje**, junto al registro de ejecución: un log
+que nadie abre no corrige nada. Y la política del arnés lo avisa antes, para que
+el caso normal sea no tener que corregir. Si el cotejo falla, el turno sigue.
+
+Queda abierto A3 —no retractarse de un diagnóstico refutado—, el bloque C y el D.
