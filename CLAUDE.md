@@ -52,7 +52,9 @@ src/core/       agente, albedrío (agency, spark, rituals), identidad
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 media_jobs, web_search
-src/adapters/   Discord (el que importa), Telegram (aún simulado)
+src/adapters/   Discord (el que importa), Telegram (aún simulado); `encargo.py`
+                traduce el pedido en plan de producción (qué piezas, cuántos
+                segmentos, qué indicaciones van al prompt)
 src/web/        Salón + /metrics
 src/cli/        los comandos por temas (gobierno, mente, operacion); `cli.py`
                 en la raíz sólo declara argumentos y reparte

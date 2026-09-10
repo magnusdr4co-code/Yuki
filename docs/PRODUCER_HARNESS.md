@@ -48,6 +48,18 @@ de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, 
 intento ni cerrar el encargo. Si Lyria no sirve la pista, el respaldo local entrega una
 maqueta instrumental declarada como tal: la entrega nunca llama canción a lo que no canta.
 
+Qué pasos tiene el encargo lo decide el pedido, no una constante. `src/adapters/encargo.py`
+lee el texto y arma el plan: si nombra piezas —canción, portada, vídeo— se producen sólo
+ésas, y si no nombra ninguna sale el encargo completo de siempre; «sin vídeo» no encarga
+vídeo; «dos segmentos» paga dos y no cuatro; y las indicaciones literales del pedido viajan
+al final de cada prompt, que es lo que faltaba para que «esta vez con más percusión»
+pudiera sonar distinto. La portada tiene paso propio y una que el proveedor devuelva como
+`simulated` no se entrega como obra. El acuse inicial dice qué se va a producir, antes de
+gastar, para que lo que no vaya a salir se sepa entonces y no por su ausencia al final. El
+plan es determinista sobre el mismo texto, y al reanudar el texto es el del trabajo
+guardado: los identificadores de paso salen idénticos y un reinicio sigue costando sólo lo
+que falta.
+
 ## Ritmos y libre albedrío
 
 `!albedrio` muestra el carácter de la iniciativa —espontaneidad, audacia,

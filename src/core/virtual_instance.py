@@ -223,6 +223,15 @@ class VirtualInstance:
             f"Cola durable en {self.data_dir / 'media_jobs'}; "
             f"{pendientes} trabajo(s) reanudable(s) ahora mismo",
         )
+        # Se declara porque durante meses no fue verdad: los pasos eran una
+        # tupla fija y el texto del pedido no cambiaba nada, así que pedir una
+        # portada no daba portada. Quien lea esta tabla tiene que poder saber
+        # si el encargo obedece o no.
+        self._cap(
+            "medios.alcance", "Medios", REAL,
+            "El pedido gobierna el encargo (`src/adapters/encargo.py`): qué piezas "
+            "—canción, portada, vídeo—, cuántos segmentos y qué indicaciones llegan al prompt",
+        )
 
     def _build_presencia(self) -> None:
         self._cap(

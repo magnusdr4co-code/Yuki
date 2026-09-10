@@ -227,6 +227,7 @@ contratar servicios de pago o de prometer una demo.
 | Copia verificada de memoria y canon | ✅ Real | `src/tools/backup.py`: instantánea coherente de SQLite + `integrity_check`, tras la síntesis diaria. Sale de la instancia sólo con `BACKUP_GCS_BUCKET`, y si no lo declara **lo dice** |
 | Presupuesto diario de gasto | ✅ Real | `src/core/spend_budget.py`: vídeo, imagen, música y voz se comprueban **antes** de llamar al proveedor; el texto se anota pero nunca se bloquea. `python3 cli.py spend` |
 | Cola durable de producción multimedia | ✅ Real | `src/tools/media_jobs.py`: cada paso facturable se persiste antes de gastar y se reanuda tras un reinicio sin regenerar lo verificado |
+| El pedido gobierna el encargo | ✅ Real | `src/adapters/encargo.py`: qué piezas —canción, portada, vídeo—, cuántos segmentos y qué indicaciones llegan al prompt salen del texto del pedido, no de una tupla fija |
 | Gemelo virtual de la instancia | ✅ Real | `python3 cli.py virtualize`: capacidades efectivas y limitadores, sin red. Réplica local en `deploy/virtual/` |
 | Adaptador Discord | ✅ Real | WebSocket saliente; responde a menciones y mensajes directos con `discord.py` |
 | Adaptador Telegram | ⚠️ Simulado | Registra en log; aún no usa `python-telegram-bot` |

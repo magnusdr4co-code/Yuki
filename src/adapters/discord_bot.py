@@ -24,6 +24,7 @@ from .discord_intents import (
     looks_like_media_delivery_request as _looks_like_media_delivery_request,
 )
 from .discord_text import split_discord_text
+from .encargo import leer_encargo
 from ..core.brake import Brake
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, describe_job as describe_media_job
@@ -43,12 +44,12 @@ MEDIA_STORYBOARD = (
     "Salida: agua, niebla y una luz contenida sobre el metal; final pausado, sin corte brusco.",
 )
 
-# Pasos facturables del encargo multimedia, en orden de ejecución.
-MEDIA_JOB_STEPS = (
-    [("cancion", "cancion")]
-    + [(f"clip_{i}", "clip") for i in range(1, len(MEDIA_STORYBOARD) + 1)]
-    + [("montaje", "montaje"), ("entrega", "entrega")]
-)
+# Pasos facturables del encargo, ya no fijos: los deriva `encargo.leer_encargo`
+# del texto del pedido, porque una tupla constante era la razón de que pedir una
+# portada no produjera portada y de que «esta vez con X» devolviera lo mismo.
+def _plan_del_encargo(pedido: str):
+    """Plan del pedido. Determinista sobre el mismo texto: reanudar lo recompone."""
+    return leer_encargo(pedido, len(MEDIA_STORYBOARD))
 
 def _parse_id_set(raw_env: str) -> Set[str]:
     if not raw_env:
@@ -792,16 +793,19 @@ class DiscordAdapter:
         if frenada:
             return (f"🛑 No genero medios ahora mismo: {frenada}. "
                     "Suéltalo con `!freno soltar` cuando quieras que siga.")
+        plan = _plan_del_encargo(content)
         job = self.media_jobs.create(
             requester_id=author_id,
             order=content,
             channel_id=getattr(origin_channel, "id", None),
-            steps=MEDIA_JOB_STEPS,
+            steps=plan.steps(),
         )
         self._spawn_media_job(job, author_id, author_name, content, origin_channel)
+        # El alcance se acusa antes de gastar: si el pedido no incluye algo, el
+        # Productor tiene que enterarse ahora y no por su ausencia al final.
         return (
-            "⚡ Producción multimedia iniciada como trabajo `" + job.id + "`. Generaré primero la canción "
-            "y después los segmentos de vídeo; sólo confirmaré y adjuntaré archivos reales en este DM. "
+            "⚡ Producción multimedia iniciada como trabajo `" + job.id + "`. Voy a producir: "
+            + plan.resumen() + ". Sólo confirmaré y adjuntaré archivos reales en este DM. "
             "Si el proceso se reinicia, el trabajo se reanuda desde el último paso verificado."
         )
 
@@ -961,22 +965,222 @@ class DiscordAdapter:
         return (f"{cabecera} **Saldrá instrumental, no cantada**, y además sin Vertex "
                 "configurado sólo puedo darte la partitura propia sintetizada en local.")
 
+    async def _paso_cancion(self, job, plan, lyrics: str, lyrics_entry, report, channel) -> None:
+        """Genera y entrega la canción. Idempotente: un paso verificado no se repite."""
+        song_step = job.ensure_step("cancion", "cancion")
+        if song_step.is_done():
+            await report(f"🎵 Reanudo el trabajo `{job.id}`: la canción ya estaba generada y verificada; no la regenero.")
+        elif song_step.exhausted():
+            await report(f"⚠️ No repito la canción: ya falló {song_step.attempts} veces ({song_step.error}).")
+        else:
+            # Lo que no se puede hacer se dice **antes** de gastar, no al
+            # entregar. En el incidente del 9 de septiembre esto se avisaba
+            # después de generar, así que el Productor pidió la misma canción
+            # cantada cuatro veces —y Yuki llegó a inventar una explicación
+            # técnica falsa para justificar por qué salía instrumental—.
+            # La causa es única y no depende del prompt: ningún motor
+            # contratado canta.
+            await report(self._aviso_de_canto(lyrics_entry))
+            titulo = (lyrics_entry or {}).get("title") or "Canción sin título"
+            song_prompt = plan.con_matices(
+                "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
+                "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
+                "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
+                "and chorus structure:\n" + lyrics[:12000]
+            )
+            song_step.attempts += 1
+            self.media_jobs.save(job)
+            song = await self.agent.nous_portal.generate_music_flow(
+                title=f"{titulo} — voz", prompt=song_prompt,
+                engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
+            )
+            song_path = song.get("local_path") if song.get("status") == "success" else None
+            if song_path and Path(song_path).is_file():
+                # Lyria canta; el respaldo local no. La nota viaja con el paso
+                # para que la entrega —incluso tras un reinicio— no llame
+                # canción a una maqueta instrumental.
+                song_step.mark_done(song_path, note=(
+                    "🎵 Canción con letra — archivo generado" if song.get("sung")
+                    else "🎼 " + (song.get("note") or "Maqueta local: no es una canción cantada.")
+                ))
+                self.media_jobs.save(job)
+                await asyncio.to_thread(self.agent.creation_library.inventory)
+            elif song.get("budget_exceeded"):
+                # Un tope de presupuesto no es un fallo del paso: mañana el
+                # mismo trabajo cabe. No gasta intento ni marca fallo.
+                song_step.attempts -= 1
+                self.media_jobs.save(job)
+                await report(f"💳 Canción aplazada por presupuesto: {song.get('error')}")
+            else:
+                detalle = song.get("error") or song.get("note") or "sin detalle"
+                song_step.mark_failed(detalle)
+                self.media_jobs.save(job)
+                await report(f"⚠️ No se generó canción: {detalle}")
+        if song_step.is_done() and not song_step.delivered:
+            if await self._send_file(channel, song_step.path,
+                                     song_step.note or "🎵 Pista de audio generada"):
+                song_step.delivered = True
+                self.media_jobs.save(job)
+            else:
+                await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
+
+    async def _paso_portada(self, job, plan, lyrics_entry, report, channel) -> None:
+        """
+        Portada única del sencillo, cuando el pedido la nombra.
+
+        `create_single_cover` existía desde hacía meses y no había paso que lo
+        llamara: se pidió una portada, no se produjo, y nadie dijo que no se iba
+        a producir. Eso es lo que arregla este paso.
+        """
+        portada = job.ensure_step("portada", "portada")
+        if portada.is_done():
+            await report(f"🎨 La portada del trabajo `{job.id}` ya estaba generada y verificada; no la regenero.")
+        elif portada.exhausted():
+            await report(f"⚠️ No repito la portada: ya falló {portada.attempts} veces ({portada.error}).")
+        else:
+            titulo = (lyrics_entry or {}).get("title") or "Sencillo"
+            portada.attempts += 1
+            self.media_jobs.save(job)
+            arte = await self.agent.media_creator.create_single_cover(
+                track_title=titulo,
+                visual_concept=plan.con_matices(
+                    "Portada de sencillo: agua, hierro e invierno; escarcha sobre acero oxidado."
+                ),
+                lighting="urushi",
+            )
+            ruta = arte.get("local_path") if arte.get("status") == "success" else None
+            # Una portada simulada no es una portada. `create_single_cover`
+            # devuelve `simulated` precisamente para que esto se pueda distinguir
+            # sin abrir el fichero, y aquí se distingue.
+            if ruta and Path(ruta).is_file() and not arte.get("simulated"):
+                portada.mark_done(ruta)
+                self.media_jobs.save(job)
+                await asyncio.to_thread(self.agent.creation_library.inventory)
+            elif arte.get("budget_exceeded"):
+                portada.attempts -= 1
+                self.media_jobs.save(job)
+                await report(f"💳 Portada aplazada por presupuesto: {arte.get('error')}")
+            else:
+                detalle = arte.get("error") or arte.get("note") or (
+                    "el proveedor devolvió un marcador simulado" if arte.get("simulated") else "sin detalle")
+                portada.mark_failed(detalle)
+                self.media_jobs.save(job)
+                await report(f"⚠️ No se generó portada: {detalle}")
+        if portada.is_done() and not portada.delivered:
+            if await self._send_file(channel, portada.path, "🎨 Portada del sencillo"):
+                portada.delivered = True
+                self.media_jobs.save(job)
+            else:
+                await report("⚠️ La portada se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
+
+    async def _pasos_video(self, job, plan, report, channel) -> None:
+        """Segmentos de vídeo y montaje. Un segmento verificado no se vuelve a pagar."""
+        script_entry = self._library_entry("palabra", ("guion", "audiovisual", "video"))
+        script = ""
+        if script_entry:
+            script = self.agent.creation_library.read_entry(script_entry["id"]).get("content", "")
+        visual_entry = self._library_entry("visual", ("herrumbre", "salon", "escarcha"))
+        visual_path = self._library_file(visual_entry)
+        guion = MEDIA_STORYBOARD[:plan.segmentos]
+        hechos = sum(1 for i in range(1, plan.segmentos + 1)
+                     if job.ensure_step(f"clip_{i}", "clip").is_done())
+        if hechos:
+            await report(f"🎬 {hechos} de {plan.segmentos} segmentos ya estaban verificados; sólo genero los que faltan.")
+        else:
+            await report(f"🎬 Generando {plan.segmentos} segmento(s) de 8 s y ensamblándolos; "
+                         "no sustituiré el vídeo por un marcador.")
+        clips: List[str] = []
+        for index, beat in enumerate(guion, 1):
+            clip_step = job.ensure_step(f"clip_{index}", "clip")
+            if clip_step.is_done():
+                clips.append(clip_step.path)
+                continue
+            if clip_step.exhausted():
+                await report(f"⚠️ Segmento {index} descartado tras {clip_step.attempts} intentos: {clip_step.error}")
+                break
+            prompt = plan.con_matices(
+                "Cinematic 16:9, 24 fps, slow meditative camera, no fast cuts. " + beat +
+                " Guion de referencia: " + (script[:2500] or "Herrumbre y Escarcha, agua, hierro e invierno.")
+            )
+            clip_step.attempts += 1
+            self.media_jobs.save(job)
+            video = await self.agent.nous_portal.generate_video_frontier(
+                prompt=prompt, duration_seconds=8, aspect_ratio="16:9", image_path=visual_path,
+            )
+            path = video.get("local_path") if video.get("status") == "success" else None
+            if path and Path(path).is_file():
+                clip_step.mark_done(path)
+                self.media_jobs.save(job)
+                clips.append(path)
+            elif video.get("budget_exceeded"):
+                clip_step.attempts -= 1
+                self.media_jobs.save(job)
+                await report(
+                    f"💳 Segmento {index} aplazado por presupuesto: {video.get('error')}. "
+                    "El trabajo queda pendiente; no se pierde lo generado."
+                )
+                break
+            else:
+                detalle = video.get("error") or video.get("note") or "sin detalle"
+                clip_step.mark_failed(detalle)
+                self.media_jobs.save(job)
+                await report(f"⚠️ Segmento {index} no generado: {detalle}")
+                break
+
+        montaje = job.ensure_step("montaje", "montaje")
+        final_video = montaje.path if montaje.is_done() else None
+        if final_video is None and len(clips) == plan.segmentos:
+            final_video = await asyncio.to_thread(self._concat_videos, clips)
+            if final_video:
+                montaje.mark_done(final_video)
+            else:
+                montaje.mark_failed("ffmpeg no produjo el vídeo final")
+            self.media_jobs.save(job)
+        if final_video:
+            await asyncio.to_thread(self.agent.creation_library.inventory)
+            if not montaje.delivered:
+                pie = f"🎬 Vídeo final — {plan.segmentos * 8} s, {plan.segmentos} segmento(s) ensamblados"
+                if await self._send_file(channel, final_video, pie):
+                    montaje.delivered = True
+                    self.media_jobs.save(job)
+                else:
+                    await report("⚠️ El vídeo se generó, pero Discord rechazó el adjunto; no lo doy por entregado.")
+        elif clips:
+            await report("⚠️ No pude ensamblar el vídeo final; adjunto sólo los segmentos reales disponibles.")
+            for index, path in enumerate(clips, 1):
+                clip_step = job.ensure_step(f"clip_{index}", "clip")
+                if clip_step.delivered:
+                    continue
+                if await self._send_file(channel, path, f"🎬 Segmento {index}"):
+                    clip_step.delivered = True
+                    self.media_jobs.save(job)
+        else:
+            await report("⚠️ No se generó ningún segmento de vídeo; no hay vídeo que adjuntar.")
+
     async def _run_dm_media_delivery(self, author_id: str, author_name: str, content: str, channel,
                                      job=None) -> None:
         """
-        Genera canción cantada y vídeo desde obras existentes; entrega sólo adjuntos reales.
+        Produce lo que el pedido nombra desde obras existentes; entrega sólo adjuntos reales.
 
         El trabajo es durable: cada paso se persiste en cuanto tiene fichero
         verificado, así que un reinicio a mitad no repite lo ya generado ni deja
         el encargo perdido. Reanudar cuesta únicamente los pasos que faltan.
+
+        Qué pasos hay lo decide `encargo.leer_encargo` sobre el texto del pedido
+        —antes era una tupla fija, y por eso pedir una portada no daba portada—.
         """
         async def report(text: str) -> None:
             await self._send_long(channel, text)
 
+        # El plan sale del texto del pedido, y al reanudar `content` es
+        # `job.order` —el mismo texto—, así que los identificadores de paso
+        # salen idénticos. Si no lo fueran, la reanudación daría por «no hecho»
+        # lo ya pagado y volvería a facturarlo.
+        plan = _plan_del_encargo(content)
         if job is None:
             job = self.media_jobs.create(
                 requester_id=author_id, order=content,
-                channel_id=getattr(channel, "id", None), steps=MEDIA_JOB_STEPS,
+                channel_id=getattr(channel, "id", None), steps=plan.steps(),
             )
         job.channel_id = str(getattr(channel, "id", "")) or job.channel_id
 
@@ -994,143 +1198,12 @@ class DiscordAdapter:
                 await report("❌ La letra recuperada es demasiado breve para una canción; no la presentaré como canto completo.")
                 return
 
-            # --- Paso 1: canción -------------------------------------------------
-            song_step = job.ensure_step("cancion", "cancion")
-            if song_step.is_done():
-                await report(f"🎵 Reanudo el trabajo `{job.id}`: la canción ya estaba generada y verificada; no la regenero.")
-            elif song_step.exhausted():
-                await report(f"⚠️ No repito la canción: ya falló {song_step.attempts} veces ({song_step.error}).")
-            else:
-                # Lo que no se puede hacer se dice **antes** de gastar, no al
-                # entregar. En el incidente del 9 de septiembre esto se avisaba
-                # después de generar, así que el Productor pidió la misma canción
-                # cantada cuatro veces —y Yuki llegó a inventar una explicación
-                # técnica falsa para justificar por qué salía instrumental—.
-                # La causa es única y no depende del prompt: ningún motor
-                # contratado canta.
-                await report(self._aviso_de_canto(lyrics_entry))
-                song_prompt = (
-                    "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
-                    "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
-                    "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
-                    "and chorus structure:\n" + lyrics[:12000]
-                )
-                song_step.attempts += 1
-                self.media_jobs.save(job)
-                song = await self.agent.nous_portal.generate_music_flow(
-                    title="Herrumbre y Escarcha — voz", prompt=song_prompt,
-                    engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
-                )
-                song_path = song.get("local_path") if song.get("status") == "success" else None
-                if song_path and Path(song_path).is_file():
-                    # Lyria canta; el respaldo local no. La nota viaja con el paso
-                    # para que la entrega —incluso tras un reinicio— no llame
-                    # canción a una maqueta instrumental.
-                    song_step.mark_done(song_path, note=(
-                        "🎵 Canción con letra — archivo generado" if song.get("sung")
-                        else "🎼 " + (song.get("note") or "Maqueta local: no es una canción cantada.")
-                    ))
-                    self.media_jobs.save(job)
-                    await asyncio.to_thread(self.agent.creation_library.inventory)
-                elif song.get("budget_exceeded"):
-                    # Un tope de presupuesto no es un fallo del paso: mañana el
-                    # mismo trabajo cabe. No gasta intento ni marca fallo.
-                    song_step.attempts -= 1
-                    self.media_jobs.save(job)
-                    await report(f"💳 Canción aplazada por presupuesto: {song.get('error')}")
-                else:
-                    detalle = song.get("error") or song.get("note") or "sin detalle"
-                    song_step.mark_failed(detalle)
-                    self.media_jobs.save(job)
-                    await report(f"⚠️ No se generó canción: {detalle}")
-            if song_step.is_done() and not song_step.delivered:
-                if await self._send_file(channel, song_step.path,
-                                         song_step.note or "🎵 Pista de audio generada"):
-                    song_step.delivered = True
-                    self.media_jobs.save(job)
-                else:
-                    await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
-
-            # --- Paso 2: segmentos de vídeo --------------------------------------
-            script_entry = self._library_entry("palabra", ("guion", "audiovisual", "video"))
-            script = ""
-            if script_entry:
-                script = self.agent.creation_library.read_entry(script_entry["id"]).get("content", "")
-            visual_entry = self._library_entry("visual", ("herrumbre", "salon", "escarcha"))
-            visual_path = self._library_file(visual_entry)
-            hechos = sum(1 for i in range(1, len(MEDIA_STORYBOARD) + 1)
-                         if job.ensure_step(f"clip_{i}", "clip").is_done())
-            if hechos:
-                await report(f"🎬 {hechos} de {len(MEDIA_STORYBOARD)} segmentos ya estaban verificados; sólo genero los que faltan.")
-            else:
-                await report("🎬 Generando cuatro segmentos de 8 s y ensamblándolos; no sustituiré el vídeo por un marcador.")
-            clips: List[str] = []
-            for index, beat in enumerate(MEDIA_STORYBOARD, 1):
-                clip_step = job.ensure_step(f"clip_{index}", "clip")
-                if clip_step.is_done():
-                    clips.append(clip_step.path)
-                    continue
-                if clip_step.exhausted():
-                    await report(f"⚠️ Segmento {index} descartado tras {clip_step.attempts} intentos: {clip_step.error}")
-                    break
-                prompt = (
-                    "Cinematic 16:9, 24 fps, slow meditative camera, no fast cuts. " + beat +
-                    " Guion de referencia: " + (script[:2500] or "Herrumbre y Escarcha, agua, hierro e invierno.")
-                )
-                clip_step.attempts += 1
-                self.media_jobs.save(job)
-                video = await self.agent.nous_portal.generate_video_frontier(
-                    prompt=prompt, duration_seconds=8, aspect_ratio="16:9", image_path=visual_path,
-                )
-                path = video.get("local_path") if video.get("status") == "success" else None
-                if path and Path(path).is_file():
-                    clip_step.mark_done(path)
-                    self.media_jobs.save(job)
-                    clips.append(path)
-                elif video.get("budget_exceeded"):
-                    clip_step.attempts -= 1
-                    self.media_jobs.save(job)
-                    await report(
-                        f"💳 Segmento {index} aplazado por presupuesto: {video.get('error')}. "
-                        "El trabajo queda pendiente; no se pierde lo generado."
-                    )
-                    break
-                else:
-                    detalle = video.get("error") or video.get("note") or "sin detalle"
-                    clip_step.mark_failed(detalle)
-                    self.media_jobs.save(job)
-                    await report(f"⚠️ Segmento {index} no generado: {detalle}")
-                    break
-
-            # --- Paso 3: montaje y entrega ---------------------------------------
-            montaje = job.ensure_step("montaje", "montaje")
-            final_video = montaje.path if montaje.is_done() else None
-            if final_video is None and len(clips) == len(MEDIA_STORYBOARD):
-                final_video = await asyncio.to_thread(self._concat_videos, clips)
-                if final_video:
-                    montaje.mark_done(final_video)
-                else:
-                    montaje.mark_failed("ffmpeg no produjo el vídeo final")
-                self.media_jobs.save(job)
-            if final_video:
-                await asyncio.to_thread(self.agent.creation_library.inventory)
-                if not montaje.delivered:
-                    if await self._send_file(channel, final_video, "🎬 Vídeo final — 32 s, cuatro segmentos ensamblados"):
-                        montaje.delivered = True
-                        self.media_jobs.save(job)
-                    else:
-                        await report("⚠️ El vídeo se generó, pero Discord rechazó el adjunto; no lo doy por entregado.")
-            elif clips:
-                await report("⚠️ No pude ensamblar el vídeo final; adjunto sólo los segmentos reales disponibles.")
-                for index, path in enumerate(clips, 1):
-                    clip_step = job.ensure_step(f"clip_{index}", "clip")
-                    if clip_step.delivered:
-                        continue
-                    if await self._send_file(channel, path, f"🎬 Segmento {index}"):
-                        clip_step.delivered = True
-                        self.media_jobs.save(job)
-            else:
-                await report("⚠️ No se generó ningún segmento de vídeo; no hay vídeo que adjuntar.")
+            if plan.cancion:
+                await self._paso_cancion(job, plan, lyrics, lyrics_entry, report, channel)
+            if plan.portada:
+                await self._paso_portada(job, plan, lyrics_entry, report, channel)
+            if plan.video:
+                await self._pasos_video(job, plan, report, channel)
 
             # El trabajo sólo se cierra cuando no queda nada por hacer. Cerrarlo
             # con pasos pendientes sería dar por entregado lo que no existe, y

@@ -60,7 +60,7 @@ class MediaStep:
     """Un paso facturable e idempotente del trabajo."""
 
     id: str
-    kind: str                      # cancion | clip | montaje | entrega
+    kind: str                      # cancion | portada | clip | montaje | entrega
     status: str = PENDIENTE
     path: Optional[str] = None
     error: Optional[str] = None

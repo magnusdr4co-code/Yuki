@@ -24,8 +24,8 @@ se repite el mes que viene.
 | # | Hallazgo | Estado |
 |---|---|---|
 | B6 | **El encargo no puede recoger una letra nueva.** `_library_entry` devuelve la **primera** entrada que casa por palabra clave: ni prefiere la más reciente ni admite que nadie designe cuál. Guardó la versión vocal y el encargo siguiente volvió a coger la de siempre. | **corregido**: gana la más reciente, y el pedido puede designar una obra por su identificador |
-| B7 | **No existe paso de portada.** `MEDIA_JOB_STEPS` es fijo —canción, cuatro clips, montaje, entrega— así que la portada pedida **no podía** producirse. `create_single_cover` existe, pero fuera del encargo. Y nadie lo dijo. | abierto |
-| B8 | **El encargo ignora lo que se le pide.** El texto del pedido se guarda en `order` y no altera ningún paso. «Vuelve a generarlo, esta vez con X» produce lo mismo por construcción. | abierto |
+| B7 | **No existe paso de portada.** `MEDIA_JOB_STEPS` es fijo —canción, cuatro clips, montaje, entrega— así que la portada pedida **no podía** producirse. `create_single_cover` existe, pero fuera del encargo. Y nadie lo dijo. | **corregido**: los pasos los deriva `encargo.leer_encargo` del pedido, y hay paso `portada` |
+| B8 | **El encargo ignora lo que se le pide.** El texto del pedido se guarda en `order` y no altera ningún paso. «Vuelve a generarlo, esta vez con X» produce lo mismo por construcción. | **corregido**: el pedido gobierna alcance, número de segmentos y prompts (`Encargo.con_matices`) |
 | B9 | **Trabajo abandonado a medias.** El de las 5:24 arrancó los cuatro segmentos y nunca emitió «Vídeo final». | abierto |
 
 ## C. Deriva de persona
@@ -65,5 +65,25 @@ encargo, no al entregarlo. `_aviso_de_canto` nombra la causa real —ningún mot
 contratado sirve voz— y distingue si hay Vertex o sólo partitura local. Cerrar
 ese hueco es lo que evita que se invente otra explicación para llenarlo.
 
-Quedan abiertos B7 (no hay paso de portada), B8 (el pedido no altera los pasos)
-y B9 (trabajo abandonado a medias), más todo el bloque A salvo A2, el C y el D.
+**B7 y B8 — el pedido manda.** Eran el mismo defecto: `MEDIA_JOB_STEPS` era una
+tupla constante, así que el texto del encargo no podía cambiar nada. Ahora
+`src/adapters/encargo.py` lo traduce a un plan y de ahí salen los pasos:
+
+- **Alcance.** Si el pedido nombra piezas —canción, vídeo, portada— se producen
+  sólo las nombradas; si no nombra ninguna, sigue siendo el encargo completo de
+  siempre. Negarlas cuenta: «sin vídeo» **no** encarga vídeo, que es el error
+  fácil de una regla que sólo mira si la palabra aparece.
+- **Portada.** Hay paso `portada`, idempotente y facturable como los demás, y
+  una portada que el proveedor devuelve con `simulated` no se entrega como obra.
+- **Segmentos.** «dos segmentos» paga dos, no cuatro; el montaje y el pie del
+  vídeo cuentan los que haya en vez de decir «32 s» siempre.
+- **Matices.** Las indicaciones literales del pedido viajan al final de cada
+  prompt —canción, clips y portada—, que es lo que faltaba para que «esta vez
+  con más percusión» pudiera sonar distinto.
+- **Y reanudar sigue costando sólo lo que falta.** El plan es determinista sobre
+  el mismo texto, y al reanudar el texto es `job.order`: los identificadores de
+  paso salen idénticos. Si no lo fueran, un reinicio daría por «no hecho» lo ya
+  pagado. Hay prueba de esa propiedad, no sólo el comentario.
+
+Quedan abiertos B9 (trabajo abandonado a medias), todo el bloque A salvo A2, el
+C y el D.
