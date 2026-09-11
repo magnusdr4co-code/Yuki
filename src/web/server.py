@@ -654,5 +654,10 @@ def run_web_server(port: int = None, host: str = "0.0.0.0"):
 
 
 if __name__ == "__main__":
+    # El Salón puede arrancarse directo (`python -m src.web.server`), sin pasar
+    # por `cli.py`. También aquí, o el servidor corre mudo.
+    from ..core.registro import configurar as _configurar_log
+
+    _configurar_log()
     cli_port = int(sys.argv[1]) if len(sys.argv) > 1 else None
     run_web_server(port=cli_port)

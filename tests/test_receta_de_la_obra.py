@@ -210,3 +210,41 @@ def test_el_respaldo_musical_deja_receta_al_componer(tmp_path, monkeypatch):
     assert guardada["parametros"]["bpm"] == 72
     assert guardada["parametros"]["escala"] == "insen"
     assert guardada["parametros"]["duration_seconds"] == 45
+
+
+def test_la_entrega_dice_con_que_se_hizo(tmp_path, monkeypatch):
+    """
+    El Productor preguntó «¿qué es lo que has hecho?» y Yuki contestó con un
+    relato técnico detallado en un turno con **cero herramientas ejecutadas**:
+    no hizo nada de eso, el prompt de generación está escrito en el adaptador.
+
+    La receta ya se escribía junto al audio y no la veía nadie. Enseñarla en el
+    pie del adjunto quita el hueco por donde entró el relato.
+    """
+    import pytest as _pytest
+
+    _pytest.importorskip("discord")
+    from src.adapters.discord_bot import DiscordAdapter
+
+    pista = tmp_path / "cancion.mp3"
+    pista.write_bytes(b"audio")
+    receta.escribir(str(pista), motor="lyria-3-pro-preview", prompt="canta esto",
+                    duration_seconds=90)
+
+    pie = DiscordAdapter._pie_de_receta(str(pista))
+
+    assert "lyria-3-pro-preview" in pie
+    assert "duration_seconds 90" in pie
+
+
+def test_sin_receta_no_se_inventa_un_pie(tmp_path):
+    """Una obra anterior no tiene receta, y callar es mejor que suponer el motor."""
+    import pytest as _pytest
+
+    _pytest.importorskip("discord")
+    from src.adapters.discord_bot import DiscordAdapter
+
+    vieja = tmp_path / "vieja.mp3"
+    vieja.write_bytes(b"audio")
+
+    assert DiscordAdapter._pie_de_receta(str(vieja)) == ""

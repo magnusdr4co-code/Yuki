@@ -24,37 +24,54 @@ parameters:
 
 # Habilidad: Animar Portada (`/animar-portada`)
 
-Da movimiento a la obra visual de Yuki: anima una portada ya pintada o genera un teaser breve para el lanzamiento de un sencillo.
+Vídeo es lo más caro que hace Yuki: **Veo se factura por segundo**. Por eso el
+criterio se dice antes, no después.
 
-> **Antes de nada, el coste.** Esta es la herramienta más cara del catálogo: **≈0,10 USD por segundo de vídeo**. Un teaser de 10 segundos cuesta alrededor de 1 USD, más que miles de respuestas de texto de Yuki. No se invoca por iniciativa propia.
+`src/tools/criterio_audiovisual.py` arma el guion **leyendo la obra**. Eran
+cuatro planos escritos a mano —el muelle, el Salón, la intérprete, la salida— y
+se usaban con cualquier obra delante: un encargo sobre otra canción rodaba
+igualmente el muelle.
 
-## Pasos de Ejecución:
+## 1. Los planos salen de la obra
 
-1. **Confirmar que hay petición explícita:**
-   - Esta habilidad **sólo** se ejecuta si el productor la ha pedido. Nunca desde una tarea del cron, nunca "para enseñar lo que se puede hacer".
-2. **Preferir una portada existente:**
-   - Si hay un `image_path`, se usa `image_to_video`. Es el flujo natural —primero el arte, después el movimiento— y permite revisar el fotograma de partida antes de gastar.
-   - Sin imagen, `text_to_video` desde el concepto, con el prefijo estético de `SOUL.md`.
-3. **Describir el movimiento, no la escena:**
-   - El modelo ya ve la imagen. El *prompt* dice qué se mueve, cómo y en qué orden: "la niebla avanza de izquierda a derecha mientras el pan de oro capta la luz".
-4. **Acotar la duración:**
-   - Entero de 3 a 10 segundos. Por defecto 6. Fuera de rango se rechaza antes de llamar al modelo.
-5. **Registrar el gasto:**
-   - El resultado trae `estimated_cost_usd`. Anótalo junto a la habilidad que lo consumió y comunícaselo al productor.
+Si la letra o el guion archivado traen secciones —`[Verse 1]`, `[Chorus]`,
+`#### [Estrofa I]`—, cada plano toma una, en orden. Las marcas de clave sonora
+(`[Tempo: 68 BPM, 4/4…]`) **no** son secciones: describen la pieza entera, y
+rodarlas sería rodar un rótulo.
+
+Si la obra no nombra secciones, se usa el guion de casa **y se dice que es el
+de casa**. Presentarlo como una lectura de la obra sería atribuirse un trabajo
+que no se hizo.
+
+## 2. El número de planos lo manda el pedido
+
+No la obra. De ese número se derivan los identificadores de paso del trabajo
+durable, y si cambiaran entre arranques una reanudación daría por «no hecho» lo
+que ya está pagado. La obra decide **qué** se rueda; el pedido, **cuánto**.
+
+Cuando hay más secciones que planos, se avisa de lo que queda fuera. Cuando hay
+menos, se repiten variando el punto de vista en vez de inventar escenas que la
+obra no pide.
+
+## 3. Ritmo de plano
+
+- **8 s por plano**, que es lo que sirve el proveedor. No es una elección de
+  montaje: es el material con el que hay que montar.
+- **Cámara lenta y continua, sin cortes bruscos.** El montaje une; si cada
+  plano se rueda como una pieza suelta, el ensamblado se nota.
+- Cada plano sabe **su sitio en la secuencia** (`Shot 2 of 4`). Un plano que no
+  sabe dónde va se corta solo.
+
+## 4. Continuidad
+
+La imagen archivada entra como primer fotograma cuando la hay: es lo que ata el
+vídeo a la portada en vez de dejar dos obras que sólo comparten título.
 
 ## Herramientas
 
-> Contrato de herramientas según [`skills/HERRAMIENTAS.md`](../HERRAMIENTAS.md). Si una herramienta no está listada ahí, no existe.
-
 | Paso | Herramienta | Detalle |
 |---|---|---|
-| Pintar el fotograma de partida | `vertex.image` | Vía `/generar-portada`. Opcional pero recomendado: revisar antes de animar sale más barato que repetir |
-| Redactar el concepto de movimiento | `portal.chat` → `tier_1_creative` | Sólo si el productor no lo ha dado ya |
-| Animar | `vertex.video` | `gemini-omni-flash-preview`. **≈0,10 USD/s.** De 3 a 10 s. Una toma por petición |
-| Guardar | — | `./output/video/yuki_omni_<timestamp>.mp4`, ruta relativa |
-
-**No confundas Omni con un modelo de texto.** Genera vídeo y se factura por segundo. El cerebro de Yuki lo sirve `vertex.chat`/`portal.chat` (§2 del catálogo).
-
-**Si falla:** **no hay respaldo.** Un reintento y, si no responde, aborta y explícalo. Nunca describas un vídeo que no existe ni devuelvas la ruta de un marcador como si fuera metraje.
-
-**Antes de publicarlo:** el vídeo lleva marca SynthID de Google. Consérvala, etiqueta el contenido como generado y archiva la publicación en `./output/posts/` (§8 del catálogo).
+| Criterio del guion | `src/tools/criterio_audiovisual.py` | Local, determinista sobre la misma obra |
+| Vídeo | `portal.video` → Veo | **Facturado por segundo.** Reserva presupuesto antes de llamar |
+| Montaje | `ffmpeg concat` | Sólo une clips ya verificados; no acepta rutas externas |
+| Receta | `<fichero>.receta.json` | Prompt íntegro y parámetros, archivados con la obra |

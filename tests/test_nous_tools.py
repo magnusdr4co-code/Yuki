@@ -577,8 +577,20 @@ class TestPropagacionDeEstado(unittest.TestCase):
             os.remove(result["local_path"])
 
             # La cadencia viaja como indicación en lenguaje natural, no SSML.
-            self.assertIn("pausas deliberadas", tts.recibido["input"]["prompt"])
-            self.assertNotIn("<break", tts.recibido["input"]["prompt"])
+            # Se comprueba la **propiedad** —que la indicación diga cómo
+            # respirar— y no la redacción literal: la versión anterior fijaba
+            # las palabras exactas de una constante, así que cualquier mejora
+            # del criterio vocal la rompía sin que nada estuviera mal.
+            indicacion = tts.recibido["input"]["prompt"]
+            self.assertRegex(indicacion, r"aire|pausa|silencio")
+            self.assertNotIn("<break", indicacion)
+            self.assertNotIn("<speak", indicacion)
+
+            # Y la cadencia del proveedor, cuando la hay, llega al prompt: es lo
+            # que la constante sí garantizaba y no se puede perder al quitarla.
+            conCadencia = await motor.synthesize_voice("Otra frase.", cadencia_ms=350)
+            os.remove(conCadencia["local_path"])
+            self.assertIn("350", tts.recibido["input"]["prompt"])
 
         with sdk_de_google_simulado():
             asyncio.run(_run())

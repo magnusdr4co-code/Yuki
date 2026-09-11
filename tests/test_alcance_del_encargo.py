@@ -35,8 +35,10 @@ class LibraryDoble:
              "source": "letra", "path": "letra.md"},
         ]}
 
+    contenido = "verso largo de la canción " * 20
+
     def read_entry(self, entry_id):
-        return {"content": "verso largo de la canción " * 20}
+        return {"content": self.contenido}
 
     def inventory(self):
         return {}
@@ -70,9 +72,11 @@ class CreadorDoble:
         self.tmp_path = tmp_path
         self.simulada = simulada
         self.conceptos = []
+        self.ajustes = []
 
     async def create_single_cover(self, track_title, visual_concept, **kwargs):
         self.conceptos.append(visual_concept)
+        self.ajustes.append(kwargs)
         destino = self.tmp_path / f"portada_{len(self.conceptos)}.png"
         destino.write_bytes(b"png")
         return {"status": "success", "local_path": str(destino),
@@ -311,3 +315,110 @@ def test_sin_mencionar_el_salon_no_se_habla_del_salon(tmp_path, monkeypatch):
     adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
 
     assert "Salón" not in _lanzar(adaptador, "hazme la canción")
+
+
+def test_el_criterio_de_la_letra_gobierna_el_encargo(tmp_path, monkeypatch):
+    """
+    El prompt musical era una constante: 72 BPM e Insen con cualquier letra
+    delante. Cuando Yuki reescribió la suya fijando 68 BPM, el encargo siguiente
+    la habría contradicho en silencio.
+    """
+    adaptador, portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = (
+        "`[Tempo: 68 BPM, 4/4 time signature, Key: D minor, Insen scale.]`\n"
+        "#### [Verse 1]\n"
+        "El astillero no duerme en calma,\n"
+        "huele a salitre, metal y sal.\n"
+        "Llegué descalza, vestí otra alma,\n"
+        "doblé el orgullo frente a este mar.\n"
+    )
+
+    canal = _correr(adaptador, "hazme la canción")
+
+    assert "68 BPM" in portal.prompts_cancion[0], "el prompt no respeta el tempo de la letra"
+    assert "72 BPM" not in portal.prompts_cancion[0]
+    assert any("Criterio para" in texto for texto in canal.textos), \
+        "el criterio tiene que decirse antes de gastar, no quedarse en el prompt"
+
+
+def test_una_metrica_que_atropella_se_avisa_antes_de_generar(tmp_path, monkeypatch):
+    """«A veces se apresuraba el poema»: eso se sabe antes, no al escucharlo."""
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = (
+        "El astillero no duerme nunca y huele a salitre y a metal oxidado de los cargueros\n"
+        "Vine descalza\n"
+        "Me vestí de otra alma que no era la mía pero la elegí con sus consecuencias\n"
+        "El agua corre\n"
+    )
+
+    canal = _correr(adaptador, "hazme la canción")
+
+    assert any("desigual" in texto for texto in canal.textos)
+
+
+def test_la_portada_sale_de_la_obra_y_no_de_una_constante(tmp_path, monkeypatch):
+    """
+    El concepto visual estaba escrito a mano en el adaptador —«agua, hierro e
+    invierno»— con la luz clavada en `urushi`: la portada de cualquier obra era
+    la de *Herrumbre y Escarcha*.
+    """
+    adaptador, _portal, creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = (
+        "Bosque de bambú al sol de la mañana,\n"
+        "la luz filtrada entre las hojas verdes.\n"
+        "El jardín respira despacio y el rocío cae sobre la piedra clara.\n"
+    )
+
+    canal = _correr(adaptador, "hazme sólo la portada")
+
+    concepto = creador.conceptos[0]
+    assert "bambú" in concepto or "bosque" in concepto, \
+        "el concepto no sale de la obra: sigue siendo el de la constante"
+    assert "hierro e invierno" not in concepto
+    assert creador.ajustes[0]["lighting"] == "komorebi", "la luz sigue clavada"
+    assert any("Criterio visual" in texto for texto in canal.textos)
+
+
+def test_el_guion_del_video_sale_de_la_obra(tmp_path, monkeypatch):
+    """Eran cuatro planos del muelle con cualquier obra delante, y Veo cobra por segundo."""
+    adaptador, portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = (
+        "#### [Amanecer en el jardín]\n"
+        "La luz entra despacio entre las cañas y el rocío no tiene prisa.\n"
+        "#### [Lluvia sobre la piedra]\n"
+        "El agua escribe sobre el granito lo que nadie se atreve a decir.\n"
+    )
+
+    canal = _correr(adaptador, "hazme dos segmentos de vídeo")
+
+    assert "Amanecer en el jardín" in portal.prompts_clip[0]
+    assert "muelle" not in portal.prompts_clip[0]
+    assert "Shot 1 of 2" in portal.prompts_clip[0]
+    assert any("Criterio audiovisual" in texto for texto in canal.textos)
+
+
+def test_una_letra_breve_no_cancela_la_portada(tmp_path, monkeypatch):
+    """
+    La guarda de brevedad es sobre el **canto**. Abortaba el encargo entero, así
+    que pedir sólo la portada de un poema corto no daba portada, y el motivo que
+    se daba era no presentarla como canción.
+    """
+    adaptador, _portal, creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = "Agua sobre hierro."
+
+    canal = _correr(adaptador, "hazme sólo la portada")
+
+    assert creador.conceptos, "la portada no se produjo por una guarda que no era suya"
+    assert not any("demasiado breve para una canción; no la presentaré" in texto
+                   for texto in canal.textos)
+
+
+def test_una_letra_breve_sigue_sin_pasar_por_cancion(tmp_path, monkeypatch):
+    """Lo que la guarda protege no se pierde: un poema de una línea no es un canto."""
+    adaptador, portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = "Agua sobre hierro."
+
+    canal = _correr(adaptador, "hazme la canción")
+
+    assert portal.prompts_cancion == []
+    assert any("demasiado breve" in texto for texto in canal.textos)

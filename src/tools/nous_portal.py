@@ -277,6 +277,10 @@ class NousPortalClient:
         audio_path = os.path.join(self.music_dir, audio_filename)
 
         # Vertex no sirve música cantada ni render acústico, y
+        # Ojo al leer `skills/HERRAMIENTAS.md`: es anterior a Lyria y su tabla decía
+        # que «la música se limita a local.midi». Ya no. Lyria canta, y fiarse de
+        # ese documento en vez de este código costó decirle al Productor que una
+        # canción saldría instrumental el día que salió cantada.
         # `skills/HERRAMIENTAS.md` §1 ya declara que `suno_v4` y `flow_audio` no
         # existen en ninguna pasarela contratada. Mientras no se contrate un
         # motor musical, esto es un marcador y se dice: la música real de Yuki
@@ -338,13 +342,13 @@ class NousPortalClient:
             # natural, no como marcado SSML. Se le describe la "pausa elegida"
             # de SOUL.md, que es más fiel que un <break> mecánico, y emite OGG
             # Opus nativo: no hace falta transcodificar con ffmpeg.
-            registro = "más grave y lenta, casi un susurro" if is_night_mode else "serena y cálida"
-            indicacion = (
-                f"Habla en un registro {registro}, con pausas deliberadas de unos "
-                f"{cadence_pause_ms} milisegundos en comas y puntos. Elige cada palabra "
-                "antes de decirla; nunca suenes apresurada ni mecánica."
-            )
-            resultado = await self.vertex.synthesize_voice(text, style_prompt=indicacion)
+            # Aquí había una indicación constante que sólo distinguía noche de
+            # día. Pisaba al criterio vocal —un `style_prompt` explícito gana—,
+            # así que el criterio no llegaba a aplicarse nunca. Ahora esta capa
+            # sólo aporta lo que sabe: la hora y la cadencia del proveedor.
+            fase = "night" if is_night_mode else None
+            resultado = await self.vertex.synthesize_voice(
+                text, circadian_phase=fase, cadencia_ms=cadence_pause_ms)
             if resultado["status"] == "success":
                 resultado["voice_id"] = resultado.get("voice", voice_id)
                 resultado["is_night_mode"] = is_night_mode

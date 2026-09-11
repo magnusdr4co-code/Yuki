@@ -46,7 +46,8 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 
 | Tema | Documento |
 |---|---|
-| Google Cloud, de cero | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) |
+| **Desplegar ahora** | [DESPLIEGUE.md](DESPLIEGUE.md) — qué variable habilita qué, qué secretos hacen falta y cómo comprobar que **vive**, no sólo que arrancó. Es la que se mantiene al día: `tests/test_despliegue.py` la vigila |
+| Google Cloud, de cero | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) — el montaje del proyecto (cuentas, IAM, registro). Conserva decisiones de su día, corregidas en su cabecera |
 | Otras opciones (VPS, Docker, Modal) | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — alternativas estudiadas; **la instancia real corre en GCE**, no en ninguna de ellas |
 
 ## Registro de decisiones

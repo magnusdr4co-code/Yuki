@@ -13,6 +13,7 @@ import asyncio
 import logging
 import subprocess
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional, Set, List, Dict, Any
 
@@ -31,6 +32,7 @@ from ..core.brake import Brake
 from ..core.spend_budget import SpendLedger
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, TERMINADO, describe_job as describe_media_job
+from ..tools import criterio_audiovisual, criterio_musical, criterio_visual, receta
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -1118,29 +1120,36 @@ class DiscordAdapter:
 
     def _aviso_de_canto(self, lyrics_entry) -> str:
         """
-        Qué se va a generar y qué no, dicho antes de que cueste dinero.
+        Qué motor va a componer esto, dicho antes de que cueste dinero.
 
-        `skills/HERRAMIENTAS.md` §1 declara que ningún motor musical contratado
-        sirve voz cantada: Lyria compone instrumental y el respaldo local
-        sintetiza la partitura y devuelve `sung: False`. No es algo que se
-        arregle reescribiendo la letra ni incrustándola en la partitura —el
-        prompt ya la manda íntegra con la orden de cantarla— y decir lo
-        contrario sería inventarse una capacidad.
+        Aquí hubo un error grave y conviene que conste: esta función afirmaba
+        «ningún motor musical contratado sirve voz» y **es falso**. Lyria canta
+        —`nous_portal` lo dice en su propio código y marca el resultado con
+        `sung: True`—, y el 11 de septiembre entregó una canción cantada justo
+        después de que este aviso dijera que no saldría. La frase venía de
+        `skills/HERRAMIENTAS.md`, que es anterior a Lyria y habla de `suno_v4` y
+        `flow_audio`; me fié del documento en vez del código.
+
+        Negar una capacidad que existe es tan falso como prometer una que no, y
+        aquí se hizo por intentar evitar lo segundo. Lo honesto no es afirmar
+        ninguno de los dos extremos antes de generar: es decir **qué motor va a
+        atender y qué significa cada salida**, porque hasta que el proveedor
+        responde no se sabe cuál de los dos caminos tocó. La nota del adjunto sí
+        lo sabe, y por eso viaja con el paso.
         """
-        from ..tools.vertex_media import VertexMediaClient
-
         motor = getattr(self.agent, "media_creator", None)
         vertex = getattr(getattr(motor, "portal", None), "vertex", None)
-        hay_vertex = isinstance(vertex, VertexMediaClient) and getattr(vertex, "enabled", False)
+        hay_vertex = bool(vertex is not None and getattr(vertex, "is_available", lambda: False)())
 
         titulo = (lyrics_entry or {}).get("title", "la letra archivada")
         cabecera = f"🎵 Generando desde «{titulo}»."
         if hay_vertex:
-            return (f"{cabecera} **Saldrá instrumental, no cantada**: ningún motor musical "
-                    "contratado sirve voz. Lyria compone la base y el adjunto sólo saldrá si "
-                    "devuelve audio real; si no, oirás la partitura propia sintetizada.")
-        return (f"{cabecera} **Saldrá instrumental, no cantada**, y además sin Vertex "
-                "configurado sólo puedo darte la partitura propia sintetizada en local.")
+            return (f"{cabecera} Lo atiende **Lyria**, que sí canta: el prompt le manda la letra "
+                    "íntegra con la orden de interpretarla. Si Lyria no responde, cae al respaldo "
+                    "local, que **no canta** —es una maqueta instrumental— y en ese caso el "
+                    "adjunto lo dirá en su propia nota. No doy por hecho cuál de los dos saldrá.")
+        return (f"{cabecera} Sin Vertex configurado no hay motor que cante: sólo puedo darte la "
+                "partitura propia sintetizada en local, que es **instrumental**.")
 
     def _paso_anterior(self, job, step_id: str):
         """El paso del mismo nombre en el trabajo más reciente del mismo Productor."""
@@ -1151,6 +1160,30 @@ class DiscordAdapter:
             if paso is not None and paso.is_done() and paso.delivered:
                 return anterior, paso
         return None, None
+
+    @staticmethod
+    def _pie_de_receta(ruta: Optional[str]) -> str:
+        """
+        Con qué se hizo, dicho en la propia entrega.
+
+        El 11 de septiembre el Productor preguntó «¿qué es lo que has hecho?» y
+        Yuki contestó con un relato técnico detallado —incrustar la fonética en
+        la partitura, fijar el tempo, gobernar los contrastes— en un turno con
+        **cero herramientas ejecutadas**. No hizo nada de eso: el prompt de la
+        canción está escrito en este fichero y ella no lo toca.
+
+        La receta ya se escribía junto al audio y no la veía nadie. Enseñarla
+        aquí quita el hueco: quien pregunte qué se hizo tiene la respuesta
+        delante, y no hace falta que nadie se la imagine.
+        """
+        datos = receta.leer(ruta) if ruta else {}
+        if not datos:
+            return ""
+        parametros = datos.get("parametros") or {}
+        interesantes = [f"{clave} {valor}" for clave, valor in parametros.items()
+                        if clave in ("duration_seconds", "bpm", "escala", "aspect_ratio")]
+        detalle = f" · {' · '.join(interesantes)}" if interesantes else ""
+        return f"\n-# 🧾 Generado con {datos.get('motor') or 'motor sin declarar'}{detalle}"
 
     async def _aviso_de_que_ya_salio_asi(self, job, paso) -> str:
         """
@@ -1193,17 +1226,22 @@ class DiscordAdapter:
             # contratado canta.
             await report(self._aviso_de_canto(lyrics_entry))
             titulo = (lyrics_entry or {}).get("title") or "Canción sin título"
-            song_prompt = plan.con_matices(
-                "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
-                "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
-                "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
-                "and chorus structure:\n" + lyrics[:12000]
-            )
+            # El prompt era una constante: 90 s, 72 BPM, Insen, voz serena, con
+            # cualquier letra delante. Cuando Yuki reescribió la suya fijando 68
+            # BPM y su propia estructura, el encargo siguiente la habría
+            # contradicho en silencio. Ahora lo decide `criterio_musical`
+            # leyendo la letra, y manda lo que la letra ya traiga.
+            criterio = criterio_musical.leer_criterio(lyrics, titulo=titulo)
+            # El criterio se dice **antes** de gastar: si la métrica va a
+            # atropellar la voz, eso se sabe ahora y no al escuchar el adjunto.
+            await report(criterio.resumen())
+            song_prompt = criterio.prompt(lyrics, matices=plan.matices)
             song_step.attempts += 1
             self.media_jobs.save(job)
             song = await self.agent.nous_portal.generate_music_flow(
                 title=f"{titulo} — voz", prompt=song_prompt,
-                engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
+                engine="lyria-3-pro-preview", duration_seconds=criterio.duracion_segundos,
+                bpm=criterio.bpm, scale=criterio.escala.capitalize(),
             )
             song_path = song.get("local_path") if song.get("status") == "success" else None
             if song_path and Path(song_path).is_file():
@@ -1229,6 +1267,7 @@ class DiscordAdapter:
                 await report(f"⚠️ No se generó canción: {detalle}")
         if song_step.is_done() and not song_step.delivered:
             pie = (song_step.note or "🎵 Pista de audio generada")
+            pie += self._pie_de_receta(song_step.path)
             pie += await self._aviso_de_que_ya_salio_asi(job, song_step)
             if await self._send_file(channel, song_step.path, pie):
                 song_step.delivered = True
@@ -1236,7 +1275,21 @@ class DiscordAdapter:
             else:
                 await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
 
-    async def _paso_portada(self, job, plan, lyrics_entry, report, channel) -> None:
+    @staticmethod
+    def _semilla_visual(lyrics_entry, lyrics: str) -> str:
+        """
+        De qué parte la imagen: el título y las primeras imágenes de la letra.
+
+        No se manda la letra entera —una portada no ilustra un poema línea a
+        línea— sino su arranque, que es donde la obra declara su materia.
+        """
+        titulo = (lyrics_entry or {}).get("title", "")
+        primeras = " ".join(
+            linea.strip() for linea in (lyrics or "").splitlines()
+            if linea.strip() and not linea.strip().startswith(("#", "[", "(", "`")))[:400]
+        return f"portada de sencillo. {titulo}. {primeras}".strip()
+
+    async def _paso_portada(self, job, plan, lyrics, lyrics_entry, report, channel) -> None:
         """
         Portada única del sencillo, cuando el pedido la nombra.
 
@@ -1251,14 +1304,20 @@ class DiscordAdapter:
             await report(f"⚠️ No repito la portada: ya falló {portada.attempts} veces ({portada.error}).")
         else:
             titulo = (lyrics_entry or {}).get("title") or "Sencillo"
+            # El concepto visual estaba escrito a mano —«agua, hierro e
+            # invierno»— con la luz clavada en `urushi`, así que la portada de
+            # cualquier obra era la portada de *Herrumbre y Escarcha*. Ahora
+            # sale de la obra y el criterio decide encuadre y luz.
+            visual = criterio_visual.leer_criterio_visual(
+                plan.con_matices(self._semilla_visual(lyrics_entry, lyrics)), titulo=titulo)
+            await report(visual.resumen())
             portada.attempts += 1
             self.media_jobs.save(job)
             arte = await self.agent.media_creator.create_single_cover(
                 track_title=titulo,
-                visual_concept=plan.con_matices(
-                    "Portada de sencillo: agua, hierro e invierno; escarcha sobre acero oxidado."
-                ),
-                lighting="urushi",
+                visual_concept=visual.prompt(),
+                lighting=visual.luz,
+                aspect_ratio=visual.encuadre,
             )
             ruta = arte.get("local_path") if arte.get("status") == "success" else None
             # Una portada simulada no es una portada. `create_single_cover`
@@ -1279,7 +1338,8 @@ class DiscordAdapter:
                 self.media_jobs.save(job)
                 await report(f"⚠️ No se generó portada: {detalle}")
         if portada.is_done() and not portada.delivered:
-            pie = "🎨 Portada del sencillo" + await self._aviso_de_que_ya_salio_asi(job, portada)
+            pie = ("🎨 Portada del sencillo" + self._pie_de_receta(portada.path)
+                   + await self._aviso_de_que_ya_salio_asi(job, portada))
             if await self._send_file(channel, portada.path, pie):
                 portada.delivered = True
                 self.media_jobs.save(job)
@@ -1294,16 +1354,21 @@ class DiscordAdapter:
             script = self.agent.creation_library.read_entry(script_entry["id"]).get("content", "")
         visual_entry = self._library_entry("visual", ("herrumbre", "salon", "escarcha"))
         visual_path = self._library_file(visual_entry)
-        guion = MEDIA_STORYBOARD[:plan.segmentos]
+        # El guion eran cuatro planos del muelle escritos a mano, con cualquier
+        # obra delante. Ahora lo lee de la obra; el **número** de planos sigue
+        # saliendo del pedido, porque de él se derivan los pasos del trabajo
+        # durable y cambiarlo rompería la reanudación de lo ya pagado.
+        guion_visual = criterio_audiovisual.leer_guion(
+            script or self._semilla_visual(None, ""), plan.segmentos,
+            titulo=(script_entry or {}).get("title", ""))
         hechos = sum(1 for i in range(1, plan.segmentos + 1)
                      if job.ensure_step(f"clip_{i}", "clip").is_done())
         if hechos:
             await report(f"🎬 {hechos} de {plan.segmentos} segmentos ya estaban verificados; sólo genero los que faltan.")
         else:
-            await report(f"🎬 Generando {plan.segmentos} segmento(s) de 8 s y ensamblándolos; "
-                         "no sustituiré el vídeo por un marcador.")
+            await report(guion_visual.resumen())
         clips: List[str] = []
-        for index, beat in enumerate(guion, 1):
+        for index in range(1, len(guion_visual.planos) + 1):
             clip_step = job.ensure_step(f"clip_{index}", "clip")
             if clip_step.is_done():
                 clips.append(clip_step.path)
@@ -1311,10 +1376,7 @@ class DiscordAdapter:
             if clip_step.exhausted():
                 await report(f"⚠️ Segmento {index} descartado tras {clip_step.attempts} intentos: {clip_step.error}")
                 break
-            prompt = plan.con_matices(
-                "Cinematic 16:9, 24 fps, slow meditative camera, no fast cuts. " + beat +
-                " Guion de referencia: " + (script[:2500] or "Herrumbre y Escarcha, agua, hierro e invierno.")
-            )
+            prompt = plan.con_matices(guion_visual.prompt(index, script))
             clip_step.attempts += 1
             self.media_jobs.save(job)
             video = await self.agent.nous_portal.generate_video_frontier(
@@ -1407,15 +1469,24 @@ class DiscordAdapter:
                 await report("❌ No encuentro una letra verificable en la Biblioteca; no generaré una canción sin texto fuente.")
                 return
             lyrics = self.agent.creation_library.read_entry(lyrics_entry["id"]).get("content", "")
-            if len(lyrics.strip()) < 80:
-                self.media_jobs.abandon(job, "letra demasiado breve")
-                await report("❌ La letra recuperada es demasiado breve para una canción; no la presentaré como canto completo.")
-                return
+            # La brevedad sólo descarta el **canto**: una portada o un vídeo se
+            # sostienen sobre un poema corto. Antes esta guarda abortaba el
+            # encargo entero, así que pedir sólo la portada de una pieza breve
+            # no daba portada y decía que era por no presentarla como canción.
+            if plan.cancion and len(lyrics.strip()) < 80:
+                if not (plan.portada or plan.video):
+                    self.media_jobs.abandon(job, "letra demasiado breve")
+                    await report("❌ La letra recuperada es demasiado breve para una canción; "
+                                 "no la presentaré como canto completo.")
+                    return
+                plan = replace(plan, cancion=False)
+                await report("⚠️ La letra es demasiado breve para una canción y no la presentaré "
+                             "como canto completo; sigo con el resto del encargo.")
 
             if plan.cancion:
                 await self._paso_cancion(job, plan, lyrics, lyrics_entry, report, channel)
             if plan.portada:
-                await self._paso_portada(job, plan, lyrics_entry, report, channel)
+                await self._paso_portada(job, plan, lyrics, lyrics_entry, report, channel)
             if plan.video:
                 await self._pasos_video(job, plan, report, channel)
 

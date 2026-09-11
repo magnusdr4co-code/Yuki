@@ -226,9 +226,23 @@ class VirtualInstance:
         # Se declara porque durante meses no existía: lo único que sobrevivía a
         # una generación era el manifiesto del Artículo 50, que recorta el
         # prompt a 500 caracteres porque su trabajo es otro.
+        # Se declara porque el prompt musical era una constante: 72 BPM e Insen
+        # con cualquier letra delante, incluida una que pedía 68.
+        self._cap("medios.criterio", "Medios", REAL,
+                  "Antes de encargar decide leyendo la fuente: música (tempo, compás, escala, "
+                  "estructura), imagen (encuadre, luz, carga), vídeo (planos desde las secciones "
+                  "de la obra) y voz (registro, respiración); manda lo que la fuente ya traiga y "
+                  "avisa de lo que va a salir mal antes de gastar")
         self._cap("medios.receta", "Medios", REAL,
                   "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
                   "parámetros, y la receta se archiva con ella en Biblioteca")
+        # Se declara porque durante todo el proyecto no fue verdad: `LOG_LEVEL`
+        # estaba en el arranque y nadie lo leía, así que los 97 `logger.info` de
+        # la instancia no se emitían. Un log vacío no falla: tranquiliza.
+        nivel = (_env("LOG_LEVEL") or "INFO").upper()
+        self._cap("salud.registro", "Mente", REAL,
+                  f"Log configurado en los puntos de entrada a {nivel}; los `logger.info` "
+                  "de la instancia llegan a `docker logs`")
         pendientes = self.pending_media_jobs()
         self._cap(
             "medios.cola", "Medios", REAL,

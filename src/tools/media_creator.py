@@ -88,15 +88,25 @@ class MediaCreatorTool:
         visual_concept: str,
         provider: str = "gemini_image", # "gemini_image", "seedream", "flux_pro"
         lighting: str = "komorebi",
+        aspect_ratio: str = "1:1",
         mood_params: Optional[Dict[str, Any]] = None
     ) -> Dict[str, Any]:
-        """Genera una portada de sencillo con modelos de frontera (Gemini Image / Seedream / Flux Pro)."""
+        """
+        Genera una portada con modelos de frontera (Gemini Image / Seedream / Flux Pro).
+
+        El encuadre estaba clavado en `1:1` y la cola del prompt era una
+        constante —«Traditional shamisen meets modern industrial minimalism»—,
+        así que un cartel y una cabecera salían cuadrados y con el mismo
+        remate. Ahora los decide quien llama; `criterio_visual` los deduce del
+        concepto cuando nadie los impone.
+        """
         season = get_current_micro_season()
-        prompt = f"Album single cover for track '{track_title}'. Concept: {visual_concept}. Seasonal motif: {season['seasonal_kigo']}. Traditional shamisen meets modern industrial minimalism."
+        prompt = (f"Album single cover for track '{track_title}'. Concept: {visual_concept}. "
+                  f"Seasonal motif: {season['seasonal_kigo']}.")
         result = await self.portal.generate_image_frontier(
             prompt=prompt,
             provider=provider,
-            aspect_ratio="1:1",
+            aspect_ratio=aspect_ratio,
             lighting_style=lighting,
             mood_params=mood_params
         )

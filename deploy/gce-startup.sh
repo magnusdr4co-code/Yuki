@@ -68,6 +68,30 @@ fetch_secret() {
 }
 fetch_secret "$SECRET_NAME" OPENROUTER_API_KEY
 fetch_secret "$DISCORD_SECRET_NAME" DISCORD_BOT_TOKEN
+
+# Secretos opcionales. `fetch_secret` es estricto —si falta, el arranque muere—
+# y eso es correcto para los dos de arriba: sin ellos Yuki no habla con nadie.
+# Éstos habilitan capacidades y su ausencia es un estado legítimo: la instancia
+# arranca igual y `cli.py virtualize` dice qué quedó inactivo. Un secreto que
+# falta no puede tumbar la VM.
+fetch_secret_opcional() {
+  local secret_name="$1"
+  local env_name="$2"
+  if fetch_secret "$secret_name" "$env_name" 2>/dev/null; then
+    echo "yuki-startup: ${env_name} tomado de Secret Manager" >&2
+  else
+    echo "yuki-startup: ${env_name} no declarado; la capacidad queda inactiva" >&2
+  fi
+}
+# Sin esto las rutas /api del Salón quedan ABIERTAS en el 8080 y la descarga de
+# obra no se enciende. Es lo primero que conviene declarar tras el primer arranque.
+fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-salon-api-token/versions/latest" SALON_API_TOKEN
+# Sin bucket, la copia queda en el mismo disco que el original y no protege del
+# escenario que la justifica: perder el disco.
+fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-backup-gcs-bucket/versions/latest" BACKUP_GCS_BUCKET
+# Difusión por Telegram. La salida es real; la entrada no está implementada.
+fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-telegram-bot-token/versions/latest" TELEGRAM_BOT_TOKEN
+fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-telegram-chat-id/versions/latest" TELEGRAM_DEFAULT_CHAT_ID
 unset METADATA_TOKEN
 
 # Refresh the image when possible so a new :latest is picked up after a deploy;

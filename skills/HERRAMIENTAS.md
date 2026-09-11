@@ -34,7 +34,8 @@
 
 | Lo que aparece en documentación antigua | Realidad |
 |---|---|
-| `suno_v4`, `flow_audio` (música cantada / render acústico) | ⛔ **No están en el Tool Gateway ni en OpenRouter.** La música se limita a `local.midi` hasta que se contrate Suno aparte |
+| `suno_v4`, `flow_audio` (render acústico) | ⛔ **No están en el Tool Gateway ni en OpenRouter.** No confundir con la música cantada: ver la fila siguiente |
+| «La música se limita a `local.midi`» (lo que decía esta tabla) | ⛔ **Desfasado, y costó una mentira en producción.** `lyria-3-pro-preview` por Vertex **sí canta** (`nous_portal` marca el resultado con `sung: True`); el respaldo local `music_fallback` no, y por eso devuelve `sung: False`. Un aviso del adaptador de Discord citó esta fila para decirle al Productor que la canción saldría instrumental, y salió cantada. **La fuente de verdad sobre qué canta es el código, no esta tabla** |
 | `gemini_image`, `seedream`, `flux_pro` como IDs de proveedor | Sustituidos por los modelos reales de `portal.image` (§3) |
 | `nous_tts_v2`, voz `yuki_serene_alto` | Sustituido por `portal.tts` con la voz configurada en `config.yaml` |
 | `https://api.nousportal.com/v1` | URL ficticia. La real es `https://inference-api.nousresearch.com/v1` |
