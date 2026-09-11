@@ -10,9 +10,9 @@
 | Campo | Valor |
 |---|---|
 | Repositorio | `europe-southwest1-docker.pkg.dev/yuki-prod/yuki/yuki-agent` |
-| Digest desplegado | `sha256:117577a64c665d24784922a62e247be8169533e3619e418e317a5c6dbe942a0d` |
-| Commit de código | `d8f5cbe` — consolidación de mejoras de producción y corrección de desactivación explícita de Vertex |
-| Build de Cloud Build | `1a1d11bf-c986-4db8-9b10-8cc7ab6823d3` |
+| Digest desplegado | `sha256:b0bf0a95e79b14a7eb97da053ff63ded57f96907e8304946bcda8c430dac9c16` |
+| Commit de código | `1f5d90e` — herencia correcta de `VERTEX_PROJECT_ID` desde el entorno |
+| Build de Cloud Build | `e0108418-6373-47df-8e8b-7664466f4550` |
 
 La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto inmutable
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
@@ -77,6 +77,19 @@ La copia automática fuera de la instancia sigue pendiente de `BACKUP_GCS_BUCKET
   devuelve `200`, Discord conectado a Temple y Dev Server con todos los canales,
   pairing persistente, 91 recuerdos íntegros y la ruta de reconocimiento de
   producción multimedia activa. No se generaron medios facturables como prueba.
+
+### Corrección posterior de Vertex
+
+- La causa de «Sin Vertex configurado» era que `vertex_ai.project_id: ""` en
+  `config.yaml` anulaba `VERTEX_PROJECT_ID=yuki-prod` al construir el portal de
+  medios. `VertexMediaClient.from_config()` ahora trata ese vacío como herencia;
+  `enabled: false` sigue siendo la desactivación explícita.
+- Verificación dentro de `yuki-daemon`: `MEDIA_PROJECT=yuki-prod`,
+  `MEDIA_AVAILABLE=True`, `PORTAL_PROJECT=yuki-prod` y `PORTAL_AVAILABLE=True`.
+- Durante el primer intento de actualización el disco raíz llegó al 100% por 27
+  imágenes antiguas. Se retiraron únicamente imágenes Docker sin etiqueta,
+  liberando unos 15 GB; el script de arranque ahora las limpia antes de cada
+  descarga sin tocar datos persistentes ni contenedores activos.
 
 ## Servicios y conectividad
 

@@ -94,6 +94,12 @@ fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-telegram-bot-token/ve
 fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-telegram-chat-id/versions/latest" TELEGRAM_DEFAULT_CHAT_ID
 unset METADATA_TOKEN
 
+# Evita que imágenes antiguas sin etiqueta llenen el disco raíz antes de la
+# siguiente descarga. Sólo elimina capas dangling; conserva las imágenes
+# etiquetadas y los contenedores activos. El caché sigue siendo fallback si
+# Artifact Registry no responde.
+docker image prune -f >/dev/null 2>&1 || true
+
 # Refresh the image when possible so a new :latest is picked up after a deploy;
 # keep a cached copy as a safe boot fallback during a transient registry failure.
 TOKEN_JSON="$(curl -fsS -H 'Metadata-Flavor: Google' \
