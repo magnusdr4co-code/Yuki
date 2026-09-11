@@ -31,7 +31,7 @@ from ..core.brake import Brake
 from ..core.spend_budget import SpendLedger
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, TERMINADO, describe_job as describe_media_job
-from ..tools import receta
+from ..tools import criterio_musical, receta
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -1225,17 +1225,22 @@ class DiscordAdapter:
             # contratado canta.
             await report(self._aviso_de_canto(lyrics_entry))
             titulo = (lyrics_entry or {}).get("title") or "Canción sin título"
-            song_prompt = plan.con_matices(
-                "Create a 90-second Spanish sung song, not an instrumental. Female mature serene voice, "
-                "72 BPM, restrained vibrato, Japanese/Korean neo-traditional palette with shamisen and koto, "
-                "industrial cold water and rust atmosphere. Sing these exact lyrics in Spanish, preserving stanza "
-                "and chorus structure:\n" + lyrics[:12000]
-            )
+            # El prompt era una constante: 90 s, 72 BPM, Insen, voz serena, con
+            # cualquier letra delante. Cuando Yuki reescribió la suya fijando 68
+            # BPM y su propia estructura, el encargo siguiente la habría
+            # contradicho en silencio. Ahora lo decide `criterio_musical`
+            # leyendo la letra, y manda lo que la letra ya traiga.
+            criterio = criterio_musical.leer_criterio(lyrics, titulo=titulo)
+            # El criterio se dice **antes** de gastar: si la métrica va a
+            # atropellar la voz, eso se sabe ahora y no al escuchar el adjunto.
+            await report(criterio.resumen())
+            song_prompt = criterio.prompt(lyrics, matices=plan.matices)
             song_step.attempts += 1
             self.media_jobs.save(job)
             song = await self.agent.nous_portal.generate_music_flow(
                 title=f"{titulo} — voz", prompt=song_prompt,
-                engine="lyria-3-pro-preview", duration_seconds=90, bpm=72, scale="Insen",
+                engine="lyria-3-pro-preview", duration_seconds=criterio.duracion_segundos,
+                bpm=criterio.bpm, scale=criterio.escala.capitalize(),
             )
             song_path = song.get("local_path") if song.get("status") == "success" else None
             if song_path and Path(song_path).is_file():

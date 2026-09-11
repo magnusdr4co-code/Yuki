@@ -42,7 +42,13 @@ def main():
     skill_p.add_argument("--concept", default="lluvia sobre metal y pan de oro", help="Concepto visual o tema")
     skill_p.add_argument("--text", default="El agua siempre encuentra su camino.", help="Texto a sintetizar o curar")
     skill_p.add_argument("--scale", default="insen", help="Escala musical (insen, hirajoshi, kumoi, iwato)")
-    skill_p.add_argument("--bpm", default=84, type=int, help="BPM del beat")
+    # Sin valor por defecto a propósito: con uno, «no lo dijo» y «pidió 84» son
+    # indistinguibles, y el criterio de composición quedaría siempre pisado por
+    # un número que nadie escribió.
+    skill_p.add_argument("--bpm", default=None, type=int,
+                         help="BPM del beat (si se omite, lo decide la letra o el criterio)")
+    skill_p.add_argument("--lyrics-id", dest="lyrics_id", default=None,
+                         help="Identificador de Biblioteca de la letra sobre la que componer")
     skill_p.add_argument("--mood", default="lluvia sobre metal", help="Atmósfera musical")
     skill_p.add_argument("--guest", default="Visitante", help="Nombre del invitado")
     skill_p.add_argument("--intention", default="buscar serenidad", help="Intención de la ceremonia")
@@ -159,6 +165,7 @@ def main():
             "text": args.text,
             "scale": args.scale,
             "bpm": args.bpm,
+            "lyrics_id": args.lyrics_id,
             "mood": args.mood,
             "guest": args.guest,
             "intention": args.intention,

@@ -93,7 +93,10 @@ def cmd_skill(skill_name: str, extra_args: dict):
             title = extra_args.get("title", "El Río Antes de Tener Nombre")
             concept = extra_args.get("concept", "lluvia sobre metal y pan de oro")
             scale = extra_args.get("scale", "insen")
-            bpm = int(extra_args.get("bpm", 82))
+            # `.get(clave, defecto)` no sirve aquí: la clave existe y vale `None`
+            # cuando nadie pasó `--bpm`, así que el defecto no llegaría a actuar
+            # y esto reventaría con `int(None)`.
+            bpm = int(extra_args.get("bpm") or 82)
 
             result = await agent.media_creator.execute_single_release_pipeline(
                 title=title, concept=concept, scale=scale, bpm=bpm
@@ -107,10 +110,32 @@ def cmd_skill(skill_name: str, extra_args: dict):
             print(f"\n{MAGENTA}{BOLD}📜 Lírica Waka Creada:{RESET}\n{result['lyrics']}")
 
         elif skill_name == "componer-beat":
+            from src.tools.criterio_musical import leer_criterio
+
             title = extra_args.get("title", "Lluvia de Metal")
-            bpm = int(extra_args.get("bpm", 84))
             mood = extra_args.get("mood", "lluvia sobre metal")
-            result = await agent.media_creator.compose_beat_structure(title=title, bpm=bpm, mood=mood)
+            scale = extra_args.get("scale", "insen")
+            # Con una letra archivada, el criterio la lee y decide; sin ella,
+            # manda lo que pida el argumento. Antes el tempo venía siempre del
+            # argumento y la ficha de la habilidad no la leía nadie.
+            letra = ""
+            lyrics_id = extra_args.get("lyrics_id")
+            if lyrics_id:
+                try:
+                    letra = agent.creation_library.read_entry(lyrics_id).get("content", "")
+                except (KeyError, OSError) as exc:
+                    print(f"{RED}❌ No pude leer la letra '{lyrics_id}': {type(exc).__name__}{RESET}")
+                    return
+            criterio = leer_criterio(letra, titulo=title)
+            if extra_args.get("bpm") is not None:
+                criterio.bpm = int(extra_args["bpm"])
+                criterio.origen["bpm"] = "argumento"
+            if not letra:
+                criterio.escala = scale
+            print(f"\n{MAGENTA}{criterio.resumen()}{RESET}\n")
+
+            result = await agent.media_creator.compose_beat_structure(
+                title=title, bpm=criterio.bpm, mood=mood, scale=criterio.escala)
             print(f"{GREEN}✅ Estructura musical y archivo MIDI compuestos:{RESET}")
             print(f"   Archivo descriptivo: {result['meta_path']}")
             print(f"   Archivo MIDI real:   {result['midi_path']} ({result['midi_bytes']} bytes)")

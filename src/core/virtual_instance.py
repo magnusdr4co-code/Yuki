@@ -226,6 +226,12 @@ class VirtualInstance:
         # Se declara porque durante meses no existía: lo único que sobrevivía a
         # una generación era el manifiesto del Artículo 50, que recorta el
         # prompt a 500 caracteres porque su trabajo es otro.
+        # Se declara porque el prompt musical era una constante: 72 BPM e Insen
+        # con cualquier letra delante, incluida una que pedía 68.
+        self._cap("medios.criterio", "Medios", REAL,
+                  "Antes de encargar audio decide tempo, compás, escala, estructura y registro "
+                  "leyendo la letra (`criterio_musical`); manda lo que la letra ya traiga y "
+                  "avisa si la métrica va a atropellar la voz")
         self._cap("medios.receta", "Medios", REAL,
                   "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
                   "parámetros, y la receta se archiva con ella en Biblioteca")

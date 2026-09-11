@@ -35,8 +35,10 @@ class LibraryDoble:
              "source": "letra", "path": "letra.md"},
         ]}
 
+    contenido = "verso largo de la canción " * 20
+
     def read_entry(self, entry_id):
-        return {"content": "verso largo de la canción " * 20}
+        return {"content": self.contenido}
 
     def inventory(self):
         return {}
@@ -311,3 +313,42 @@ def test_sin_mencionar_el_salon_no_se_habla_del_salon(tmp_path, monkeypatch):
     adaptador.brake = types.SimpleNamespace(blocked_reason=lambda ambito: None)
 
     assert "Salón" not in _lanzar(adaptador, "hazme la canción")
+
+
+def test_el_criterio_de_la_letra_gobierna_el_encargo(tmp_path, monkeypatch):
+    """
+    El prompt musical era una constante: 72 BPM e Insen con cualquier letra
+    delante. Cuando Yuki reescribió la suya fijando 68 BPM, el encargo siguiente
+    la habría contradicho en silencio.
+    """
+    adaptador, portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = (
+        "`[Tempo: 68 BPM, 4/4 time signature, Key: D minor, Insen scale.]`\n"
+        "#### [Verse 1]\n"
+        "El astillero no duerme en calma,\n"
+        "huele a salitre, metal y sal.\n"
+        "Llegué descalza, vestí otra alma,\n"
+        "doblé el orgullo frente a este mar.\n"
+    )
+
+    canal = _correr(adaptador, "hazme la canción")
+
+    assert "68 BPM" in portal.prompts_cancion[0], "el prompt no respeta el tempo de la letra"
+    assert "72 BPM" not in portal.prompts_cancion[0]
+    assert any("Criterio para" in texto for texto in canal.textos), \
+        "el criterio tiene que decirse antes de gastar, no quedarse en el prompt"
+
+
+def test_una_metrica_que_atropella_se_avisa_antes_de_generar(tmp_path, monkeypatch):
+    """«A veces se apresuraba el poema»: eso se sabe antes, no al escucharlo."""
+    adaptador, _portal, _creador = _adaptador(tmp_path, monkeypatch)
+    adaptador.agent.creation_library.contenido = (
+        "El astillero no duerme nunca y huele a salitre y a metal oxidado de los cargueros\n"
+        "Vine descalza\n"
+        "Me vestí de otra alma que no era la mía pero la elegí con sus consecuencias\n"
+        "El agua corre\n"
+    )
+
+    canal = _correr(adaptador, "hazme la canción")
+
+    assert any("desigual" in texto for texto in canal.textos)
