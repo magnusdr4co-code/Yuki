@@ -285,7 +285,7 @@ presupuesto para todo lo demás—; no entran en `describe()`, que es la línea 
 DM y no un informe; y no se emiten en `gasto_hoy`, que multiplicaría sus series
 por cada ruta y rompería la comparación con los límites.
 
-### M6 · Cerrar los canales simulados — *búsqueda y Telegram hechos, queda Honcho*
+### M6 · Cerrar los canales simulados — **hecho**
 *Cierra L5, L6 y L9.* Tres piezas del diagrama no servían tráfico real. La
 búsqueda ya está: `src/tools/web_search.py` llama a Firecrawl de verdad cuando
 hay `FIRECRAWL_API_KEY`, y sin ella devuelve pistas de introspección marcadas
@@ -314,9 +314,27 @@ La **entrada** (un bucle de `getUpdates` con su desplazamiento persistido) no
 está implementada, y `start_polling` lo dice en el arranque en vez de fingirlo.
 Anunciarla a medias es exactamente lo que hacía el código anterior.
 
-Queda **Honcho** —perfil en JSON local—, con las dos salidas honestas de
-siempre: implementarlo o retirarlo del diagrama; lo que no se sostiene es
-dejarlo dibujado como si funcionara.
+**Honcho: retirado del diagrama, que era la otra salida honesta.** El propio
+limitador L9 proponía las dos —«sincronizar con el servicio, o declarar el JSON
+local como la implementación real»— y ésta es la segunda, porque no hay servicio
+contratado y no lo va a haber por decisión de un commit.
+
+Lo que había era la tercera, la que no vale: `api_key` caía a `"mock_key"`, se
+guardaba una `api_url` que nadie llamaba, el diagrama dibujaba un «Honcho Client
+API» y `process_dialectic_exchange` devolvía `{"status": "synchronized"}`
+**siempre** —sincronizara o no, hubiera servicio o no—. Y había una prueba que
+lo exigía: un test puede fijar una mentira igual de bien que una garantía.
+
+Ahora el resultado dice `status: "local"`, `remoto: False` y si hubo cambio o
+no; el perfil se lee y se escribe con `estado_json` como el resto del estado
+—era el octavo módulo con su propia copia de esas dos líneas, y se tragaba
+cualquier excepción en silencio—; `HONCHO_API_KEY` queda marcada como no leída;
+y el gemelo virtual declara la capacidad como real y local en vez de decir
+«perfil dialéctico sincronizado» en cuanto veía una clave.
+
+Que sea local no lo hace frágil: entra en la copia de seguridad y está en
+`state_registry`, así que sobrevive a la pérdida del disco igual que la memoria.
+Con esto **L9 queda resuelto** y M6 cerrado.
 
 ### M7 · El Salón como panel de estado — **hecho**
 *Reduce la dependencia del DM.* `/api/trabajos` publica el estado de cada

@@ -1,14 +1,30 @@
 """
-Modelado Dialéctico Honcho para Yuki.
-Permite una evolución continua y adaptativa de su personalidad, gustos estéticos
-y metodologías de trabajo mediante la interacción dialéctica con su mánager/productor.
+Perfil dialéctico del Productor. **Local, y eso es lo que es.**
+
+El nombre viene de Honcho y el diagrama dibujaba un «Honcho Client API», pero en
+este código no hay ni ha habido una sola llamada a ningún servicio: el perfil
+vive en `data/honcho_profile.json` y lo actualizan dos heurísticas sobre el texto
+del Productor. `docs/VIRTUALIZACION_Y_MEJORAS.md` (M6, limitador L9) daba dos
+salidas honestas —sincronizar con el servicio o **declarar el JSON local como la
+implementación real**— y ésta es la segunda.
+
+Lo que había antes era la tercera, la que no vale: `api_key` caía a `"mock_key"`,
+se guardaba una `api_url` que nadie usaba, y `process_dialectic_exchange`
+devolvía `{"status": "synchronized"}` **siempre**, sincronizara o no, hubiera
+servicio o no. Un campo que dice «sincronizado» sin haber hablado con nadie es
+exactamente el vicio que este proyecto lleva años corrigiendo.
+
+Que sea local no lo hace frágil: el perfil entra en la copia de seguridad
+—`backup.py` lo incluye— y está declarado en `state_registry`, así que sobrevive
+a la pérdida del disco igual que la memoria.
 """
 
 import os
-import json
 import time
+from pathlib import Path
 from typing import Dict, Any, Optional
 
+from ..core import estado_json
 from ..core.rutas import datos
 
 class HonchoDialecticClient:
@@ -18,22 +34,35 @@ class HonchoDialecticClient:
         api_url: str = "https://api.honcho.dev/v1",
         app_id: str = "yuki-digital-diva"
     ):
-        self.api_key = api_key or os.getenv("HONCHO_API_KEY", "mock_key")
-        self.api_url = api_url
-        self.app_id = app_id
+        # Se siguen aceptando por compatibilidad con `config.yaml` y con el
+        # agente, que los pasa. No se usan: no hay llamada remota. Sin valor
+        # falso por defecto —`"mock_key"` daba a entender que había credencial—.
+        self.api_key = api_key or os.getenv("HONCHO_API_KEY", "")
+        self.api_url = api_url  # no se lee: no hay cliente remoto
+        self.app_id = app_id    # no se lee: no hay cliente remoto
         self.local_cache_path = str(datos("honcho_profile.json"))
         self._local_profile = self._load_local_profile()
 
     def _load_local_profile(self) -> Dict[str, Any]:
-        """Carga el perfil dialéctico local en caso de estar offline o en caché."""
-        if os.path.exists(self.local_cache_path):
-            try:
-                with open(self.local_cache_path, "r", encoding="utf-8") as f:
-                    return json.load(f)
-            except Exception:
-                pass
+        """
+        El perfil guardado, o el de base.
 
-        # Perfil base predeterminado
+        Se lee con `estado_json` como el resto del estado del proyecto: un
+        fichero corrupto devuelve el esquema vacío en vez de tumbar la
+        instancia, y aquí el esquema vacío es el perfil de base. Antes tenía su
+        propia copia de esas dos líneas y se tragaba cualquier excepción en
+        silencio, sin dejar constancia de que el perfil se había perdido.
+        """
+        guardado = estado_json.leer(
+            Path(self.local_cache_path), self._perfil_de_base,
+            valido=lambda d: isinstance(d.get("aesthetic_preferences"), dict),
+            que_es="perfil dialéctico",
+        )
+        return guardado
+
+    @staticmethod
+    def _perfil_de_base() -> Dict[str, Any]:
+        """Punto de partida. Es una función para que dos lectores no compartan listas."""
         return {
             "producer_id": "producer_manager",
             "relationship_stage": "colaboracion_creativa_estrecha",
@@ -59,9 +88,8 @@ class HonchoDialecticClient:
         }
 
     def save_local_profile(self):
-        os.makedirs(os.path.dirname(self.local_cache_path) if os.path.dirname(self.local_cache_path) else ".", exist_ok=True)
-        with open(self.local_cache_path, "w", encoding="utf-8") as f:
-            json.dump(self._local_profile, f, indent=2, ensure_ascii=False)
+        """Escritura atómica: el proceso muere a mitad justo cuando se despliega."""
+        estado_json.escribir(Path(self.local_cache_path), self._local_profile)
 
     def get_dialectic_context(self, user_id: str = "producer_manager") -> str:
         """
@@ -93,8 +121,13 @@ class HonchoDialecticClient:
         user_id: str = "producer_manager"
     ) -> Dict[str, Any]:
         """
-        Analiza un intercambio para extraer evoluciones en gustos, acuerdos o síntesis dialéctica.
-        En producción se comunica con la API de Honcho; localmente actualiza el modelo adaptativo.
+        Ajusta el perfil local con lo que el Productor haya dejado dicho.
+
+        Son dos heurísticas sobre el texto, y el resultado lo dice: `remoto` es
+        `False` siempre, porque no hay servicio con el que hablar. Antes esto
+        devolvía `{"status": "synchronized"}` en todos los casos —también cuando
+        no cambiaba nada—, que es afirmar una sincronización inexistente en el
+        único campo donde alguien iría a comprobarla.
         """
         # Detección heurística de ajustes estéticos o temáticos
         updated = False
@@ -114,6 +147,8 @@ class HonchoDialecticClient:
             self.save_local_profile()
 
         return {
-            "status": "synchronized",
-            "profile_version": self._local_profile.get("last_updated")
+            "status": "local",
+            "remoto": False,
+            "actualizado": updated,
+            "profile_version": self._local_profile.get("last_updated"),
         }

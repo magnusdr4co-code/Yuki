@@ -283,11 +283,14 @@ class VirtualInstance:
             "database_path", "data/yuki_memory.db"))
         self._cap("mente.memoria", "Mente", REAL,
                   f"SQLite FTS5 en {db} ({'presente' if db.is_file() else 'aún sin crear'})")
+        # Decía «Perfil dialéctico sincronizado» en cuanto había una clave, y no
+        # hay ni ha habido una sola llamada remota: la clave no la lee nadie. La
+        # implementación real es el JSON local, y así se declara —además entra
+        # en la copia de seguridad, que es lo que hace que no sea frágil—.
         self._cap(
-            "mente.honcho", "Mente",
-            REAL if _clave_util("HONCHO_API_KEY") else SIMULADO,
-            "Perfil dialéctico sincronizado" if _clave_util("HONCHO_API_KEY")
-            else "Perfil sólo en JSON local; sin sincronización remota",
+            "mente.honcho", "Mente", REAL,
+            "Perfil dialéctico local en `honcho_profile.json`, incluido en la copia; "
+            "no hay servicio remoto y `HONCHO_API_KEY` no se lee",
         )
         self._cap(
             "mente.web", "Mente",
@@ -491,11 +494,12 @@ class VirtualInstance:
 
         self._lim(
             id="L9", title="Honcho dialéctico sin servicio remoto",
-            severity=MODERADO, status=ABIERTO,
-            evidence="El perfil vive en JSON local; no hay sincronización.",
-            impact="El modelado con el Productor no sobrevive a la pérdida del disco ni se comparte "
-                   "entre entornos.",
-            proposals=["Sincronizar con el servicio, o declarar el JSON local como la implementación real."],
+            severity=MODERADO, status=RESUELTO,
+            evidence="El perfil vive en JSON local y ésa es la implementación declarada; "
+                     "entra en la copia y está en el registro de estado.",
+            impact="Deja de haber un servicio dibujado que nadie llama: el código ya no dice "
+                   "«synchronized» sin haber hablado con nadie.",
+            proposals=["Si algún día se contrata el servicio, añadir el cliente y volver a abrirlo."],
         )
 
     # -- Salidas ---------------------------------------------------------

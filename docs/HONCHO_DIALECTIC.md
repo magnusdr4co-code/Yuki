@@ -1,6 +1,14 @@
-# 🧠 Modelado Dialéctico con Honcho: La Relación Productor-Diva
+# 🧠 Modelado Dialéctico: La Relación Productor-Diva
 
-Este documento describe la integración de **Honcho** en Yuki para lograr una personalidad adaptativa que evoluciona mediante el diálogo continuo con su productor o mánager.
+> **Alcance real, para que no haya duda:** el perfil dialéctico es **local**. Vive
+> en `data/honcho_profile.json`, lo mueven dos heurísticas sobre el texto del
+> Productor y **no hay cliente remoto**: nunca ha habido una llamada a ningún
+> servicio de Honcho en este código. El nombre y la filosofía dialéctica vienen
+> de ahí; la implementación es propia y es ésta. `HONCHO_API_KEY` no la lee
+> nadie. Lo que sigue describe el modelo y el formato del perfil, que sí son
+> exactos; donde este documento dijera o sugiriera sincronización remota, léase
+> «perfil local». Entra en la copia de seguridad y en `state_registry`, así que
+> sobrevive a la pérdida del disco igual que la memoria.
 
 ---
 

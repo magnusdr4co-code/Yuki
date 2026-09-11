@@ -1,5 +1,10 @@
 """
-Sincronización y persistencia de perfiles dialécticos de Honcho.
+Escritura del perfil dialéctico local.
+
+No sincroniza con nada: el nombre del módulo viene de cuando el diagrama
+dibujaba un cliente remoto que nunca existió. Se conserva porque es API pública
+en uso; lo que cambia es que aquí ya no se llama sincronización a guardar un
+JSON en el disco de la instancia.
 """
 
 from .dialectic import HonchoDialecticClient

@@ -28,9 +28,9 @@ flowchart TD
         MM[Memory Lifecycle Manager]
     end
 
-    subgraph Modelado_Honcho["Modelado Dialéctico Honcho"]
-        HONCHO[Honcho Client API]
-        TOM[Theory of Mind / Profile Sync]
+    subgraph Modelado_Honcho["Perfil dialéctico (local)"]
+        HONCHO[honcho_profile.json<br/>sin servicio remoto]
+        TOM[Teoría de la mente / heurísticas]
     end
 
     subgraph Gateway_Medios["Nous Portal Gateway"]
