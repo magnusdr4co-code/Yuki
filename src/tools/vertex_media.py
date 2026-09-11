@@ -108,8 +108,14 @@ class VertexMediaClient:
                  budget: Optional[SpendLedger] = None,
                  marker: Optional[MediaMarker] = None,
                  brake: Optional[Brake] = None):
-        self.project_id = (project_id or os.getenv("VERTEX_PROJECT_ID")
-                           or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
+        # `None` significa «descubre la configuración del entorno»; una cadena
+        # vacía es una desactivación explícita y debe respetarse. Esto importa
+        # tanto para las pruebas como para los arranques que quieran mantener
+        # el motor de medios apagado aunque la VM tenga ADC/proyecto activo.
+        self.project_id = (
+            (os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
+            if project_id is None else project_id
+        )
         self.location = location or os.getenv("VERTEX_LOCATION") or "global"
         self.video_location = video_location or self.location
         self.music_location = music_location or "global"
