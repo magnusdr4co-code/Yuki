@@ -45,14 +45,17 @@ Romper una de éstas es romper el proyecto, no una prueba:
 
 ```
 src/core/       agente, albedrío (agency, spark, rituals), identidad
-                (persona_anchor, transparency), gobierno (state_registry,
-                blackbox, brake, spend_budget, virtual_instance), salud (pulse);
+                (persona_anchor, transparency, cotejo: lo dicho contra lo
+                ejecutado), gobierno (state_registry, blackbox, brake,
+                spend_budget, virtual_instance), salud (pulse);
                 `rutas.py` decide dónde vive cada cosa y `estado_json.py` cómo
                 se guarda —atómico, y tolerante a un fichero corrupto—
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 media_jobs, web_search
-src/adapters/   Discord (el que importa), Telegram (aún simulado)
+src/adapters/   Discord (el que importa), Telegram (aún simulado); `encargo.py`
+                traduce el pedido en plan de producción (qué piezas, cuántos
+                segmentos, qué indicaciones van al prompt)
 src/web/        Salón + /metrics
 src/cli/        los comandos por temas (gobierno, mente, operacion); `cli.py`
                 en la raíz sólo declara argumentos y reparte

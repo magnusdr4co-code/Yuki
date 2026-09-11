@@ -47,9 +47,27 @@ def looks_like_media_delivery_request(content: str) -> bool:
     return asks_to_make and asks_for_media and (asks_for_delivery or asks_for_both_media)
 
 
+def _entrecomillados(content: str) -> list:
+    return [t.strip() for t in re.findall(r'["“”\']([^"“”\']+)["”\']', content or "") if t.strip()]
+
+
 def extract_production_target(content: str) -> Tuple[str, str]:
     """Extrae servidor y canal de la petición; mantiene defaults conservadores."""
-    quoted = re.findall(r'["“”\']([^"“”\']+)["”\']', content or "")
-    guild_name = quoted[0].strip() if quoted else "Dev Server"
-    channel_name = quoted[1].strip() if len(quoted) > 1 else "Salón"
+    quoted = _entrecomillados(content)
+    guild_name = quoted[0] if quoted else "Dev Server"
+    channel_name = quoted[1] if len(quoted) > 1 else "Salón"
     return guild_name, channel_name
+
+
+def extract_production_theme(content: str) -> str:
+    """
+    El tema de la obra que se va a producir, si la petición lo nombra.
+
+    Es el tercer entrecomillado, después del servidor y el canal. Antes no se
+    leía: la letra, la partitura, las imágenes y el vídeo estaban escritos a
+    mano sobre *Herrumbre y Escarcha*, así que abrir un Salón para otra cosa
+    producía igualmente esa canción. El mismo defecto que en el encargo por DM,
+    en el otro camino.
+    """
+    quoted = _entrecomillados(content)
+    return quoted[2] if len(quoted) > 2 else ""

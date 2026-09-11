@@ -91,6 +91,12 @@ def _env(name: str) -> str:
     return (os.getenv(name) or "").strip()
 
 
+def _recortar(texto: str, tope: int) -> str:
+    """Detalle acotado, y con la marca de que se acortó: nunca a la chita callando."""
+    texto = (texto or "").strip()
+    return texto if len(texto) <= tope else texto[:tope - 1].rstrip() + "…"
+
+
 def _clave_util(name: str) -> bool:
     return is_usable_key(_env(name))
 
@@ -217,11 +223,26 @@ class VirtualInstance:
         )
         self._cap("medios.midi", "Medios", REAL,
                   "Partituras locales por `src/tools/midi_generator.py`, sin proveedor")
+        # Se declara porque durante meses no existía: lo único que sobrevivía a
+        # una generación era el manifiesto del Artículo 50, que recorta el
+        # prompt a 500 caracteres porque su trabajo es otro.
+        self._cap("medios.receta", "Medios", REAL,
+                  "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
+                  "parámetros, y la receta se archiva con ella en Biblioteca")
         pendientes = self.pending_media_jobs()
         self._cap(
             "medios.cola", "Medios", REAL,
             f"Cola durable en {self.data_dir / 'media_jobs'}; "
             f"{pendientes} trabajo(s) reanudable(s) ahora mismo",
+        )
+        # Se declara porque durante meses no fue verdad: los pasos eran una
+        # tupla fija y el texto del pedido no cambiaba nada, así que pedir una
+        # portada no daba portada. Quien lea esta tabla tiene que poder saber
+        # si el encargo obedece o no.
+        self._cap(
+            "medios.alcance", "Medios", REAL,
+            "El pedido gobierna el encargo (`src/adapters/encargo.py`): qué piezas "
+            "—canción, portada, vídeo—, cuántos segmentos y qué indicaciones llegan al prompt",
         )
 
     def _build_presencia(self) -> None:
@@ -230,14 +251,26 @@ class VirtualInstance:
             REAL if _clave_util("DISCORD_BOT_TOKEN") else INACTIVO,
             f"Guilds autorizados: {_env('DISCORD_ALLOWED_GUILD_ID') or 'ninguno declarado'}",
         )
-        self._cap("presencia.telegram", "Presencia", SIMULADO,
-                  "El adaptador registra en log; no usa `python-telegram-bot`")
+        # La salida ya es real; la entrada no existe y se declara. Antes esto
+        # decía «simulado» a secas mientras el adaptador escribía «Bot de
+        # Telegram de Yuki iniciado» en el log: las dos cosas a la vez.
+        telegram_listo = _clave_util("TELEGRAM_BOT_TOKEN") and bool(_env("TELEGRAM_DEFAULT_CHAT_ID"))
+        self._cap(
+            "presencia.telegram", "Presencia", REAL if telegram_listo else INACTIVO,
+            ("Salida real por la API HTTP (difusión con marca y freno); la entrada "
+             "—polling— no está implementada" if telegram_listo else
+             "Salida sin credenciales: falta TELEGRAM_BOT_TOKEN o TELEGRAM_DEFAULT_CHAT_ID; "
+             "la entrada —polling— no está implementada"),
+        )
         salon_protegido = bool(_env("SALON_API_TOKEN"))
         self._cap(
             "presencia.salon", "Presencia", REAL,
             f"Servidor web multihilo con /health en el puerto {_env('PORT') or '8080'}; "
-            + ("rutas /api con credencial" if salon_protegido else
-               "rutas /api ABIERTAS (sin SALON_API_TOKEN), con techo de 20 peticiones/5 min"),
+            + ("rutas /api con credencial; panel de trabajos y de instancia; "
+               "sirve obra en /api/outputs/<categoría>/<nombre>"
+               if salon_protegido else
+               "rutas /api ABIERTAS (sin SALON_API_TOKEN), con techo de 20 peticiones/5 min; "
+               "panel de trabajos y de instancia; no sirve obra, sólo enumera nombres"),
         )
         trabajos = (self.config.get("scheduler", {}) or {}).get("cron_jobs", []) or []
         activos = [j for j in trabajos if j.get("enabled")]
@@ -250,11 +283,14 @@ class VirtualInstance:
             "database_path", "data/yuki_memory.db"))
         self._cap("mente.memoria", "Mente", REAL,
                   f"SQLite FTS5 en {db} ({'presente' if db.is_file() else 'aún sin crear'})")
+        # Decía «Perfil dialéctico sincronizado» en cuanto había una clave, y no
+        # hay ni ha habido una sola llamada remota: la clave no la lee nadie. La
+        # implementación real es el JSON local, y así se declara —además entra
+        # en la copia de seguridad, que es lo que hace que no sea frágil—.
         self._cap(
-            "mente.honcho", "Mente",
-            REAL if _clave_util("HONCHO_API_KEY") else SIMULADO,
-            "Perfil dialéctico sincronizado" if _clave_util("HONCHO_API_KEY")
-            else "Perfil sólo en JSON local; sin sincronización remota",
+            "mente.honcho", "Mente", REAL,
+            "Perfil dialéctico local en `honcho_profile.json`, incluido en la copia; "
+            "no hay servicio remoto y `HONCHO_API_KEY` no se lee",
         )
         self._cap(
             "mente.web", "Mente",
@@ -285,7 +321,8 @@ class VirtualInstance:
         self._cap(
             "mente.ritmos", "Mente", REAL,
             f"{len(ritmos.aprobados())} ritmo(s) propio(s) activo(s), "
-            f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor",
+            f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor; "
+            "se proponen desde el DM, los aprueba él",
         )
 
         # El gemelo dice lo que la instancia puede saber de sí misma. Que sepa
@@ -457,11 +494,12 @@ class VirtualInstance:
 
         self._lim(
             id="L9", title="Honcho dialéctico sin servicio remoto",
-            severity=MODERADO, status=ABIERTO,
-            evidence="El perfil vive en JSON local; no hay sincronización.",
-            impact="El modelado con el Productor no sobrevive a la pérdida del disco ni se comparte "
-                   "entre entornos.",
-            proposals=["Sincronizar con el servicio, o declarar el JSON local como la implementación real."],
+            severity=MODERADO, status=RESUELTO,
+            evidence="El perfil vive en JSON local y ésa es la implementación declarada; "
+                     "entra en la copia y está en el registro de estado.",
+            impact="Deja de haber un servicio dibujado que nadie llama: el código ya no dice "
+                   "«synchronized» sin haber hablado con nadie.",
+            proposals=["Si algún día se contrata el servicio, añadir el cliente y volver a abrirlo."],
         )
 
     # -- Salidas ---------------------------------------------------------
@@ -488,6 +526,56 @@ class VirtualInstance:
             "limitadores_abiertos": sum(1 for lim in self.limiters if lim.status == ABIERTO),
             "limitadores_bloqueantes": sum(1 for lim in self.limiters if lim.severity == BLOQUEANTE),
         }
+
+    def bloque_de_capacidades(self, maximo: int = 4000, por_linea: int = 150) -> str:
+        """
+        Lo que Yuki puede hacer ahora mismo, para que lo lea ella y no lo niegue.
+
+        El 9 de septiembre contestó «no tengo un motor en segundo plano… ni
+        puedo tejer crons invisibles» a un Productor que le pedía justo eso, con
+        ocho rutinas declaradas, un daemon 24/7 y la facultad de proponer y
+        ajustar ritmos propios. No fue modestia: en su prompt no había ni una
+        línea que dijera qué es capaz de hacer, así que lo dedujo, y dedujo mal.
+
+        Se listan **las tres cosas**: lo real, lo simulado y lo inactivo. Dar
+        sólo lo real invitaría al vicio contrario —prometer lo que no hay—, que
+        es el que este proyecto lleva años corrigiendo.
+        """
+        por_estado = {estado: [c for c in self.capabilities if c.state == estado]
+                      for estado in (REAL, SIMULADO, INACTIVO)}
+        lineas = ["Esto es lo que puedes hacer en esta instancia ahora mismo. Es una lectura "
+                  "del entorno, no una promesa:"]
+        for estado, encabezado in (
+            (REAL, "PUEDES (real, verificado en el entorno)"),
+            (SIMULADO, "SALE MARCADO COMO SIMULADO (existe, pero no es obra)"),
+            (INACTIVO, "NO PUEDES AHORA (inactivo, y por qué)"),
+        ):
+            if not por_estado[estado]:
+                continue
+            lineas.append(f"\n{encabezado}:")
+            # Se recorta cada detalle y no la lista entera: con un tope global,
+            # lo que se pierde es la cola, y la cola es justo «lo que no puedes
+            # y por qué». Un dato largo de más vale menos que una lista completa.
+            lineas += [f"- {cap.id}: {_recortar(cap.detail, por_linea)}"
+                       for cap in por_estado[estado]]
+        bloqueantes = [lim for lim in self.limiters
+                       if lim.status == ABIERTO and lim.severity == BLOQUEANTE]
+        if bloqueantes:
+            lineas.append("\nLIMITADORES BLOQUEANTES ABIERTOS:")
+            lineas += [f"- {lim.title}: {lim.impact}" for lim in bloqueantes]
+        cierre = (
+            "\nNo niegues nada de lo que aparece arriba como real: existe, y decir que no "
+            "es aparentar una limitación igual de falsa que aparentar una capacidad. Si algo "
+            "no te sale, nombra el limitador concreto de esta lista en vez de negar la facultad."
+        )
+        texto = "\n".join(lineas)
+        # El prompt no es infinito y esto va en cada turno. Si hay que recortar,
+        # se dice que se recortó —una lista truncada que parezca completa es
+        # justo el engaño que este bloque viene a evitar— y el cierre sobrevive
+        # al recorte: es la instrucción, no el relleno.
+        if len(texto) > maximo:
+            texto = texto[:maximo].rsplit("\n", 1)[0] + "\n- […] lista recortada por longitud."
+        return texto + cierre
 
     def render_markdown(self) -> str:
         resumen = self.summary()

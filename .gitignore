@@ -38,27 +38,19 @@ env/
 venv/
 ENV/
 
-# Output assets cache (keep directory structure with .gitkeep)
-output/art/*.png
-output/art/*.jpg
-output/art/*.webp
-output/voice/*.ogg
-output/voice/*.mp3
-output/music/*.mp3
-output/music/*.wav
-output/video/*.mp4
-output/posts/*.md
-# Marcadores de medio simulado. Se les cambió la extensión a `.simulado.txt`
-# para que un fichero de texto dejara de llamarse `.png` —el contenido decía la
-# verdad y el nombre mentía—, y al hacerlo dejaron de encajar en las reglas de
-# arriba: cinco se colaron en un commit. Siguen siendo obra falsa que no va al
-# repositorio.
-output/**/*.simulado.txt
-!output/art/.gitkeep
-!output/voice/.gitkeep
-!output/music/.gitkeep
-!output/video/.gitkeep
-!output/posts/.gitkeep
+# Obra generada. La regla es la **propiedad** —en `output/` no se versiona nada—
+# y no una lista de extensiones. Enumerarlas ya falló dos veces: el día que los
+# marcadores pasaron a `.simulado.txt` dejaron de encajar y se colaron cinco en
+# un commit; y los manifiestos `.c2pa.json` que acompañan a cada fichero marcado
+# no encajaron nunca —se escriben junto a cada medio y estaban a un `git add -A`
+# de entrar—. Con la lista, un formato nuevo se cuela solo.
+output/**
+# Los directorios se reincluyen para que git pueda descender y ver los .gitkeep.
+!output/**/
+!output/**/.gitkeep
+# El canon de Biblioteca sí es texto del proyecto, no obra generada.
+!output/Biblioteca/INDEX.md
+!output/Biblioteca/CANON.md
 
 # Estado en runtime: la memoria y el estado vital de Yuki son propios de cada
 # despliegue, no del repositorio. Un clon limpio arranca con valores por defecto.

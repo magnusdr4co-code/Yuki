@@ -106,18 +106,25 @@ class AutonomousTasks:
             voice_result = await self.agent.nous_portal.synthesize_voice_tts(text=morning_text)
             logger.info(f"🎙️ Voz matutina generada: {voice_result['audio_url']}")
 
-        # Difundir a adaptadores activos (si están configurados)
+        # Difundir a adaptadores activos (si están configurados). El resultado
+        # se conserva: antes se descartaba, así que la tarea daba el día por
+        # difundido aunque no hubiera salido nada hacia ningún seguidor.
+        difusion = {"entregado": False, "motivo": "sin adaptador de Telegram"}
         if hasattr(self.agent, "telegram_adapter") and self.agent.telegram_adapter:
-            await self.agent.telegram_adapter.broadcast_drop(
+            difusion = await self.agent.telegram_adapter.broadcast_drop(
                 text=morning_text,
                 image_path=image_result["local_path"] if image_result else None,
                 audio_path=voice_result["local_path"] if voice_result else None
-            )
+            ) or {"entregado": False, "motivo": "el adaptador no dijo nada"}
+        if not difusion.get("entregado"):
+            logger.warning("Inspiración matutina no difundida: %s",
+                           difusion.get("motivo") or "sin detalle")
 
         return {
             "text": morning_text,
             "image": image_result,
-            "voice": voice_result
+            "voice": voice_result,
+            "difusion": difusion
         }
 
     async def daily_memory_synthesis(self):

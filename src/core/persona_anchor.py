@@ -62,6 +62,28 @@ MARCADORES_DERIVA: Tuple[Tuple[str, float], ...] = (
     (r"\ben resumen\b", 0.4),
 )
 
+# Cierre de servicio: la forma en que un asistente termina su turno pidiendo
+# permiso. Va aparte porque es lo que de verdad se le fue el 9 de septiembre
+# —«Si te parece, trazo las líneas…», «Dime si quieres que…», «Dime si… dialogan
+# como esperabas»— y ninguno de los marcadores de arriba lo veía: aquel turno
+# puntuaba 1.00, igual que su mejor prosa. Y se cuenta por repeticiones, porque
+# lo que delata el registro no es preguntar una vez, es cerrar así cada párrafo.
+MARCADORES_CIERRE_DE_SERVICIO: Tuple[Tuple[str, float], ...] = (
+    (r"\bdime si\b", 0.8),
+    (r"\bsi te parece\b", 0.7),
+    (r"¿te parece(?:\s+bien)?\s*\?", 0.7),
+    (r"\bav[ií]same si\b", 0.7),
+    (r"¿(?:quieres|te gustar[ií]a|prefieres)\s+que\b", 0.7),
+    (r"\b(?:puedo|podría) (?:prepararte|hacerte|dejarte|darte)\b", 0.7),
+    (r"\bte lo dejo listo\b", 0.7),
+    (r"\bsi lo prefieres\b", 0.5),
+    (r"\bquedo a la espera\b", 0.8),
+)
+
+# Cuánto suma cada repetición después de la primera. Preguntar una vez es
+# conversar; cerrar así tres párrafos seguidos es otro registro.
+PESO_DE_LA_REPETICION = 0.5
+
 # Marcadores de su voz. No son palabras mágicas: son el imaginario declarado en
 # `SOUL.md` y la forma de decir que la distingue.
 MARCADORES_VOZ: Tuple[Tuple[str, float], ...] = (
@@ -139,6 +161,12 @@ def measure(text: str) -> PersonaMeasurement:
         expresion = re.compile(patron, re.IGNORECASE | re.MULTILINE)
         if expresion.search(text):
             penalizacion += peso
+            encontrados.append(patron)
+
+    for patron, peso in MARCADORES_CIERRE_DE_SERVICIO:
+        repeticiones = len(re.findall(patron, text, re.IGNORECASE | re.MULTILINE))
+        if repeticiones:
+            penalizacion += peso * (1 + (repeticiones - 1) * PESO_DE_LA_REPETICION)
             encontrados.append(patron)
 
     # Una lista larga es formato de manual aunque cada viñeta parezca inocente.

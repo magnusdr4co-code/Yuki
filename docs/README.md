@@ -13,6 +13,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 
 | Pregunta | Documento |
 |---|---|
+| Un encargo devuelve siempre lo mismo | [INCIDENTE_ENCARGO_MULTIMEDIA.md](INCIDENTE_ENCARGO_MULTIMEDIA.md) — los catorce hallazgos de la sesión del 9 de septiembre, con su estado |
 | Está desplegado y algo falla | [OPERACION.md](OPERACION.md) — CI, humo, métricas, bitácora, freno, simulacro, restauración, signos vitales |
 | Todo verde y no hace nada | [OPERACION.md §8](OPERACION.md) (signos vitales) y [LIBRE_ALBEDRIO.md §6](LIBRE_ALBEDRIO.md) (censo de ciclos) |
 | Qué puede y qué no puede esta instancia | [VIRTUALIZACION_Y_MEJORAS.md](VIRTUALIZACION_Y_MEJORAS.md) — gemelo virtual y limitadores L1–L11 |

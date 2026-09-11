@@ -299,3 +299,42 @@ def test_el_repositorio_no_lleva_obra_generada():
                and f not in HEREDADOS]
 
     assert not colados, f"obra generada versionada en el repositorio: {colados}"
+
+
+def test_un_formato_nuevo_en_la_salida_ya_viene_ignorado():
+    """
+    La otra mitad: el guardián de arriba avisa **después** del commit.
+
+    `.gitignore` enumeraba extensiones, así que sólo protegía de lo que ya se
+    había generado alguna vez. Los manifiestos `.c2pa.json` que acompañan a cada
+    fichero marcado no encajaron nunca en ninguna regla: se escriben junto a
+    cada medio y estaban a un `git add -A` de entrar en el repositorio.
+
+    Se comprueba con un nombre que nadie ha visto nunca, porque de eso va: de lo
+    que se genere mañana.
+    """
+    import subprocess
+
+    raiz = Path(__file__).resolve().parents[1]
+    inventados = [
+        "output/music/pista.c2pa.json",
+        "output/music/pista.receta.json",
+        "output/art/lienzo.formato-que-aun-no-existe",
+        "output/video/toma.simulado.txt",
+    ]
+    for candidato in inventados:
+        decision = subprocess.run(["git", "check-ignore", "-q", candidato],
+                                  cwd=raiz, timeout=60)
+        assert decision.returncode == 0, f"'{candidato}' entraría al repositorio"
+
+    # Y las carpetas siguen existiendo: ignorarlo todo sin reincluir los
+    # marcadores dejaría el árbol sin `output/` y algún camino escribiría en
+    # un directorio que no está.
+    #
+    # `--no-index` no es un detalle: sin él, `check-ignore` da por no ignorado
+    # todo lo que ya está en el índice, y como los `.gitkeep` están seguidos
+    # desde siempre, la comprobación pasaba sin llegar a mirar la regla.
+    for marcador in ("output/music/.gitkeep", "output/art/.gitkeep"):
+        decision = subprocess.run(["git", "check-ignore", "--no-index", "-q", marcador],
+                                  cwd=raiz, timeout=60)
+        assert decision.returncode != 0, f"'{marcador}' tiene que seguir versionado"

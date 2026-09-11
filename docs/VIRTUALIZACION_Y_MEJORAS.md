@@ -95,6 +95,14 @@ abiertas, para no tumbar un despliegue en marcha—, pero el arranque lo avisa y
 el gemelo virtual lo reporta como limitador abierto. Cerrarlo es declarar la
 variable en la instancia y, mejor aún, restringir el puerto en el cortafuegos.
 
+Con una excepción, y va en la otra dirección: `/api/outputs/<categoría>/<nombre>`
+—que sirve el fichero de una obra, no su nombre— **exige credencial siempre**,
+también cuando el resto de `/api` está abierto. Enumerar nombres es una fuga
+menor; servir los bytes a quien alcance el puerto es otra cosa, y encenderla en
+silencio cambiaría la exposición de una instancia en marcha. Sin token, responde
+403 diciendo por qué, y el listado declara que la descarga está desactivada en
+vez de callarlo.
+
 ### L4 — El canto dependía de una sola preview (mitigado)
 
 `generate_music_flow` sólo producía audio real por `lyria-3-pro-preview`. Una
@@ -224,19 +232,60 @@ protege de perder el disco, que es el escenario de L7. Manual:
 
 ### M4 · Motor musical de respaldo — **hecho**
 *Mitiga L4.* Construido con lo que ya había en casa, como se proponía: partitura
-propia, FluidSynth y ffmpeg. Ver la ficha de L4. Queda pendiente lo que ningún
-código resuelve: contratar un segundo motor que **cante**, para que el canto no
-dependa de una sola preview, y archivar en Biblioteca el prompt y los parámetros
-de cada pista para poder rehacerla igual.
+propia, FluidSynth y ffmpeg. Ver la ficha de L4.
 
-### M5 · Extender el enrutado por tarea al resto del sistema
-*Amplía lo hecho.* `provider_routing.routes` ya se aplica: las rutas del cron
-(`feed_summary`, `social_formatting`, `dialectic_synthesis`) salen con su modelo,
-su temperatura y su techo, en vez de que un resumen de feed cueste lo mismo que
-una síntesis dialéctica. Falta llevarlo al arnés del Productor y a
-`music_composition`, y publicar el coste por ruta cuando exista M2.
+**La receta de cada obra ya se archiva.** Era la segunda mitad de esta ficha y
+faltaba: lo único que sobrevivía a una generación era el manifiesto del Artículo
+50, y ése no es una receta —guarda el prompt recortado a 500 caracteres dentro
+de un campo llamado `abstract`, porque su trabajo es declarar el origen, no
+reproducir la obra—. Con la letra de una canción dentro, eso es perderla entera.
 
-### M6 · Cerrar los canales simulados — *búsqueda hecha, quedan Telegram y Honcho*
+Ahora cada fichero generado —imagen, música, vídeo, voz y también el respaldo
+local— deja un `<fichero>.receta.json` al lado con el prompt íntegro y los
+parámetros que de verdad cambian el resultado: motor, duración, bpm, escala,
+relación de aspecto, imagen de partida. Al inventariar, la receta **viaja con la
+obra** a Biblioteca; si se quedara en `output/` se perdería en la primera
+limpieza. No se archiva como pieza aparte: no es obra, es lo que explica una.
+
+`receta.diferencias()` responde además la pregunta que nadie podía contestar
+cuando el Productor decía «me has devuelto exactamente lo mismo»: si las dos
+recetas coinciden, no fue terquedad del modelo, se pidió lo mismo.
+
+Queda pendiente lo que ningún código resuelve: contratar un segundo motor que
+**cante**, para que el canto no dependa de una sola preview.
+
+### M5 · Extender el enrutado por tarea al resto del sistema — **hecho**
+*Amplía lo hecho.* Las rutas del cron ya salían con su modelo, su temperatura y
+su techo. Faltaban tres cosas y están las tres.
+
+**El arnés del Productor.** `generate_with_tools` ignoraba el enrutado por
+completo: el único camino donde Yuki **ejecuta** de verdad salía siempre con
+`agent.model`. Ahora usa `producer_tools`, con una diferencia deliberada
+respecto a `generate`: ahí el `max_tokens` de la ruta **sube** el techo, nunca lo
+baja. Un turno de herramientas que se corta por longitud no da una respuesta más
+corta, da un `finish_reason == "length"` y se descarta entero.
+
+**`music_composition`.** Estaba declarada en `config.yaml` desde el principio y
+no la leía nadie —un dial que no gira, la regla 6 de `CLAUDE.md`—. Escribir la
+letra de una canción es exactamente su tarea, y es lo que la usa ahora. Hay una
+prueba que recorre `provider_routing.routes` y exige que **cada ruta declarada
+tenga un lector**, para que la siguiente no vuelva a quedarse suelta.
+
+**El coste por ruta.** El enrutado mandaba un resumen de feed a un modelo barato
+y una síntesis a uno caro, pero el gasto caía todo en el mismo montón: no había
+forma de comprobar si separarlas servía de algo. `record_llm` anota ahora también
+por tarea y `por_ruta()` lo devuelve con su coste estimado. Se ve en `cli.py
+spend` (tabla «Texto por tarea») y en `/metrics`
+(`yuki_gasto_texto_usd_por_ruta`, `yuki_gasto_tokens_por_ruta`).
+
+Tres decisiones que evitan que el desglose estorbe: las unidades por ruta llevan
+prefijo y **no tienen límite propio** —un techo diario se pone al total; acotar
+una tarea sola dejaría a Yuki sin poder resumir un feed mientras le sobra
+presupuesto para todo lo demás—; no entran en `describe()`, que es la línea del
+DM y no un informe; y no se emiten en `gasto_hoy`, que multiplicaría sus series
+por cada ruta y rompería la comparación con los límites.
+
+### M6 · Cerrar los canales simulados — **hecho**
 *Cierra L5, L6 y L9.* Tres piezas del diagrama no servían tráfico real. La
 búsqueda ya está: `src/tools/web_search.py` llama a Firecrawl de verdad cuando
 hay `FIRECRAWL_API_KEY`, y sin ella devuelve pistas de introspección marcadas
@@ -245,16 +294,81 @@ inventados que la reflexión de las 03:00 citaba como corrientes del mundo. El
 origen viaja en el propio prompt (`describe_origin`), así que Yuki no puede
 atribuir al mundo algo que no salió de él.
 
-Quedan Telegram —registra en log, no llega a ningún seguidor— y Honcho —perfil
-en JSON local—. Cada uno admite dos salidas honestas: implementarlo o retirarlo
-del diagrama; lo que no se sostiene es dejarlo dibujado como si funcionara.
+**Telegram: la salida ya es real; la entrada no existe y se dice.** Era peor de
+lo que esta ficha describía. `start_polling` escribía «Bot de Telegram de Yuki
+iniciado» con un token configurado y no iniciaba nada, y `broadcast_drop`
+registraba `📢 [TELEGRAM BROADCAST]` con el texto del lanzamiento y devolvía
+`None`, así que la tarea de las 07:30 daba el día por difundido. Nadie recibía
+nada y nada fallaba.
 
-### M7 · El Salón como panel de estado
-*Reduce la dependencia del DM.* Hoy el único sitio donde se ve un encargo es la
-DM del Productor. Exponer en el Salón el estado de los trabajos —pasos
-verificados, fallos con su motivo, nada de promesas— permite comprobar una
-producción sin abrir Discord y da al informe de virtualización un lugar donde
-vivir en caliente.
+Ahora la difusión sale de verdad contra la API HTTP de Telegram, **con la
+biblioteca estándar**: `multipart` son veinte líneas que no envejecen y la
+instancia es una `e2-small` con 2 GB para todo. Cumple las tres reglas que la
+hacen publicable: el freno se consulta **antes** de tocar la red, la obra se
+marca **antes** de entregarla y cada mensaje lleva la declaración visible, y
+nada se da por entregado sin la confirmación del servidor —un `chat not found`
+no es una difusión—. El resultado dice `entregado` y, si no, por qué; la tarea
+matutina lo conserva y lo registra en vez de descartarlo.
+
+La **entrada** (un bucle de `getUpdates` con su desplazamiento persistido) no
+está implementada, y `start_polling` lo dice en el arranque en vez de fingirlo.
+Anunciarla a medias es exactamente lo que hacía el código anterior.
+
+**Honcho: retirado del diagrama, que era la otra salida honesta.** El propio
+limitador L9 proponía las dos —«sincronizar con el servicio, o declarar el JSON
+local como la implementación real»— y ésta es la segunda, porque no hay servicio
+contratado y no lo va a haber por decisión de un commit.
+
+Lo que había era la tercera, la que no vale: `api_key` caía a `"mock_key"`, se
+guardaba una `api_url` que nadie llamaba, el diagrama dibujaba un «Honcho Client
+API» y `process_dialectic_exchange` devolvía `{"status": "synchronized"}`
+**siempre** —sincronizara o no, hubiera servicio o no—. Y había una prueba que
+lo exigía: un test puede fijar una mentira igual de bien que una garantía.
+
+Ahora el resultado dice `status: "local"`, `remoto: False` y si hubo cambio o
+no; el perfil se lee y se escribe con `estado_json` como el resto del estado
+—era el octavo módulo con su propia copia de esas dos líneas, y se tragaba
+cualquier excepción en silencio—; `HONCHO_API_KEY` queda marcada como no leída;
+y el gemelo virtual declara la capacidad como real y local en vez de decir
+«perfil dialéctico sincronizado» en cuanto veía una clave.
+
+Que sea local no lo hace frágil: entra en la copia de seguridad y está en
+`state_registry`, así que sobrevive a la pérdida del disco igual que la memoria.
+Con esto **L9 queda resuelto** y M6 cerrado.
+
+### M7 · El Salón como panel de estado — **hecho**
+*Reduce la dependencia del DM.* `/api/trabajos` publica el estado de cada
+encargo —pasos verificados, entregados, intentos y el motivo de cada fallo— y el
+Salón lo pinta y lo refresca cada treinta segundos. Dos decisiones que lo hacen
+útil en vez de decorativo: se lee **del disco y no del agente**, así que contesta
+también con el daemon caído, que es justo cuando alguien mira el panel para saber
+dónde se quedó algo; y «verificado» sale de `is_done()`, no del estado guardado,
+porque un paso marcado hecho cuyo fichero ya no está hay que rehacerlo y el panel
+no puede decir que sí donde la entrega dice que no. Va detrás de la credencial,
+como `/metrics`.
+
+**Y al abrirlo apareció lo de verdad grave: el panel mentía.** El aside del Salón
+era una maqueta presentada como cuadro de mandos.
+
+- «🧠 Memoria FTS5 **en Vivo**», con insignia verde `BM25 INDEX`, eran dos
+  recuerdos escritos a mano en el HTML. `/api/memories` existía desde siempre y
+  no lo llamaba nadie. La insignia era la misma con la memoria leída que con la
+  consulta caída.
+- «Rutinas Cron: 03:00 / 07:30 / 23:30», en verde y en monoespaciada: tres de las
+  ocho que hay, congeladas. Quien mirase el panel concluía que Yuki tiene tres
+  rutinas —que es exactamente lo que ella misma le dijo al Productor el 9 de
+  septiembre, y que costó una corrección aparte—.
+- «Álbum en Curso» y «Paleta Sonora» no correspondían a nada que la instancia
+  pueda leer.
+
+Ahora todas las filas se leen: `/api/instancia` da rutinas reales con su
+expresión cron y su zona, el directorio de obra resuelto y los signos vitales, y
+la fila verde del pulso sólo se enciende con `viva` —que el proceso corra no es
+que Yuki viva, y un panel verde con ella parada es el fallo más silencioso que
+tiene el proyecto—. Cuando algo no se puede leer, el panel dice «sin lectura» y
+el motivo. Si `config.yaml` no se puede abrir, la respuesta lleva el error y una
+lista de rutinas **vacía**: inventar rutinas es el fallo que este endpoint
+corrige, no uno que pueda cometer al fallar.
 
 ## 5. Comprobación
 

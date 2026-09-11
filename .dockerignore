@@ -40,13 +40,10 @@ data/backups/
 data/runtime_overrides.json
 media_cache/
 
-# Artefactos generados por Yuki
-output/art/*
-output/voice/*
-output/music/*
-output/posts/*
-output/video/*
-output/Biblioteca/
+# Artefactos generados por Yuki. La regla es la propiedad, no la lista de
+# carpetas: una categoría nueva de obra —`output/otro/`— no tendría por qué
+# entrar en la imagen sólo por no estar enumerada aquí.
+output/**
 !output/**/.gitkeep
 
 # Python

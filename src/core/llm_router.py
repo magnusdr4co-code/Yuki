@@ -689,8 +689,20 @@ class LLMRouter:
             LocalVoiceProvider(),
         ]
 
-    def generate_with_tools(self, messages, tools):
-        """Turno de herramientas real; nunca degrada a prosa local simulada."""
+    def generate_with_tools(self, messages, tools, route: Optional[str] = None):
+        """
+        Turno de herramientas real; nunca degrada a prosa local simulada.
+
+        Honra la ruta declarada, que era lo que faltaba de M5: el arnés del
+        Productor salía siempre con `agent.model`, así que el enrutado por tarea
+        se aplicaba a los crons y no al camino donde Yuki ejecuta de verdad.
+
+        Con una diferencia deliberada respecto a `generate`: el `max_tokens` de
+        la ruta **sube** el techo, nunca lo baja. Un turno de herramientas que se
+        corta por longitud no da una respuesta más corta, da un
+        `finish_reason == "length"` y se descarta entero.
+        """
+        options = self.resolve_route(route)
         for provider in self.providers:
             if not isinstance(provider, (VertexProvider, OpenRouterProvider)) or not provider.is_available():
                 continue
@@ -704,13 +716,24 @@ class LLMRouter:
                                     timeout=45, max_retries=1)
                 else:
                     client = provider._client().with_options(timeout=45, max_retries=1)
-                for model in (provider.primary_model, provider.fallback_model):
+                modelos = [provider.primary_model, provider.fallback_model]
+                # El modelo preferente se nombra a través del agregador; Vertex
+                # rechazaría ese identificador, así que allí sólo se aplican los
+                # ajustes agnósticos, igual que en `generate`.
+                if (options is not None and options.preferred_model
+                        and isinstance(provider, OpenRouterProvider)):
+                    modelos.insert(0, options.preferred_model)
+                techo = max(provider.max_tokens, 4096,
+                            options.max_tokens if options is not None and options.max_tokens else 0)
+                extra = ({"temperature": options.temperature}
+                         if options is not None and options.temperature is not None else {})
+                for model in modelos:
                     if not model:
                         continue
                     try:
                         response = client.chat.completions.create(
                             model=model, messages=messages, tools=tools, tool_choice="auto",
-                            max_tokens=max(provider.max_tokens, 4096),
+                            max_tokens=techo, **extra,
                         )
                         choice = response.choices[0]
                         if choice.finish_reason == "length":

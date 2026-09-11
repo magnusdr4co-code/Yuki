@@ -46,6 +46,13 @@ VOZ_CARACTERES = "voz_caracteres"
 TOKENS_ENTRADA = "tokens_entrada"
 TOKENS_SALIDA = "tokens_salida"
 
+# Prefijo de las unidades desglosadas por tarea. Van aparte de las totales
+# porque un límite diario se pone al total: acotar una ruta sola dejaría a Yuki
+# sin poder resumir un feed mientras le sobra presupuesto para todo lo demás.
+PREFIJO_RUTA = "ruta:"
+SUFIJO_ENTRADA = ":entrada"
+SUFIJO_SALIDA = ":salida"
+
 # Precios de referencia, orientativos: la cifra que manda es la del panel de
 # facturación. Música ausente a propósito (ver docstring).
 PRECIO_VIDEO_POR_SEGUNDO = 0.10
@@ -304,12 +311,43 @@ class SpendLedger:
         logger.info("Reserva devuelta: %s -%g", unit, amount)
         return consumo
 
-    def record_llm(self, input_tokens: int, output_tokens: int) -> None:
-        """Atajo para el consumo de texto, que llega en dos unidades a la vez."""
+    def record_llm(self, input_tokens: int, output_tokens: int,
+                   route: Optional[str] = None) -> None:
+        """
+        Atajo para el consumo de texto, que llega en dos unidades a la vez.
+
+        Con `route` se anota además por tarea. El enrutado ya mandaba un resumen
+        de feed a un modelo barato y una síntesis dialéctica a uno caro, pero el
+        gasto se sumaba en un único montón: no había forma de saber si la
+        separación estaba sirviendo de algo. `M5` pedía exactamente esto.
+        """
         if input_tokens:
             self.record(TOKENS_ENTRADA, input_tokens)
         if output_tokens:
             self.record(TOKENS_SALIDA, output_tokens)
+        if route and (input_tokens or output_tokens):
+            # Las unidades por ruta llevan prefijo para no colisionar con las
+            # que tienen límite: un techo se pone al total, no a una tarea.
+            self.record(f"{PREFIJO_RUTA}{route}{SUFIJO_ENTRADA}", input_tokens or 0)
+            self.record(f"{PREFIJO_RUTA}{route}{SUFIJO_SALIDA}", output_tokens or 0)
+
+    def por_ruta(self) -> Dict[str, Dict[str, float]]:
+        """Consumo de texto de hoy desglosado por tarea, con su coste estimado."""
+        desglose: Dict[str, Dict[str, float]] = {}
+        for unidad, cantidad in self.today().items():
+            if not unidad.startswith(PREFIJO_RUTA):
+                continue
+            resto = unidad[len(PREFIJO_RUTA):]
+            if resto.endswith(SUFIJO_ENTRADA):
+                nombre, clave, precio = resto[:-len(SUFIJO_ENTRADA)], "entrada", TOKENS_ENTRADA
+            elif resto.endswith(SUFIJO_SALIDA):
+                nombre, clave, precio = resto[:-len(SUFIJO_SALIDA)], "salida", TOKENS_SALIDA
+            else:
+                continue
+            fila = desglose.setdefault(nombre, {"entrada": 0.0, "salida": 0.0, "usd": 0.0})
+            fila[clave] = cantidad
+            fila["usd"] = round(fila["usd"] + coste_estimado(precio, cantidad), 6)
+        return desglose
 
     # -- Informe ---------------------------------------------------------
 
@@ -320,6 +358,10 @@ class SpendLedger:
             return "Sin gasto registrado hoy."
         partes = []
         for unidad in sorted(consumo):
+            # El desglose por ruta tiene su propia salida (`por_ruta`): meterlo
+            # aquí convertiría la línea del DM en un informe ilegible.
+            if unidad.startswith(PREFIJO_RUTA):
+                continue
             limite = self.limits.get(unidad)
             usado = consumo[unidad]
             partes.append(f"{unidad}: {usado:g}" + (f"/{limite:g}" if limite is not None else ""))

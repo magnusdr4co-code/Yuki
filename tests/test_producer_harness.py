@@ -6,7 +6,7 @@ import pytest
 
 from src.tools.creation_library import CreationLibrary
 from src.tools.producer_terminal import ProducerTerminal
-from src.core.producer_harness import ProducerHarness
+from src.core.producer_harness import RUTA, ProducerHarness
 from src.core.runtime_config import RuntimeConfigStore
 
 
@@ -60,7 +60,11 @@ def call(name, arguments=None):
 
 def agent_for(tmp_path, turns, allowed=True):
     class Router:
-        def generate_with_tools(self, messages, tools):
+        def generate_with_tools(self, messages, tools, route=None):
+            # `route` no es opcional en el arnés: sale siempre con la
+            # ruta declarada. Un doble más estrecho que la firma real
+            # deja pasar el cambio que rompe producción.
+            assert route == RUTA
             if len(messages) > 2:
                 assert messages[-1]["tool_call_id"] == "call-1"
             return turns.pop(0)

@@ -15,8 +15,11 @@ Un fallo o límite devuelve resultado parcial; no se promete trabajo futuro inex
 Model Armor inspecciona el prompt, argumentos y respuesta. La inferencia sale del event loop.
 
 Herramientas: `library_inventory`, `library_list`, `library_save_text`, `library_read`,
-`library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set` y
-`runtime_config_rollback`. El canon es tipo/estado: sonora, visual, palabra, audiovisual;
+`library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set`,
+`runtime_config_rollback`, `ritual_list`, `ritual_propose` y `ritual_adjust`. Las tres
+últimas existen porque le pidieron «apúntate tareas y crons» y el turno terminó con cero
+herramientas ejecutadas y un «no puedo» falso: no había ninguna que llamar. Sólo consultan
+y proponen —aprobar un ritmo no está en este bucle, porque proponer no es concederse—. El canon es tipo/estado: sonora, visual, palabra, audiovisual;
 semilla, en-desarrollo, terminado. Los originales no se borran. Imports idempotentes
 por hash, límite 100 MB por archivo, sin enlaces fuera de output. Simulaciones conocidas
 se omiten. JSON de producción permanece en origen; no se etiqueta como obra.
@@ -26,6 +29,14 @@ de output. El estado inicial es en-desarrollo: ni la publicación ni un éxito d
 certifican que una obra esté terminada. Guardar otro texto crea una versión por hash.
 
 El flujo específico del Salón archiva presentación y letra y avisa al DM al terminar.
+Qué obra produce sale de la petición: `crea el canal "<servidor>" "<canal>" "<obra>"` —el
+tercer entrecomillado nombra la obra y gobierna la letra, el título y el imaginario de la
+partitura, los tres conceptos visuales y el prompt del vídeo—. Sin él se produce la de
+siempre, que es el comportamiento anterior; antes todo eso estaba escrito a mano sobre un
+título concreto, así que abrir un Salón para otra cosa producía igualmente aquélla. El
+acuse dice qué obra y a cuánto sale —una pista, tres imágenes y 6 s de vídeo— con el
+presupuesto de hoy, porque este camino gastaba sin mencionar ninguna de las dos cosas.
+
 Las órdenes del Productor emparejado que solicitan crear y entregar música, audio o vídeo
 se interceptan **antes** del `ProducerHarness`: no dependen de que el LLM decida invocar
 herramientas. El adaptador confirma el inicio, recupera los recursos de Biblioteca,
@@ -47,6 +58,44 @@ trabajos reanudables. El gasto de medios se reserva contra el presupuesto diario
 de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, sin gastar
 intento ni cerrar el encargo. Si Lyria no sirve la pista, el respaldo local entrega una
 maqueta instrumental declarada como tal: la entrega nunca llama canción a lo que no canta.
+
+Y cuando una entrega repite lo anterior, lo dice en el propio adjunto: si el
+fichero es byte a byte el ya entregado en un trabajo previo, o si el paso vuelve
+con la misma nota de limitación, el pie lo nombra. Es la mitad comprobable de un
+fallo que no lo es entero —Yuki explicó una vez por qué la canción no salía
+cantada, el turno siguiente salió igual y no lo mencionó—: el sistema puede
+señalar que el resultado no ha cambiado; retractarse de la explicación sigue
+siendo suyo.
+
+El acuse inicial dice el coste previsto —segundos de vídeo, pista, imagen— y el
+presupuesto de hoy, y avisa si el encargo no cabe: descubrir el tope a mitad
+cuesta lo ya generado. Y un pedido idéntico palabra por palabra al de un trabajo
+terminado hace menos de noventa minutos, con sus ficheros todavía vivos, no se
+ejecuta: se responde con lo que ya existe y con qué haría falta para que saliera
+distinto. Cualquier cambio del texto libera la guarda, porque el pedido pasa a
+ser otro.
+
+Qué pasos tiene el encargo lo decide el pedido, no una constante. `src/adapters/encargo.py`
+lee el texto y arma el plan: si nombra piezas —canción, portada, vídeo— se producen sólo
+ésas, y si no nombra ninguna sale el encargo completo de siempre; «sin vídeo» no encarga
+vídeo; «dos segmentos» paga dos y no cuatro; y las indicaciones literales del pedido viajan
+al final de cada prompt, que es lo que faltaba para que «esta vez con más percusión»
+pudiera sonar distinto. La portada tiene paso propio y una que el proveedor devuelva como
+`simulated` no se entrega como obra. El acuse inicial dice qué se va a producir, antes de
+gastar, para que lo que no vaya a salir se sepa entonces y no por su ausencia al final. El
+plan es determinista sobre el mismo texto, y al reanudar el texto es el del trabajo
+guardado: los identificadores de paso salen idénticos y un reinicio sigue costando sólo lo
+que falta.
+
+Y la respuesta se coteja con lo ejecutado antes de salir. Si el texto cita un
+identificador de Biblioteca que no está en el índice, o dice que algo «queda
+guardado» en un turno donde no se llamó a ninguna herramienta de escritura, la
+discrepancia se publica junto a la respuesta, encima del registro de ejecución:
+los recibos ya eran honestos, pero lo que lee el Productor es la prosa. La
+resolución de identificadores es por prefijo y sobre el índice completo, no
+sobre las cien entradas que devuelve `library_list`; un cotejo con falsos
+positivos deja de leerse a los tres avisos. La política del turno lo advierte
+antes, para que el caso normal sea no tener nada que corregir.
 
 ## Ritmos y libre albedrío
 

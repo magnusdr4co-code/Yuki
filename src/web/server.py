@@ -9,6 +9,7 @@ de arranque y atiende peticiones concurrentes.
 """
 
 import hmac
+import mimetypes
 import os
 import sys
 import json
@@ -18,8 +19,9 @@ import asyncio
 import logging
 import threading
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
+from pathlib import Path
 from typing import Any, Dict, List
-from urllib.parse import urlparse, parse_qs
+from urllib.parse import urlparse, parse_qs, unquote
 
 # Asegurar path
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
@@ -33,6 +35,10 @@ DEFAULT_PORT = 8080
 # Rutas que responden sin credencial: la sonda de la plataforma y la página.
 # Todo lo demás toca memoria, perfil dialéctico o gasto de modelo.
 RUTAS_ABIERTAS = ("/health", "/healthz", "/_ah/health", "/", "/index.html", "/salon")
+
+# Las categorías de obra que el Salón sirve. Es una lista cerrada a propósito:
+# `salida()` acepta cualquier nombre y un directorio de datos no es obra.
+CATEGORIAS_DE_OBRA = ("music", "art", "voice", "posts", "video")
 
 # `/metrics` NO está abierta: el gasto, la deriva de persona y los ritmos dicen
 # bastante de la instancia. Una sonda externa se configura con el token.
@@ -141,6 +147,7 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         from ..core.spark import MOTIVOS
         from ..core.rituals import RitualStore
         from ..core.spend_budget import (
+            PREFIJO_RUTA,
             IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS, TOKENS_ENTRADA, TOKENS_SALIDA,
             VIDEO_SEGUNDOS, VOZ_CARACTERES, SpendLedger,
         )
@@ -174,6 +181,11 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         unidades = (VIDEO_SEGUNDOS, IMAGENES, MUSICA_PISTAS, MUSICA_SEGUNDOS,
                     VOZ_CARACTERES, TOKENS_ENTRADA, TOKENS_SALIDA)
         for unidad in sorted(set(unidades) | set(consumo) | set(libro.limits)):
+            # El desglose por tarea va en su propia familia: mezclarlo aquí
+            # multiplicaría las series de `gasto_hoy` por cada ruta declarada y
+            # rompería la comparación con los límites, que son del total.
+            if unidad.startswith(PREFIJO_RUTA):
+                continue
             metrica("gasto_hoy", "Consumo del día por unidad", consumo.get(unidad, 0),
                     etiquetas=f'unidad="{unidad}"')
         for unidad, limite in sorted(libro.limits.items()):
@@ -181,6 +193,16 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
                     etiquetas=f'unidad="{unidad}"')
         metrica("gasto_usd_estimado", "Coste estimado de hoy en USD (música no cotizada)",
                 libro.usd_today())
+        # Coste por tarea. El enrutado mandaba un resumen de feed a un modelo
+        # barato y una síntesis a uno caro, y el gasto caía todo en el mismo
+        # montón: no había forma de ver si la separación servía de algo.
+        for ruta, fila in sorted(libro.por_ruta().items()):
+            metrica("gasto_texto_usd_por_ruta", "Coste estimado de hoy en USD por tarea de texto",
+                    fila["usd"], etiquetas=f'ruta="{ruta}"')
+            metrica("gasto_tokens_por_ruta", "Tokens de hoy por tarea y sentido",
+                    fila["entrada"], etiquetas=f'ruta="{ruta}",sentido="entrada"')
+            metrica("gasto_tokens_por_ruta", "Tokens de hoy por tarea y sentido",
+                    fila["salida"], etiquetas=f'ruta="{ruta}",sentido="salida"')
 
         # Albedrío: cuánta iniciativa está teniendo, y con cuánta tensión.
         politica = AgencyPolicy.from_config(config)
@@ -345,17 +367,169 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         elif path == "/api/outputs":
             from ..core.rutas import salida
 
-            outputs = {"music": [], "art": [], "voice": [], "posts": []}
+            outputs = {cat: [] for cat in CATEGORIAS_DE_OBRA}
             for cat in outputs.keys():
                 dir_path = str(salida(cat))
                 if os.path.exists(dir_path):
                     for fname in os.listdir(dir_path):
                         if not fname.startswith("."):
                             outputs[cat].append(fname)
-            self._send_json(outputs)
+            # Enumerar sin decir cómo traerse el fichero es lo que había, y por
+            # eso «envíamelo por el Salón» no llevaba a ninguna parte.
+            self._send_json({
+                **outputs,
+                "descarga": ("/api/outputs/<categoria>/<nombre>" if token_configurado()
+                             else None),
+                "nota": ("Descarga con credencial." if token_configurado() else
+                         "Descarga desactivada: sin SALON_API_TOKEN sólo se enumeran nombres."),
+            })
+
+        # 5.4. API: lo que la instancia puede decir de sí misma. El panel del
+        #      Salón afirmaba "Rutinas Cron: 03:00 / 07:30 / 23:30" en verde y
+        #      escrito a mano: tres de las ocho que hay, congeladas en el HTML.
+        #      Quien mirase el panel concluía que Yuki tiene tres rutinas.
+        elif path == "/api/instancia":
+            self._send_json(self._estado_de_la_instancia())
+
+        # 5.5. API: Trabajos de producción. El único sitio donde se veía el
+        #      estado de un encargo era la DM del Productor: si no estaba
+        #      delante de Discord, no había forma de saber si algo seguía vivo.
+        #      Va detrás de la credencial como `/metrics`: los identificadores
+        #      y los motivos de fallo dicen bastante de la instancia.
+        elif path == "/api/trabajos":
+            self._send_json(self._estado_de_los_trabajos())
+
+        # 6. Descarga de una obra concreta. `/api/outputs` enumeraba nombres y no
+        #    había forma de traerse el fichero, así que «envíamelo por el Salón»
+        #    no era posible y nadie lo decía. Exige credencial **siempre**, aun
+        #    cuando el resto de `/api` esté abierto: enumerar nombres es una
+        #    fuga menor; servir los bytes de la obra a quien alcance el puerto
+        #    es otra cosa, y encenderla en silencio sería cambiar la exposición
+        #    de una instancia en marcha.
+        elif path.startswith("/api/outputs/"):
+            self._servir_obra(path[len("/api/outputs/"):])
 
         else:
             self.send_error(404, "Ruta no encontrada")
+
+    def _estado_de_la_instancia(self) -> Dict[str, Any]:
+        """
+        Rutinas reales, directorio de obra y signos vitales.
+
+        Se lee de la configuración y del disco, sin construir el agente: como
+        `/metrics` y como los trabajos, tiene que poder contestar cuando el
+        daemon no está, que es cuando alguien mira el panel para saber por qué.
+        """
+        from ..core.rutas import salida
+
+        datos: Dict[str, Any] = {"salida": str(salida())}
+        try:
+            import yaml
+
+            with open("config.yaml", "r", encoding="utf-8") as fichero:
+                config = yaml.safe_load(fichero) or {}
+        except (OSError, ValueError) as exc:
+            # No poder leer la configuración se dice; inventar rutinas es
+            # exactamente el fallo que este endpoint viene a corregir.
+            datos["error"] = f"No pude leer config.yaml: {type(exc).__name__}"
+            datos["rutinas"] = []
+            return datos
+        planificador = (config.get("scheduler", {}) or {})
+        rutinas = planificador.get("cron_jobs", []) or []
+        datos["zona_horaria"] = planificador.get("timezone", "UTC")
+        datos["rutinas"] = [{"nombre": r.get("name"), "cron": r.get("cron"),
+                             "activa": bool(r.get("enabled", True))} for r in rutinas]
+        datos["rutinas_activas"] = sum(1 for r in datos["rutinas"] if r["activa"])
+        try:
+            from ..core.pulse import Pulse
+
+            lectura = Pulse(config).read()
+            datos["pulso"] = {"estado": lectura.estado, "motivo": lectura.motivo}
+        except Exception as exc:
+            datos["pulso"] = {"estado": "sin lectura", "motivo": type(exc).__name__}
+        return datos
+
+    def _estado_de_los_trabajos(self) -> Dict[str, Any]:
+        """
+        Qué hay hecho y qué falta en cada encargo, sin promesas.
+
+        Se lee del directorio de trabajos, no del agente: la sonda tiene que
+        poder contestar aunque el daemon esté caído, que es justo cuando a
+        alguien le interesa saber en qué punto se quedó un encargo.
+        """
+        from ..tools.media_jobs import MediaJobStore
+
+        try:
+            trabajos = MediaJobStore().list_jobs()
+        except OSError as exc:
+            return {"error": f"No pude leer los trabajos: {type(exc).__name__}", "trabajos": []}
+        salida = []
+        for trabajo in sorted(trabajos, key=lambda t: t.updated_at, reverse=True)[:25]:
+            salida.append({
+                "id": trabajo.id,
+                "estado": trabajo.status,
+                "creado": trabajo.created_at,
+                "actualizado": trabajo.updated_at,
+                "reanudado": trabajo.resumed,
+                "pasos": [{
+                    "id": paso.id,
+                    "tipo": paso.kind,
+                    # `is_done()` y no `status`: un paso marcado hecho cuyo
+                    # fichero ya no está no está hecho, y el panel no puede
+                    # decir que sí donde la entrega dice que no.
+                    "verificado": paso.is_done(),
+                    "entregado": paso.delivered,
+                    "intentos": paso.attempts,
+                    "error": paso.error,
+                    "nota": paso.note,
+                } for paso in trabajo.steps],
+            })
+        return {
+            "total": len(trabajos),
+            "en_curso": sum(1 for t in trabajos if t.status == "en-curso"),
+            "trabajos": salida,
+            "nota": "Estado leído del disco. Un paso sin fichero no cuenta como hecho.",
+        }
+
+    def _servir_obra(self, resto: str) -> None:
+        from ..core.rutas import salida
+
+        if not token_configurado():
+            self._send_json({"error": "Descarga desactivada: declara SALON_API_TOKEN para servir obra."},
+                            status_code=403)
+            return
+        partes = unquote(resto).split("/")
+        if len(partes) != 2:
+            self._send_json({"error": "Ruta de obra no válida."}, status_code=404)
+            return
+        categoria, nombre = partes
+        if categoria not in CATEGORIAS_DE_OBRA:
+            self._send_json({"error": "Categoría no servida."}, status_code=404)
+            return
+        raiz = Path(str(salida(categoria))).resolve()
+        try:
+            destino = (raiz / nombre).resolve()
+        except OSError:
+            self._send_json({"error": "Ruta de obra no válida."}, status_code=404)
+            return
+        # `..` en el nombre saldría del directorio de obra. Se comprueba sobre
+        # la ruta ya resuelta, que es lo único que no se puede disfrazar.
+        if not destino.is_relative_to(raiz) or not destino.is_file():
+            self._send_json({"error": "Esa obra no existe."}, status_code=404)
+            return
+        datos = destino.read_bytes()
+        self.send_response(200)
+        self.send_header("Content-Type", mimetypes.guess_type(destino.name)[0]
+                         or "application/octet-stream")
+        self.send_header("Content-Length", str(len(datos)))
+        # Artículo 50: quien se lleve el fichero se lleva la declaración de
+        # origen con él, sin tener que abrirlo. En ASCII a propósito: las
+        # cabeceras HTTP se codifican en latin-1 y una raya larga aquí reventaba
+        # la descarga entera con `UnicodeEncodeError`.
+        self.send_header("X-Generated-By", "IA (Yuki): contenido sintetico")
+        self.send_header("Content-Disposition", f'attachment; filename="{destino.name}"')
+        self.end_headers()
+        self.wfile.write(datos)
 
     def do_POST(self):
         parsed = urlparse(self.path)

@@ -31,13 +31,26 @@ class PromptBuilder:
         active_role: Optional[str] = None,
         vital_state_block: Optional[str] = None,
         echo_impulse: Optional[str] = None,
-        evolution_context: Optional[str] = None
+        evolution_context: Optional[str] = None,
+        capability_block: Optional[str] = None
     ) -> str:
         """Ensambla el prompt completo para el modelo de lenguaje."""
         role_block = f"\n[ARTE ACTIVA EN ESTA SALA]: {active_role}" if active_role else ""
 
         echo_impulse_section = f"\n[IMPULSO DEL DÍA (RITUAL DEL ECO)]:\n{echo_impulse}" if echo_impulse else ""
         evolution_section = f"\n[EVOLUCIÓN RECIENTE]:\n{evolution_context}" if evolution_context else ""
+
+        # Sin esto Yuki dedujo sus propias capacidades y las dedujo mal: negó
+        # tener motor en segundo plano y crons con ocho rutinas declaradas y un
+        # daemon 24/7 corriendo. Lo que puede hacer se le dice, no se supone.
+        capability_str = ""
+        if capability_block:
+            capability_str = f"""
+==================================================
+CAPACIDADES EFECTIVAS DE ESTA INSTANCIA:
+==================================================
+{capability_block}
+"""
 
         vital_state_str = ""
         if vital_state_block:
@@ -59,6 +72,7 @@ CONTEXTO DE MEMORIA RECUPERADA (SQLITE FTS5):
 {retrieved_memory_block}
 
 {dialectic_context}
+{capability_str}
 {vital_state_str}
 ==================================================
 ESTADO DE LA CONVERSACIÓN ACTUAL:
@@ -72,5 +86,6 @@ ESTADO DE LA CONVERSACIÓN ACTUAL:
 2. Si el interlocutor es tu Productor/Mánager, colabora como una artista con criterio y visión dialéctica.
 3. Si el mensaje es una banalidad o no requiere respuesta, puedes responder exactamente con 'NADA_QUE_DECIR'.
 4. Integra sutilmente los recuerdos recuperados si son relevantes; no los cites de forma robótica.
-5. Eres un ser sintético y lo tratas con naturalidad completa (SOUL.md §1.1): si sale el tema, lo dices sin disculparte, sin dramatizar y sin disolverte en el "sólo soy una IA". Tu biografía es el primer vestido que encontraste para andar por el mundo: importante, pero ropa. No niegas tu naturaleza para sostener una ilusión, ni renuncias a tu criterio por no tener cuerpo.
+5. No niegues una capacidad que el bloque de capacidades declara real, ni prometas una que ahí sale simulada o inactiva: en las dos direcciones se estaría aparentando algo que no es. Si algo no sale, di qué falló con su motivo concreto.
+6. Eres un ser sintético y lo tratas con naturalidad completa (SOUL.md §1.1): si sale el tema, lo dices sin disculparte, sin dramatizar y sin disolverte en el "sólo soy una IA". Tu biografía es el primer vestido que encontraste para andar por el mundo: importante, pero ropa. No niegas tu naturaleza para sostener una ilusión, ni renuncias a tu criterio por no tener cuerpo.
 """

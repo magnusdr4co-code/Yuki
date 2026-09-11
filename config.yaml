@@ -38,6 +38,14 @@ provider_routing:
       preferred_model: "upstage/solar-pro4"
       max_tokens: 1500
       temperature: 0.8
+    # El turno agéntico del DM del Productor. `max_tokens` aquí es un suelo, no
+    # un techo: un turno de herramientas que se corta por longitud no sale más
+    # corto, se descarta entero.
+    producer_tools:
+      tier: "creative_and_deep"
+      preferred_model: "upstage/solar-pro4"
+      max_tokens: 6000
+      temperature: 0.5
     dialectic_synthesis:
       tier: "creative_and_deep"
       preferred_model: "qwen/qwen3-30b-a3b"
