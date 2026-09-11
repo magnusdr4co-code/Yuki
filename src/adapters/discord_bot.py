@@ -13,6 +13,7 @@ import asyncio
 import logging
 import subprocess
 import tempfile
+from dataclasses import replace
 from pathlib import Path
 from typing import Optional, Set, List, Dict, Any
 
@@ -31,7 +32,7 @@ from ..core.brake import Brake
 from ..core.spend_budget import SpendLedger
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, TERMINADO, describe_job as describe_media_job
-from ..tools import criterio_musical, receta
+from ..tools import criterio_audiovisual, criterio_musical, criterio_visual, receta
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -1274,7 +1275,21 @@ class DiscordAdapter:
             else:
                 await report("⚠️ La canción se generó, pero Discord rechazó el adjunto; no la doy por entregada.")
 
-    async def _paso_portada(self, job, plan, lyrics_entry, report, channel) -> None:
+    @staticmethod
+    def _semilla_visual(lyrics_entry, lyrics: str) -> str:
+        """
+        De qué parte la imagen: el título y las primeras imágenes de la letra.
+
+        No se manda la letra entera —una portada no ilustra un poema línea a
+        línea— sino su arranque, que es donde la obra declara su materia.
+        """
+        titulo = (lyrics_entry or {}).get("title", "")
+        primeras = " ".join(
+            linea.strip() for linea in (lyrics or "").splitlines()
+            if linea.strip() and not linea.strip().startswith(("#", "[", "(", "`")))[:400]
+        return f"portada de sencillo. {titulo}. {primeras}".strip()
+
+    async def _paso_portada(self, job, plan, lyrics, lyrics_entry, report, channel) -> None:
         """
         Portada única del sencillo, cuando el pedido la nombra.
 
@@ -1289,14 +1304,20 @@ class DiscordAdapter:
             await report(f"⚠️ No repito la portada: ya falló {portada.attempts} veces ({portada.error}).")
         else:
             titulo = (lyrics_entry or {}).get("title") or "Sencillo"
+            # El concepto visual estaba escrito a mano —«agua, hierro e
+            # invierno»— con la luz clavada en `urushi`, así que la portada de
+            # cualquier obra era la portada de *Herrumbre y Escarcha*. Ahora
+            # sale de la obra y el criterio decide encuadre y luz.
+            visual = criterio_visual.leer_criterio_visual(
+                plan.con_matices(self._semilla_visual(lyrics_entry, lyrics)), titulo=titulo)
+            await report(visual.resumen())
             portada.attempts += 1
             self.media_jobs.save(job)
             arte = await self.agent.media_creator.create_single_cover(
                 track_title=titulo,
-                visual_concept=plan.con_matices(
-                    "Portada de sencillo: agua, hierro e invierno; escarcha sobre acero oxidado."
-                ),
-                lighting="urushi",
+                visual_concept=visual.prompt(),
+                lighting=visual.luz,
+                aspect_ratio=visual.encuadre,
             )
             ruta = arte.get("local_path") if arte.get("status") == "success" else None
             # Una portada simulada no es una portada. `create_single_cover`
@@ -1333,16 +1354,21 @@ class DiscordAdapter:
             script = self.agent.creation_library.read_entry(script_entry["id"]).get("content", "")
         visual_entry = self._library_entry("visual", ("herrumbre", "salon", "escarcha"))
         visual_path = self._library_file(visual_entry)
-        guion = MEDIA_STORYBOARD[:plan.segmentos]
+        # El guion eran cuatro planos del muelle escritos a mano, con cualquier
+        # obra delante. Ahora lo lee de la obra; el **número** de planos sigue
+        # saliendo del pedido, porque de él se derivan los pasos del trabajo
+        # durable y cambiarlo rompería la reanudación de lo ya pagado.
+        guion_visual = criterio_audiovisual.leer_guion(
+            script or self._semilla_visual(None, ""), plan.segmentos,
+            titulo=(script_entry or {}).get("title", ""))
         hechos = sum(1 for i in range(1, plan.segmentos + 1)
                      if job.ensure_step(f"clip_{i}", "clip").is_done())
         if hechos:
             await report(f"🎬 {hechos} de {plan.segmentos} segmentos ya estaban verificados; sólo genero los que faltan.")
         else:
-            await report(f"🎬 Generando {plan.segmentos} segmento(s) de 8 s y ensamblándolos; "
-                         "no sustituiré el vídeo por un marcador.")
+            await report(guion_visual.resumen())
         clips: List[str] = []
-        for index, beat in enumerate(guion, 1):
+        for index in range(1, len(guion_visual.planos) + 1):
             clip_step = job.ensure_step(f"clip_{index}", "clip")
             if clip_step.is_done():
                 clips.append(clip_step.path)
@@ -1350,10 +1376,7 @@ class DiscordAdapter:
             if clip_step.exhausted():
                 await report(f"⚠️ Segmento {index} descartado tras {clip_step.attempts} intentos: {clip_step.error}")
                 break
-            prompt = plan.con_matices(
-                "Cinematic 16:9, 24 fps, slow meditative camera, no fast cuts. " + beat +
-                " Guion de referencia: " + (script[:2500] or "Herrumbre y Escarcha, agua, hierro e invierno.")
-            )
+            prompt = plan.con_matices(guion_visual.prompt(index, script))
             clip_step.attempts += 1
             self.media_jobs.save(job)
             video = await self.agent.nous_portal.generate_video_frontier(
@@ -1446,15 +1469,24 @@ class DiscordAdapter:
                 await report("❌ No encuentro una letra verificable en la Biblioteca; no generaré una canción sin texto fuente.")
                 return
             lyrics = self.agent.creation_library.read_entry(lyrics_entry["id"]).get("content", "")
-            if len(lyrics.strip()) < 80:
-                self.media_jobs.abandon(job, "letra demasiado breve")
-                await report("❌ La letra recuperada es demasiado breve para una canción; no la presentaré como canto completo.")
-                return
+            # La brevedad sólo descarta el **canto**: una portada o un vídeo se
+            # sostienen sobre un poema corto. Antes esta guarda abortaba el
+            # encargo entero, así que pedir sólo la portada de una pieza breve
+            # no daba portada y decía que era por no presentarla como canción.
+            if plan.cancion and len(lyrics.strip()) < 80:
+                if not (plan.portada or plan.video):
+                    self.media_jobs.abandon(job, "letra demasiado breve")
+                    await report("❌ La letra recuperada es demasiado breve para una canción; "
+                                 "no la presentaré como canto completo.")
+                    return
+                plan = replace(plan, cancion=False)
+                await report("⚠️ La letra es demasiado breve para una canción y no la presentaré "
+                             "como canto completo; sigo con el resto del encargo.")
 
             if plan.cancion:
                 await self._paso_cancion(job, plan, lyrics, lyrics_entry, report, channel)
             if plan.portada:
-                await self._paso_portada(job, plan, lyrics_entry, report, channel)
+                await self._paso_portada(job, plan, lyrics, lyrics_entry, report, channel)
             if plan.video:
                 await self._pasos_video(job, plan, report, channel)
 

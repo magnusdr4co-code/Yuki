@@ -37,7 +37,7 @@ from ..core.spend_budget import (
 from ..core.brake import Brake
 from ..core.rutas import salida
 from ..core.transparency import MediaMarker
-from . import receta
+from . import criterio_vocal, receta
 
 logger = logging.getLogger("Yuki.VertexMedia")
 
@@ -582,6 +582,8 @@ class VertexMediaClient:
     # --- Voz ------------------------------------------------------------------
 
     async def synthesize_voice(self, text: str, style_prompt: Optional[str] = None,
+                               circadian_phase: Optional[str] = None,
+                               cadencia_ms: Optional[int] = None,
                                voice: Optional[str] = None,
                                language_code: Optional[str] = None,
                                model: Optional[str] = None) -> Dict[str, Any]:
@@ -606,10 +608,12 @@ class VertexMediaClient:
         model = model or self.tts_model
         voice = voice or self.voice
         language_code = language_code or self.language_code
-        style_prompt = style_prompt or (
-            "Habla con calidez contenida y pausas deliberadas, como quien elige "
-            "cada palabra antes de decirla. Ritmo sereno, nunca apresurado."
-        )
+        # El estilo era una constante: una despedida de dos líneas y un párrafo
+        # de explicación salían con la misma respiración, y una pregunta salía
+        # afirmada. `criterio_vocal` lo lee del texto y de la hora.
+        plan_vocal = criterio_vocal.leer_criterio_vocal(
+            text, fase=circadian_phase, cadencia_ms=cadencia_ms)
+        style_prompt = style_prompt or plan_vocal.prompt()
 
         frenado = self.brake.blocked_reason("medios")
         if frenado:
@@ -655,7 +659,9 @@ class VertexMediaClient:
         # La marca recorta el texto a 200; la receta lo guarda entero, que es
         # lo que hace falta para volver a decir exactamente lo mismo.
         receta.escribir(destino, motor=model, prompt=text, voz=voice,
-                        estilo=style_prompt, idioma=language_code)
+                        estilo=style_prompt, idioma=language_code,
+                        fase=plan_vocal.fase,
+                        segundos_estimados=round(plan_vocal.segundos_estimados, 1))
         logger.info(f"🎙️ Nota de voz real generada con {model}: {destino}")
         return {
             "status": "success",

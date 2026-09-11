@@ -17,34 +17,51 @@ parameters:
 
 # Habilidad: Síntesis Vocal (`/sintesis-vocal`)
 
-Genera notas de voz emotivas y pausadas para interactuar con seguidores en Telegram y Discord o responder a menciones directas.
+Antes de hablar, Yuki **decide cómo se dice esto**.
+`src/tools/criterio_vocal.py` produce la indicación de estilo que viaja con el
+texto. Era una constante —«calidez contenida y pausas deliberadas»— con
+cualquier texto delante: una despedida de dos líneas y un párrafo de explicación
+salían con la misma respiración, y una pregunta salía afirmada.
 
-## Pasos de Ejecución:
+## 1. El registro sale de la hora
 
-1. **Cadencia:**
-   - Con `vertex.tts`, la pausa elegida se **describe en lenguaje natural** en el `prompt` del modelo. Con `portal.tts`, se insertan intervalos de respiración en comas y puntos.
-2. **Síntesis:**
-   - Invoca `vertex.tts` (`gemini-2.5-flash-tts`, voz `Aoede`, `es-es`) si hay proyecto declarado; si no, `portal.tts`.
-3. **Transcodificado — sólo en el respaldo:**
-   - `vertex.tts` emite OGG Opus nativo: no hay que transcodificar. Con `portal.tts`, convierte con `local.ffmpeg`; Telegram no reproduce como nota de voz nativa ningún otro formato.
-4. **Persistencia en el Workspace:**
-   - Almacena el audio en `./output/voice/yuki_voice_<timestamp>.ogg`.
-5. **Respuesta:**
-   - Retorna la ruta del archivo y la duración calculada para su envío inmediato por canales sociales.
+Su voz no es la misma a las tres de la mañana que al mediodía, y eso no es un
+efecto: es quién habla a esa hora.
+
+| Fase | Registro |
+|---|---|
+| `deep_rest` | Muy baja y cercana, casi un susurro; el mundo duerme |
+| `night` | Grave y lenta, con silencios largos entre frases |
+| `atelier` | Atenta y presente, articulación clara sin prisa |
+| `dawn` | Despierta pero contenida, como quien no quiere romper la mañana |
+
+## 2. La puntuación es la partitura
+
+Lo que el criterio mide. Un párrafo sin un solo signo no tiene dónde respirar:
+el sintetizador lo recorre de un tirón y suena a lectura de prospecto. Por
+debajo de **1,5 pausas por cada cien caracteres**, avisa.
+
+Si el texto trae preguntas o exclamaciones, el matiz entra en el estilo en vez
+de esperar que el motor lo adivine.
+
+## 3. Duración
+
+≈13 caracteres por segundo de habla pausada — una estimación declarada, para
+avisar de un texto largo, no para cuadrar un doblaje. Por encima de **45
+segundos** deja de ser una nota de voz y nadie la oye entera; entonces se dice,
+antes de gastar, que en voz se factura por carácter.
+
+## 4. Un solo sitio decide
+
+Había dos capas fabricando indicaciones de estilo, y la de fuera ganaba: el
+criterio no llegaba a aplicarse nunca. Ahora la capa de arriba sólo aporta lo
+que sabe —la hora y la cadencia del proveedor— y el criterio decide.
 
 ## Herramientas
 
-> Contrato de herramientas según [`skills/HERRAMIENTAS.md`](../HERRAMIENTAS.md). Si una herramienta no está listada ahí, no existe.
-
 | Paso | Herramienta | Detalle |
 |---|---|---|
-| Redactar o pulir el texto | `portal.chat` → `tier_1_creative` | Sólo si el texto no viene ya dado |
-| Sintetizar (preferente) | `vertex.tts` | `gemini-2.5-flash-tts`, voz `Aoede`, `es-es`. La cadencia va en el `prompt`, en lenguaje natural. **OGG Opus nativo** |
-| Sintetizar (respaldo) | `portal.tts` | OpenAI TTS del Tool Gateway; facturado por tokens contra los créditos |
-| Insertar las micro-pausas | — | **Sólo en el respaldo:** en el texto (350 ms por defecto en comas y puntos). No se le piden al modelo |
-| Transcodificar | `local.ffmpeg` | **Sólo en el respaldo:** `ffmpeg -i entrada.mp3 -c:a libopus -b:a 32k salida.ogg` |
-| Guardar | — | `./output/voice/yuki_voice_<timestamp>.ogg` |
-
-**Voz entrante:** para escuchar una nota de voz de un seguidor, usa `portal.stt` (Whisper, ≈ 0.0063 USD/minuto) antes de pasar el texto a `local.memory`.
-
-**Si falla:** un reintento, luego la siguiente pasarela de la tabla avisando del cambio. Sin respaldo disponible, responde en texto y explica por qué no hay audio. Nunca devuelvas la ruta de un marcador como si fuera una nota de voz.
+| Criterio vocal | `src/tools/criterio_vocal.py` | Local, determinista sobre el mismo texto |
+| Voz | `portal.tts` → Gemini TTS | OGG Opus nativo, sin transcodificar. La cadencia viaja en lenguaje natural, no en SSML |
+| Marca de origen | `MediaMarker` | Artículo 50: se marca **antes** de entregar |
+| Receta | `<fichero>.receta.json` | Texto, voz, estilo, fase y duración estimada |

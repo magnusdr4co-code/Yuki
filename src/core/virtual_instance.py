@@ -229,9 +229,10 @@ class VirtualInstance:
         # Se declara porque el prompt musical era una constante: 72 BPM e Insen
         # con cualquier letra delante, incluida una que pedía 68.
         self._cap("medios.criterio", "Medios", REAL,
-                  "Antes de encargar audio decide tempo, compás, escala, estructura y registro "
-                  "leyendo la letra (`criterio_musical`); manda lo que la letra ya traiga y "
-                  "avisa si la métrica va a atropellar la voz")
+                  "Antes de encargar decide leyendo la fuente: música (tempo, compás, escala, "
+                  "estructura), imagen (encuadre, luz, carga), vídeo (planos desde las secciones "
+                  "de la obra) y voz (registro, respiración); manda lo que la fuente ya traiga y "
+                  "avisa de lo que va a salir mal antes de gastar")
         self._cap("medios.receta", "Medios", REAL,
                   "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
                   "parámetros, y la receta se archiva con ella en Biblioteca")

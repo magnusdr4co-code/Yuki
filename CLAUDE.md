@@ -52,10 +52,13 @@ src/core/       agente, albedrío (agency, spark, rituals), identidad
                 se guarda —atómico, y tolerante a un fichero corrupto—
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
-                media_jobs, web_search
-src/adapters/   Discord (el que importa), Telegram (aún simulado); `encargo.py`
-                traduce el pedido en plan de producción (qué piezas, cuántos
-                segmentos, qué indicaciones van al prompt)
+                media_jobs, web_search; `criterio_*.py` decide cada arte antes
+                de encargarla —música, imagen, vídeo y voz— leyendo su fuente,
+                y `criterio_base.py` guarda lo único común: manda la fuente, y
+                lo deducido se declara deducido
+src/adapters/   Discord (el que importa), Telegram (salida real, sin entrada);
+                `encargo.py` traduce el pedido en plan de producción (qué
+                piezas, cuántos segmentos, qué indicaciones van al prompt)
 src/web/        Salón + /metrics
 src/cli/        los comandos por temas (gobierno, mente, operacion); `cli.py`
                 en la raíz sólo declara argumentos y reparte
