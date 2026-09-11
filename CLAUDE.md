@@ -47,7 +47,8 @@ Romper una de éstas es romper el proyecto, no una prueba:
 src/core/       agente, albedrío (agency, spark, rituals), identidad
                 (persona_anchor, transparency, cotejo: lo dicho contra lo
                 ejecutado), gobierno (state_registry, blackbox, brake,
-                spend_budget, virtual_instance), salud (pulse);
+                spend_budget, virtual_instance), salud (pulse, registro: el log
+                encendido en los puntos de entrada);
                 `rutas.py` decide dónde vive cada cosa y `estado_json.py` cómo
                 se guarda —atómico, y tolerante a un fichero corrupto—
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)

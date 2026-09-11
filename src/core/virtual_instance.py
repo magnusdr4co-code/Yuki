@@ -236,6 +236,13 @@ class VirtualInstance:
         self._cap("medios.receta", "Medios", REAL,
                   "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
                   "parámetros, y la receta se archiva con ella en Biblioteca")
+        # Se declara porque durante todo el proyecto no fue verdad: `LOG_LEVEL`
+        # estaba en el arranque y nadie lo leía, así que los 97 `logger.info` de
+        # la instancia no se emitían. Un log vacío no falla: tranquiliza.
+        nivel = (_env("LOG_LEVEL") or "INFO").upper()
+        self._cap("salud.registro", "Mente", REAL,
+                  f"Log configurado en los puntos de entrada a {nivel}; los `logger.info` "
+                  "de la instancia llegan a `docker logs`")
         pendientes = self.pending_media_jobs()
         self._cap(
             "medios.cola", "Medios", REAL,

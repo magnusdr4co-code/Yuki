@@ -26,6 +26,12 @@ from src.cli.operacion import (  # noqa: E402
 )
 
 def main():
+    # Lo primero: sin esto los 97 `logger.info` del proyecto no se emiten, y son
+    # justo lo que se mira en `docker logs` cuando algo va mal. `LOG_LEVEL` se
+    # declaraba en el arranque desde el primer despliegue y no lo leía nadie.
+    from src.core.registro import configurar as configurar_log
+
+    configurar_log()
     parser = argparse.ArgumentParser(description="CLI de Yuki - Diva Digital Autónoma (Hermes Agent)")
     subparsers = parser.add_subparsers(dest="command", help="Comando a ejecutar")
 

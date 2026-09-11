@@ -16,14 +16,24 @@ Guía completa: qué cuentas crear, qué secretos guardar y cómo desplegar.
 > real sale por OpenRouter, así que **el único secreto imprescindible para que
 > Yuki genere texto es `OPENROUTER_API_KEY`**.
 >
-> Pendiente: el enrutado por tiers de `provider_routing.routes` (modelos
-> distintos según la tarea) todavía no se lee; se usa `agent.model`.
+> **Dos cosas que este documento afirmaba y ya no son ciertas.** Se corrigen
+> aquí en vez de borrarlas, porque un documento de despliegue desfasado no falla:
+> hace que alguien se salte un paso.
 >
-> Los módulos de medios (`src/tools/nous_portal.py`) y el adaptador de Telegram
-> son simulaciones deliberadas: escriben ficheros marcador
-> y registran en log. **Espera** a dar de alta las cuentas de pago de FAL,
-> Suno o Firecrawl hasta que exista el cliente HTTP que las consuma. Ver
-> `README.md` para el estado por módulo.
+> - *«El enrutado por tiers de `provider_routing.routes` todavía no se lee.»*
+>   **Sí se lee**, y también en el arnés del Productor. Ver M5 en
+>   [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md).
+> - *«Los módulos de medios y el adaptador de Telegram son simulaciones
+>   deliberadas… espera a dar de alta las cuentas de pago.»* **Los medios son
+>   reales** con `VERTEX_PROJECT_ID` declarado —imagen, vídeo, música cantada por
+>   Lyria y voz—, y la **salida** de Telegram es real (la entrada, un bucle de
+>   `getUpdates`, no está implementada y se declara así). Lo que sigue sin
+>   cliente es Nous Portal: su endpoint no existe, por eso
+>   `NOUS_PORTAL_MODE=disabled`.
+>
+> Para desplegar ahora, la lista de variables y qué habilita cada una está en
+> **[`DESPLIEGUE.md`](DESPLIEGUE.md)**, que es la que se mantiene al día y tiene
+> una prueba que lo vigila.
 
 ---
 
