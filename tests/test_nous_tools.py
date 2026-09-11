@@ -17,6 +17,7 @@ import sys
 import tempfile
 import types as types_mod
 import unittest
+from unittest import mock
 
 from src.tools.nous_portal import NousPortalClient, local_uri
 from src.tools.media_creator import MediaCreatorTool
@@ -42,6 +43,17 @@ def test_vertex_media_can_use_a_regional_image_endpoint():
     assert motor.video_location == "us-central1"
     assert motor.music_location == "global"
     assert motor.music_model == "lyria-3-pro-preview"
+
+
+def test_empty_config_project_inherits_environment():
+    """El vacío documental de config.yaml no debe apagar Vertex en la VM."""
+    with mock.patch.dict(os.environ, {"VERTEX_PROJECT_ID": "yuki-env"}, clear=False):
+        motor = VertexMediaClient.from_config({
+            "vertex_ai": {"project_id": "", "enabled": True},
+        })
+
+    assert motor.project_id == "yuki-env"
+    assert motor.is_available()
 
 
 def portal_sin_vertex() -> NousPortalClient:

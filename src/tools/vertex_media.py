@@ -165,9 +165,17 @@ class VertexMediaClient:
         """
         vertex_cfg = (config or {}).get("vertex_ai", {}) or {}
         media_cfg = vertex_cfg.get("media", {}) or {}
+        # En `config.yaml` el vacío documenta «hereda VERTEX_PROJECT_ID».
+        # La desactivación explícita se expresa con `enabled: false`; no
+        # conviertas aquí ese marcador de herencia en `project_id=""`, porque
+        # el constructor reserva la cadena vacía para apagar medios de forma
+        # deliberada.
+        project_id = vertex_cfg.get("project_id")
+        if isinstance(project_id, str) and not project_id.strip():
+            project_id = None
 
         parametros: Dict[str, Any] = {
-            "project_id": vertex_cfg.get("project_id"),
+            "project_id": project_id,
             # Los medios pueden necesitar una región distinta del endpoint de
             # texto. Si no se declara, conserva la región global del texto.
             "location": media_cfg.get("location", vertex_cfg.get("location")),
