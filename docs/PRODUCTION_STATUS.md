@@ -1,6 +1,6 @@
 # Estado de producción — Yuki
 
-**Verificado:** 2026-09-09 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)
+**Verificado:** 2026-09-11 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)
 
 **Proyecto:** `yuki-prod`  
 **Instancia:** `yuki-agent` · Compute Engine `e2-small` · `europe-southwest1-a`
@@ -10,9 +10,9 @@
 | Campo | Valor |
 |---|---|
 | Repositorio | `europe-southwest1-docker.pkg.dev/yuki-prod/yuki/yuki-agent` |
-| Digest desplegado | `sha256:dfb83f5860613b230b9549e808870090ea31ea24a3ad7c166a8422081c6691e9` |
-| Commit de código | `a8a7378` — mejoras de virtualización, autonomía, memoria y operación |
-| Build de Cloud Build | `3a5b0a48-8b8b-4da7-9407-4a3822a9e0ae` |
+| Digest desplegado | `sha256:8c6ab9f8563478e5b63c43ec639fd59a7cacf72633f29d38cd0c406015805192` |
+| Commit de código | `5db53c5` — integración de las mejoras remotas de producción |
+| Build de Cloud Build | `dd05c8b9-0ef6-4c9b-9f1b-77d75a3f8957` |
 
 La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto inmutable
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
@@ -56,6 +56,31 @@ El inventario detecta 21 capacidades reales, 5 simuladas y 1 inactiva, con seis
 limitadores abiertos y ninguno clasificado como bloqueante. Es una inspección
 de configuración y binarios, **no** una prueba pagada de todos los proveedores.
 La copia automática fuera de la instancia sigue pendiente de `BACKUP_GCS_BUCKET`.
+
+## Actualización del 11 de septiembre
+
+- `origin/main` no tenía cambios nuevos; se incorporó la rama remota de mejoras
+  `claude/virtualizacion-mejoras-proyecto-dik9gg` hasta `47df74c` mediante merge
+  `5db53c5`, y el resultado quedó publicado en `origin/main`.
+- La integración añade planes de encargo gobernados por la petición, reanudación
+  más segura ante fallos de Discord, presupuesto anunciado antes de gastar,
+  cotejo entre recibos y prosa, recetas de obra, entrega del Salón y ajustes de
+  Honcho/Telegram. No se generaron medios como prueba de despliegue.
+- Validación: Ruff correcto, **858 pruebas aprobadas y 2 omitidas**, 12 simulacros
+  y circuito de restauración correctos. El humo sobre archivo Git limpio pasó;
+  el checkout operativo conserva el hallazgo histórico de archivos generados sin
+  marcar y no se modificó ninguna obra.
+- Imagen construida desde el repositorio y publicada con digest
+  `sha256:8c6ab9f8563478e5b63c43ec639fd59a7cacf72633f29d38cd0c406015805192`.
+  El startup script la descargó y recreó ambos contenedores conservando el disco
+  persistente, pairing y overlays.
+- Verificación posterior: `yuki-daemon` activo, `yuki-salon` saludable, `/health`
+  devuelve `200`, Discord conectado a Temple y Dev Server, ruta de producción
+  multimedia y pairing pasan dentro del contenedor, y la memoria contiene 85
+  recuerdos íntegros.
+- Pulso actual: `aletargada` pero sano; el latido es reciente y hay actividad de
+  bitácora, aunque el signo de albedrío lleva 37,9 h apagado. No se falseó el
+  estado ni se lanzó una generación facturable para maquillar la sonda.
 
 ## Servicios y conectividad
 
