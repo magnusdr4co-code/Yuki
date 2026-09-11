@@ -277,6 +277,10 @@ class NousPortalClient:
         audio_path = os.path.join(self.music_dir, audio_filename)
 
         # Vertex no sirve música cantada ni render acústico, y
+        # Ojo al leer `skills/HERRAMIENTAS.md`: es anterior a Lyria y su tabla decía
+        # que «la música se limita a local.midi». Ya no. Lyria canta, y fiarse de
+        # ese documento en vez de este código costó decirle al Productor que una
+        # canción saldría instrumental el día que salió cantada.
         # `skills/HERRAMIENTAS.md` §1 ya declara que `suno_v4` y `flow_audio` no
         # existen en ninguna pasarela contratada. Mientras no se contrate un
         # motor musical, esto es un marcador y se dice: la música real de Yuki

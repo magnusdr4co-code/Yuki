@@ -213,3 +213,47 @@ Lo que queda fuera, dicho para que nadie lo dé por hecho: si Yuki da una
 explicación técnica equivocada y el siguiente resultado la refuta, el sistema
 señala la repetición del resultado, no la contradicción del razonamiento. Eso
 sigue siendo suyo.
+
+
+## Apéndice: lo que rompió la propia corrección (11 de septiembre)
+
+Dos días después, el mismo encargo volvió a fallar. Uno de los fallos lo
+introduje al arreglar A2 y conviene que conste con su nombre.
+
+**El aviso previo decía una falsedad.** `_aviso_de_canto` afirmaba «ningún motor
+musical contratado sirve voz», y Lyria entregó una canción **cantada** en el
+mensaje siguiente. La frase salía de `skills/HERRAMIENTAS.md`, que es anterior a
+Lyria y habla de `suno_v4` y `flow_audio`; `nous_portal` decía justo lo contrario
+—«Lyria sí canta»— dos ficheros más allá, y marca el resultado con `sung: True`.
+Me fié del documento en vez del código. Arreglando A2 —inventar una causa
+técnica— cometí A1 —negar una capacidad que existe—, y había una prueba que lo
+exigía: `test_se_avisa_de_que_no_saldra_cantada_antes_de_generar`. Es el segundo
+test de esta revisión que fijaba una mentira en vez de una garantía.
+
+Ahora el aviso dice **quién atiende y qué significa cada salida** —Lyria canta;
+si cae al respaldo local no, y la nota del adjunto lo dirá— sin adelantar cuál
+de los dos tocará, porque hasta que responde el proveedor no se sabe. Y la tabla
+de `HERRAMIENTAS.md` queda corregida diciendo que la fuente de verdad sobre qué
+canta es el código.
+
+**«Genera el archivo de audio con esa estructura» no disparaba nada.** El
+detector exigía verbo + medio **y además** una palabra de entrega («pásamelo»,
+«aquí»). El primer mensaje del hilo colaba por «pásamela por aquí»; el resto no
+—tampoco «genera la canción» ni «crea el mp3»—. Al no reconocerse, la orden caía
+al arnés del DM, que no tiene herramienta de medios y no la tiene a propósito, y
+Yuki explicó una arquitectura falsa para justificarlo: llegó a decir que la pista
+anterior «no se ejecutó desde este chat» con el acuse de ese encargo cuatro
+mensajes más arriba, en ese chat. Ahora basta con mandar producir un medio
+nombrando la cosa; preguntar si algo sería posible sigue sin encargarlo, porque
+una hipótesis no puede gastar crédito.
+
+**Y contó cómo había hecho la canción sin haberla hecho.** Preguntada por el
+resultado, describió haber incrustado la fonética en la partitura, fijado 72 BPM
+y gobernado los contrastes, en un turno con **cero herramientas ejecutadas**. No
+hizo nada de eso: el prompt de la canción está escrito en el adaptador. El
+cotejo no lo cazó porque vigila citas de Biblioteca y «queda guardado», no la
+atribución de un proceso técnico. Dos cierres: la receta —que ya se escribía
+junto al audio y no la veía nadie— viaja ahora en el pie del adjunto, así que
+quien pregunte qué se hizo tiene la respuesta delante; y la política del arnés le
+prohíbe explícitamente contar cómo se generó una pieza en un turno sin
+herramientas, y explicar por qué «no puede» un encargo que sí sale de ese DM.

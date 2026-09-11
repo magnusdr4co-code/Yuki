@@ -31,6 +31,7 @@ from ..core.brake import Brake
 from ..core.spend_budget import SpendLedger
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, TERMINADO, describe_job as describe_media_job
+from ..tools import receta
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -1118,29 +1119,36 @@ class DiscordAdapter:
 
     def _aviso_de_canto(self, lyrics_entry) -> str:
         """
-        Qué se va a generar y qué no, dicho antes de que cueste dinero.
+        Qué motor va a componer esto, dicho antes de que cueste dinero.
 
-        `skills/HERRAMIENTAS.md` §1 declara que ningún motor musical contratado
-        sirve voz cantada: Lyria compone instrumental y el respaldo local
-        sintetiza la partitura y devuelve `sung: False`. No es algo que se
-        arregle reescribiendo la letra ni incrustándola en la partitura —el
-        prompt ya la manda íntegra con la orden de cantarla— y decir lo
-        contrario sería inventarse una capacidad.
+        Aquí hubo un error grave y conviene que conste: esta función afirmaba
+        «ningún motor musical contratado sirve voz» y **es falso**. Lyria canta
+        —`nous_portal` lo dice en su propio código y marca el resultado con
+        `sung: True`—, y el 11 de septiembre entregó una canción cantada justo
+        después de que este aviso dijera que no saldría. La frase venía de
+        `skills/HERRAMIENTAS.md`, que es anterior a Lyria y habla de `suno_v4` y
+        `flow_audio`; me fié del documento en vez del código.
+
+        Negar una capacidad que existe es tan falso como prometer una que no, y
+        aquí se hizo por intentar evitar lo segundo. Lo honesto no es afirmar
+        ninguno de los dos extremos antes de generar: es decir **qué motor va a
+        atender y qué significa cada salida**, porque hasta que el proveedor
+        responde no se sabe cuál de los dos caminos tocó. La nota del adjunto sí
+        lo sabe, y por eso viaja con el paso.
         """
-        from ..tools.vertex_media import VertexMediaClient
-
         motor = getattr(self.agent, "media_creator", None)
         vertex = getattr(getattr(motor, "portal", None), "vertex", None)
-        hay_vertex = isinstance(vertex, VertexMediaClient) and getattr(vertex, "enabled", False)
+        hay_vertex = bool(vertex is not None and getattr(vertex, "is_available", lambda: False)())
 
         titulo = (lyrics_entry or {}).get("title", "la letra archivada")
         cabecera = f"🎵 Generando desde «{titulo}»."
         if hay_vertex:
-            return (f"{cabecera} **Saldrá instrumental, no cantada**: ningún motor musical "
-                    "contratado sirve voz. Lyria compone la base y el adjunto sólo saldrá si "
-                    "devuelve audio real; si no, oirás la partitura propia sintetizada.")
-        return (f"{cabecera} **Saldrá instrumental, no cantada**, y además sin Vertex "
-                "configurado sólo puedo darte la partitura propia sintetizada en local.")
+            return (f"{cabecera} Lo atiende **Lyria**, que sí canta: el prompt le manda la letra "
+                    "íntegra con la orden de interpretarla. Si Lyria no responde, cae al respaldo "
+                    "local, que **no canta** —es una maqueta instrumental— y en ese caso el "
+                    "adjunto lo dirá en su propia nota. No doy por hecho cuál de los dos saldrá.")
+        return (f"{cabecera} Sin Vertex configurado no hay motor que cante: sólo puedo darte la "
+                "partitura propia sintetizada en local, que es **instrumental**.")
 
     def _paso_anterior(self, job, step_id: str):
         """El paso del mismo nombre en el trabajo más reciente del mismo Productor."""
@@ -1151,6 +1159,30 @@ class DiscordAdapter:
             if paso is not None and paso.is_done() and paso.delivered:
                 return anterior, paso
         return None, None
+
+    @staticmethod
+    def _pie_de_receta(ruta: Optional[str]) -> str:
+        """
+        Con qué se hizo, dicho en la propia entrega.
+
+        El 11 de septiembre el Productor preguntó «¿qué es lo que has hecho?» y
+        Yuki contestó con un relato técnico detallado —incrustar la fonética en
+        la partitura, fijar el tempo, gobernar los contrastes— en un turno con
+        **cero herramientas ejecutadas**. No hizo nada de eso: el prompt de la
+        canción está escrito en este fichero y ella no lo toca.
+
+        La receta ya se escribía junto al audio y no la veía nadie. Enseñarla
+        aquí quita el hueco: quien pregunte qué se hizo tiene la respuesta
+        delante, y no hace falta que nadie se la imagine.
+        """
+        datos = receta.leer(ruta) if ruta else {}
+        if not datos:
+            return ""
+        parametros = datos.get("parametros") or {}
+        interesantes = [f"{clave} {valor}" for clave, valor in parametros.items()
+                        if clave in ("duration_seconds", "bpm", "escala", "aspect_ratio")]
+        detalle = f" · {' · '.join(interesantes)}" if interesantes else ""
+        return f"\n-# 🧾 Generado con {datos.get('motor') or 'motor sin declarar'}{detalle}"
 
     async def _aviso_de_que_ya_salio_asi(self, job, paso) -> str:
         """
@@ -1229,6 +1261,7 @@ class DiscordAdapter:
                 await report(f"⚠️ No se generó canción: {detalle}")
         if song_step.is_done() and not song_step.delivered:
             pie = (song_step.note or "🎵 Pista de audio generada")
+            pie += self._pie_de_receta(song_step.path)
             pie += await self._aviso_de_que_ya_salio_asi(job, song_step)
             if await self._send_file(channel, song_step.path, pie):
                 song_step.delivered = True
@@ -1279,7 +1312,8 @@ class DiscordAdapter:
                 self.media_jobs.save(job)
                 await report(f"⚠️ No se generó portada: {detalle}")
         if portada.is_done() and not portada.delivered:
-            pie = "🎨 Portada del sencillo" + await self._aviso_de_que_ya_salio_asi(job, portada)
+            pie = ("🎨 Portada del sencillo" + self._pie_de_receta(portada.path)
+                   + await self._aviso_de_que_ya_salio_asi(job, portada))
             if await self._send_file(channel, portada.path, pie):
                 portada.delivered = True
                 self.media_jobs.save(job)

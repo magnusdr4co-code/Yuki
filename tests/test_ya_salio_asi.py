@@ -23,6 +23,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 pytest.importorskip("discord")
 
 from src.adapters.discord_bot import DiscordAdapter  # noqa: E402
+from src.tools import receta  # noqa: E402
 from src.tools.media_jobs import MediaJobStore  # noqa: E402
 
 
@@ -57,6 +58,10 @@ class PortalDoble:
         self.veces += 1
         destino = self.tmp_path / f"cancion_{self.veces}.mp3"
         destino.write_bytes(self.contenido)
+        # Los clientes reales escriben la receta junto al audio; el doble
+        # también, o la prueba no recorrería el camino del producto.
+        receta.escribir(str(destino), motor="lyria-3-pro-preview",
+                        prompt=kwargs.get("prompt", ""), duration_seconds=90)
         return {"status": "success", "local_path": str(destino),
                 "sung": False, "note": self.nota or "Maqueta local: no es una canción cantada."}
 
@@ -154,3 +159,17 @@ def test_no_poder_comparar_no_es_haber_comparado(tmp_path):
     from src.adapters.discord_bot import _mismo_contenido
 
     assert _mismo_contenido(str(tmp_path / "no-existe.mp3"), str(tmp_path / "tampoco.mp3")) is False
+
+
+def test_la_entrega_dice_con_que_motor_se_hizo(tmp_path, monkeypatch):
+    """
+    Camino del producto: el pie del adjunto tiene que llevar la receta, no sólo
+    saber construirla. El Productor preguntó «¿qué has hecho?» y la respuesta
+    salió de la imaginación porque no estaba en el mensaje.
+    """
+    adaptador = _adaptador(tmp_path, monkeypatch, PortalDoble(tmp_path))
+
+    canal = _encargar(adaptador, "hazme la canción")
+
+    assert any("lyria-3-pro-preview" in pie for pie in canal.pies), \
+        f"ningún adjunto dice con qué se generó: {canal.pies}"

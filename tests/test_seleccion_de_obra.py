@@ -117,14 +117,54 @@ def test_las_obras_archivadas_llevan_su_hora(adaptador):
 
 # --- Lo que no se puede hacer, dicho antes de gastar ---
 
-def test_se_avisa_de_que_no_saldra_cantada_antes_de_generar(adaptador):
+def test_el_aviso_dice_que_motor_atiende_antes_de_gastar(adaptador):
     """
     El aviso llegaba **después** de gastar. Por eso el Productor pidió la misma
     canción cantada cuatro veces, y por eso Yuki acabó inventando una
-    explicación técnica —que la letra había que incrustarla en la partitura—
-    para justificar un resultado que no dependía del prompt.
+    explicación técnica para justificar un resultado que no dependía del prompt.
 
-    Ningún motor contratado canta. Eso se dice antes.
+    Con Lyria disponible, lo honesto es decir **quién atiende y qué significa
+    cada salida**, no adelantar el resultado: hasta que el proveedor responde no
+    se sabe si tocó Lyria —que canta— o el respaldo local —que no—.
+    """
+    adaptador, biblioteca = adaptador
+    letra = biblioteca.save_text("Herrumbre — letra", "El óxido no duerme. " * 20)
+    adaptador.agent.media_creator = types.SimpleNamespace(
+        portal=types.SimpleNamespace(vertex=types.SimpleNamespace(is_available=lambda: True)))
+
+    aviso = adaptador._aviso_de_canto(letra)
+
+    assert "Lyria" in aviso
+    assert "respaldo local" in aviso
+    assert "Herrumbre" in aviso, "el aviso debe decir de qué obra parte"
+
+
+def test_el_aviso_no_niega_que_lyria_cante(adaptador):
+    """
+    Esto es lo que falló en producción el 11 de septiembre, y lo que esta misma
+    prueba **exigía** en su versión anterior: el aviso afirmaba «ningún motor
+    contratado sirve voz» y Lyria entregó una canción cantada acto seguido.
+
+    `nous_portal` marca su resultado con `sung: True` precisamente porque canta.
+    Negar una capacidad que existe es tan falso como prometer una que no.
+    """
+    adaptador, biblioteca = adaptador
+    letra = biblioteca.save_text("Herrumbre — letra", "El óxido no duerme. " * 20)
+    adaptador.agent.media_creator = types.SimpleNamespace(
+        portal=types.SimpleNamespace(vertex=types.SimpleNamespace(is_available=lambda: True)))
+
+    aviso = adaptador._aviso_de_canto(letra).lower()
+
+    assert "saldrá instrumental" not in aviso
+    assert "ningún motor" not in aviso
+    assert "no cantada" not in aviso
+
+
+def test_el_aviso_no_promete_lo_que_el_entorno_no_tiene(adaptador):
+    """
+    Sin Vertex no hay motor que cante, y ahí sí es honesto decirlo: no es negar
+    una capacidad, es que no está configurada. La diferencia entre esta prueba y
+    la anterior es toda la diferencia entre declarar un límite e inventarlo.
     """
     adaptador, biblioteca = adaptador
     letra = biblioteca.save_text("Herrumbre — letra", "El óxido no duerme. " * 20)
@@ -133,16 +173,5 @@ def test_se_avisa_de_que_no_saldra_cantada_antes_de_generar(adaptador):
     aviso = adaptador._aviso_de_canto(letra)
 
     assert "instrumental" in aviso.lower()
-    assert "no cantada" in aviso.lower()
-    assert "Herrumbre" in aviso, "el aviso debe decir de qué obra parte"
-
-
-def test_el_aviso_no_promete_lo_que_el_entorno_no_tiene(adaptador):
-    """Sin Vertex configurado, ni siquiera hay base compuesta: sólo la partitura propia."""
-    adaptador, biblioteca = adaptador
-    letra = biblioteca.save_text("Herrumbre — letra", "El óxido no duerme. " * 20)
-    adaptador.agent.media_creator = types.SimpleNamespace(portal=None)
-
-    aviso = adaptador._aviso_de_canto(letra)
-
     assert "local" in aviso.lower() or "partitura propia" in aviso.lower()
+    assert "Lyria" not in aviso, "sin Vertex no hay Lyria a la que nombrar"
