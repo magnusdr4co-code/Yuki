@@ -10,9 +10,9 @@
 | Campo | Valor |
 |---|---|
 | Repositorio | `europe-southwest1-docker.pkg.dev/yuki-prod/yuki/yuki-agent` |
-| Digest desplegado | `sha256:8c6ab9f8563478e5b63c43ec639fd59a7cacf72633f29d38cd0c406015805192` |
-| Commit de código | `5db53c5` — integración de las mejoras remotas de producción |
-| Build de Cloud Build | `dd05c8b9-0ef6-4c9b-9f1b-77d75a3f8957` |
+| Digest desplegado | `sha256:117577a64c665d24784922a62e247be8169533e3619e418e317a5c6dbe942a0d` |
+| Commit de código | `d8f5cbe` — consolidación de mejoras de producción y corrección de desactivación explícita de Vertex |
+| Build de Cloud Build | `1a1d11bf-c986-4db8-9b10-8cc7ab6823d3` |
 
 La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto inmutable
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
@@ -57,30 +57,26 @@ limitadores abiertos y ninguno clasificado como bloqueante. Es una inspección
 de configuración y binarios, **no** una prueba pagada de todos los proveedores.
 La copia automática fuera de la instancia sigue pendiente de `BACKUP_GCS_BUCKET`.
 
-## Actualización del 11 de septiembre
+## Actualización del 11 de septiembre — consolidación y runtime actual
 
-- `origin/main` no tenía cambios nuevos; se incorporó la rama remota de mejoras
-  `claude/virtualizacion-mejoras-proyecto-dik9gg` hasta `47df74c` mediante merge
-  `5db53c5`, y el resultado quedó publicado en `origin/main`.
-- La integración añade planes de encargo gobernados por la petición, reanudación
-  más segura ante fallos de Discord, presupuesto anunciado antes de gastar,
-  cotejo entre recibos y prosa, recetas de obra, entrega del Salón y ajustes de
-  Honcho/Telegram. No se generaron medios como prueba de despliegue.
-- Validación: Ruff correcto, **858 pruebas aprobadas y 2 omitidas**, 12 simulacros
-  y circuito de restauración correctos. El humo sobre archivo Git limpio pasó;
-  el checkout operativo conserva el hallazgo histórico de archivos generados sin
-  marcar y no se modificó ninguna obra.
-- Imagen construida desde el repositorio y publicada con digest
-  `sha256:8c6ab9f8563478e5b63c43ec639fd59a7cacf72633f29d38cd0c406015805192`.
-  El startup script la descargó y recreó ambos contenedores conservando el disco
-  persistente, pairing y overlays.
+- La rama remota `claude/virtualizacion-mejoras-proyecto-dik9gg` avanzó hasta
+  `76638f9` con cuatro commits nuevos. Se integró sin conflictos en `main`
+  mediante el merge `673eb06`; después se corrigió `VertexMediaClient` en
+  `d8f5cbe` para que `project_id=""` desactive medios explícitamente en vez de
+  heredar el proyecto de la VM. `main` quedó publicado en `origin/main`.
+- La integración activa logging real, corrige el reconocimiento de encargos
+  multimedia, hace que música/voz/imagen/vídeo respeten el criterio de la obra,
+  añade runbook de despliegue, secretos opcionales tolerantes y pruebas nuevas.
+- Validación: Ruff correcto, **947 pruebas aprobadas y 2 omitidas**. El fallo
+  inicial de Vertex sin proyecto quedó corregido y la prueba específica pasó.
+- Cloud Build `1a1d11bf-c986-4db8-9b10-8cc7ab6823d3` publicó el digest
+  `sha256:117577a64c665d24784922a62e247be8169533e3619e418e317a5c6dbe942a0d`.
+  El startup script descargó la imagen y recreó ambos contenedores preservando
+  el disco persistente.
 - Verificación posterior: `yuki-daemon` activo, `yuki-salon` saludable, `/health`
-  devuelve `200`, Discord conectado a Temple y Dev Server, ruta de producción
-  multimedia y pairing pasan dentro del contenedor, y la memoria contiene 85
-  recuerdos íntegros.
-- Pulso actual: `aletargada` pero sano; el latido es reciente y hay actividad de
-  bitácora, aunque el signo de albedrío lleva 37,9 h apagado. No se falseó el
-  estado ni se lanzó una generación facturable para maquillar la sonda.
+  devuelve `200`, Discord conectado a Temple y Dev Server con todos los canales,
+  pairing persistente, 91 recuerdos íntegros y la ruta de reconocimiento de
+  producción multimedia activa. No se generaron medios facturables como prueba.
 
 ## Servicios y conectividad
 
