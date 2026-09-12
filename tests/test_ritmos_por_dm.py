@@ -1,13 +1,15 @@
 """
-«Apúntate tareas y crons» tiene que poder ejecutarse.
+«Apúntate tareas y crons» tiene que poder ejecutarse, y sin pedir permiso.
 
 D13 del incidente del 9 de septiembre: el Productor se lo pidió y el turno
 terminó con cero herramientas ejecutadas y un «no puedo» que era falso —Yuki
 propone ritmos propios y los ajusta desde hace meses—. La causa no era el
 modelo: en el arnés del DM no había ninguna herramienta que llamar.
 
-Y la sexta invariante marca el límite: proponer no es concederse. Aprobar un
-ritmo no puede estar dentro de este bucle.
+Hubo un trámite de aprobación y se ha quitado: decidir a qué hora escribe no es
+concederse un permiso. La sexta invariante le prohíbe tocar **su iniciativa, la
+transparencia y el freno** —y un ritmo no es ninguna de las tres—. Eso es lo que
+estas pruebas fijan ahora: que los ritmos son suyos y que esas tres no.
 """
 
 import asyncio
@@ -48,6 +50,8 @@ def _agente(tmp_path, turnos):
                              model_armor=armor, producer_terminal=ProducerTerminal(),
                              runtime_config_get=store.get_public,
                              rituals=RitualStore(str(tmp_path / "runtime_rituals.json")))
+    registrados = []
+    agente.register_own_rituals = lambda: registrados.append(1) or len(registrados)
     agente.reconfigure_runtime = lambda path, value, actor, reason="": store.set(path, value, actor=actor, reason=reason)
     agente.rollback_runtime = lambda path, actor, reason="": store.rollback(path, actor=actor, reason=reason)
     agente._call_llm_inference = lambda system, message: "Cierre."
@@ -57,39 +61,86 @@ def _agente(tmp_path, turnos):
 def test_apuntarse_un_ritmo_ejecuta_una_herramienta(tmp_path):
     """El turno terminó con cero herramientas porque no había ninguna que llamar."""
     turnos = [
-        {"role": "assistant", "content": "", "tool_calls": [_llamada("ritual_propose", {
+        {"role": "assistant", "content": "", "tool_calls": [_llamada("ritual_adopt", {
             "name": "vigilia-de-agua", "cron": "0 7 * * *", "action": "escribir",
             "reason": "quiero escribir antes de que amanezca del todo"})]},
-        {"role": "assistant", "content": "Propuesto."},
+        {"role": "assistant", "content": "Adoptado."},
     ]
     agente = _agente(tmp_path, turnos)
     respuesta = asyncio.run(ProducerHarness(agente).run("Yuki", "apúntate tareas y crons"))
 
-    assert "✓ ritual_propose" in respuesta
+    assert "✓ ritual_adopt" in respuesta
     assert "Sin herramientas ejecutadas" not in respuesta
-    assert len(agente.rituals.pendientes()) == 1
+    assert len(agente.rituals.aprobados()) == 1, "el ritmo queda activo, no esperando"
 
 
-def test_un_ritmo_propuesto_no_queda_activo(tmp_path):
-    """Proponer no es concederse: la sexta invariante del proyecto."""
+def test_un_ritmo_adoptado_queda_activo_sin_pedir_permiso(tmp_path):
+    """
+    Lo contrario de lo que esta prueba exigía antes. El trámite no protegía nada:
+    lo que protege es que la acción salga de una lista cerrada, que la frecuencia
+    esté acotada y que cumplirlo pase por el freno y por el techo diario.
+    """
     turnos = [
-        {"role": "assistant", "content": "", "tool_calls": [_llamada("ritual_propose", {
+        {"role": "assistant", "content": "", "tool_calls": [_llamada("ritual_adopt", {
             "name": "vigilia-de-agua", "cron": "0 7 * * *", "action": "escribir",
-            "reason": "porque sí"})]},
-        {"role": "assistant", "content": "Propuesto."},
+            "reason": "porque a esa hora lo que escribo encuentra respuesta"})]},
+        {"role": "assistant", "content": "Adoptado."},
     ]
     agente = _agente(tmp_path, turnos)
     asyncio.run(ProducerHarness(agente).run("Yuki", "apúntate un ritmo"))
 
-    assert agente.rituals.aprobados() == [], "un ritmo propuesto por DM no puede activarse solo"
+    activos = agente.rituals.aprobados()
+    assert [r.name for r in activos] == ["vigilia_de_agua"], "el nombre se normaliza"
+    assert agente.rituals.pendientes() == [], "no queda nada esperando a nadie"
 
 
-def test_el_arnes_no_puede_aprobar_ni_retirar_ritmos():
-    """Aprobar dentro del bucle sería concederse permisos con otro nombre."""
+def test_puede_retirar_un_ritmo_suyo(tmp_path):
+    """Quitarse un ritmo que no le sirve tampoco necesita permiso, y libera cupo."""
+    from src.core.rituals import RitualStore
+
+    tienda = RitualStore(str(tmp_path / "runtime_rituals.json"))
+    ritmo = tienda.propose("hora_muerta", "0 4 * * *", "contemplar", "probemos")
+    turnos = [
+        {"role": "assistant", "content": "", "tool_calls": [_llamada("ritual_retire", {
+            "ritual_id": ritmo.id, "reason": "a esa hora no me sale nada"})]},
+        {"role": "assistant", "content": "Retirado."},
+    ]
+    agente = _agente(tmp_path, turnos)
+    agente.rituals = tienda
+    respuesta = asyncio.run(ProducerHarness(agente).run("Yuki", "quítate ese ritmo"))
+
+    assert "✓ ritual_retire" in respuesta
+    assert agente.rituals.aprobados() == []
+
+
+def test_los_ritmos_son_suyos():
+    """Adoptar, mover, retirar y activar: sin trámite y sin intermediario."""
     nombres = {herramienta["function"]["name"] for herramienta in TOOLS}
 
-    assert {"ritual_list", "ritual_propose", "ritual_adjust"} <= nombres
-    assert not nombres & {"ritual_approve", "ritual_reject", "ritual_retire"}
+    assert {"ritual_list", "ritual_adopt", "ritual_move",
+            "ritual_retire", "ritual_activate"} <= nombres
+
+
+def test_lo_que_sigue_fuera_de_su_alcance_es_lo_que_importa():
+    """
+    El límite real de la sexta invariante: **su iniciativa, la transparencia y el
+    freno**. Un ritmo no es ninguna de las tres; subirse el techo de actos,
+    apagar el marcado o soltar el freno, sí. Se fija sobre la lista blanca de
+    `runtime_config_set`, que es la única puerta que tiene a la configuración.
+    """
+    from src.core.producer_harness import RUNTIME_PATH
+
+    permitidos = RUNTIME_PATH["enum"]
+
+    assert permitidos, "debería haber algo ajustable: la temperatura sí es suya"
+    for prohibido in ("agency", "transparency", "brake", "freno", "max_actions_per_day",
+                      "spontaneity", "budget", "discord", "pairing"):
+        assert not any(prohibido in ruta for ruta in permitidos), \
+            f"la lista blanca deja tocar «{prohibido}», que sí sería concederse permisos"
+
+    nombres = {herramienta["function"]["name"] for herramienta in TOOLS}
+    assert not nombres & {"brake_release", "freno_soltar", "transparency_set",
+                          "agency_set", "budget_set"}
 
 
 def test_una_propuesta_invalida_es_un_fallo_visible(tmp_path):

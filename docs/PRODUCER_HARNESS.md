@@ -16,10 +16,15 @@ Model Armor inspecciona el prompt, argumentos y respuesta. La inferencia sale de
 
 Herramientas: `library_inventory`, `library_list`, `library_save_text`, `library_read`,
 `library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set`,
-`runtime_config_rollback`, `ritual_list`, `ritual_propose` y `ritual_adjust`. Las tres
-últimas existen porque le pidieron «apúntate tareas y crons» y el turno terminó con cero
-herramientas ejecutadas y un «no puedo» falso: no había ninguna que llamar. Sólo consultan
-y proponen —aprobar un ritmo no está en este bucle, porque proponer no es concederse—. El canon es tipo/estado: sonora, visual, palabra, audiovisual;
+`runtime_config_rollback`, `ritual_list`, `ritual_adopt`, `ritual_move`, `ritual_retire`
+y `ritual_activate`. Las de ritmos existen porque le pidieron «apúntate tareas y crons» y
+el turno terminó con cero herramientas ejecutadas y un «no puedo» falso: no había ninguna
+que llamar. Cuando las hubo sólo podía **proponer**, y tenía que explicar que la
+aprobación pasaba «fuera de esta ventana de conversación» — cierto, y ése era el problema.
+Ahora **adopta**: un ritmo queda activo al crearlo, porque decidir a qué hora escribe no
+es concederse un permiso. Lo que la acota no es el clic de nadie, sino la lista cerrada de
+acciones, el techo de disparos, el techo de ritmos, el freno y el techo diario de actos
+propios. El canon es tipo/estado: sonora, visual, palabra, audiovisual;
 semilla, en-desarrollo, terminado. Los originales no se borran. Imports idempotentes
 por hash, límite 100 MB por archivo, sin enlaces fuera de output. Simulaciones conocidas
 se omiten. JSON de producción permanece en origen; no se etiqueta como obra.
@@ -107,13 +112,16 @@ mínima y acciones por día; pasa por el mismo overlay atómico que el resto y t
 efecto en el siguiente ciclo. La evolución autónoma no puede tocar nada de esto:
 nadie debería poder concederse más iniciativa a sí mismo.
 
-`!ritmos` lista los cron del proyecto, los ritmos propios que Yuki ganó y las
-propuestas que esperan respuesta. Ella propone tras la síntesis diaria, fundando
-el horario en su diario de agencia, y avisa por DM; `!ritmo aprobar|rechazar|
-retirar <id> [motivo]` decide. Ninguna propuesta llega al planificador sin esa
-aprobación, y las que llegan sólo pueden escribir, contemplar, explorar o
-monologar: componer y pintar gastan crédito y siguen exigiendo orden explícita.
-Detalle completo en `docs/LIBRE_ALBEDRIO.md`.
+`!ritmos` lista los cron del proyecto y los ritmos propios que Yuki adoptó. Los
+adopta ella tras la síntesis diaria, fundando el horario en su diario de agencia,
+y avisa por DM con el ritmo ya sonando. Al Productor le queda **el veto**: `!ritmo
+retirar <id> [motivo]` lo quita y `!ritmo mover <id> "<cron>"` lo cambia de hora.
+`!ritmo aprobar|rechazar` sobrevive sólo para las propuestas que se quedaron
+esperando de cuando hacía falta aprobar; sin eso quedarían atrapadas en un trámite
+retirado. Un ritmo sólo puede escribir, contemplar, explorar o monologar —componer
+y pintar gastan crédito y siguen exigiendo orden explícita—, y al cumplirse pasa
+por el freno y por el techo diario de actos: adoptar ritmos decide cuándo actúa,
+nunca cuántas veces. Detalle completo en `docs/LIBRE_ALBEDRIO.md`.
 
 ## Terminal y configuración
 

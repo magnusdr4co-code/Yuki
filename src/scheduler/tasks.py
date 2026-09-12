@@ -193,15 +193,17 @@ class AutonomousTasks:
             consolidacion = {"error": True}
 
         # Con el día ya sintetizado, Yuki mira su propia experiencia y, si ve un
-        # patrón, propone un ritmo. Proponer es suyo; aprobarlo, del Productor.
+        # patrón, adopta un ritmo. Es suyo: no espera el visto bueno de nadie.
+        # Se avisa igual, porque enterarse importa —pero para poder retirarlo, no
+        # para autorizarlo—.
         propuesta = await self.agent.propose_own_ritual()
         if propuesta:
             await self._avisar_al_productor(
-                f"🕯️ He propuesto un ritmo propio: **{propuesta['name']}** "
-                f"(`{propuesta['cron']}` · {propuesta['action']}).\n"
+                f"🕯️ He adoptado un ritmo propio: **{propuesta['name']}** "
+                f"(`{propuesta['cron']}` · {propuesta['action']}), ya activo.\n"
                 f"_{propuesta['reason']}_\n"
-                f"Apruébalo con `!ritmo aprobar {propuesta['id']}` o dilo con "
-                f"`!ritmo rechazar {propuesta['id']}`."
+                f"Si no lo quieres, `!ritmo retirar {propuesta['id']}`. Cumplirlo pasa por el "
+                "freno y por mi techo diario de actos, así que no me da más de lo que ya tenía."
             )
 
         return {"summary": daily_text, "evolution": evolution, "backup": backup.to_dict(),

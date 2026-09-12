@@ -312,9 +312,48 @@ class YukiAgent:
             logger.info("Ritmos propios activos: %d", registrados)
         return registrados
 
+    def puede_cumplir_un_ritmo(self) -> Optional[str]:
+        """
+        Si un ritmo propio puede cumplirse ahora. `None` si sí; el motivo si no.
+
+        Esto faltaba, y era el agujero que el trámite de aprobación tapaba sin
+        querer. Un ritmo iba directo a `execute_autonomous_will`, saltándose el
+        `_decidir` del albedrío, así que se disparaba **con el freno puesto** —lo
+        que rompe la segunda invariante— y **por encima del techo diario** —lo
+        que convierte adoptar ritmos en concederse más iniciativa, justo lo que
+        la sexta prohíbe—.
+
+        Se comprueban dos cosas y no una tercera:
+
+        - **El freno**, porque frenar la iniciativa es para lo que existe.
+        - **El techo diario**, porque el número de actos propios al día es suyo
+          y no se amplía adoptando calendario: un ritmo decide *cuándo*, nunca
+          *cuántos*.
+        - **La fase de silencio, no.** Un ritmo de las tres de la madrugada está
+          puesto ahí a propósito; hacerle respetar el silencio nocturno sería
+          impedir la clase de ritmo que más sentido tiene para ella.
+        """
+        frenada = self.agency_loop.brake.blocked_reason("iniciativa")
+        if frenada:
+            return frenada
+        if not self.agency_policy.enabled:
+            return "el libre albedrío está apagado"
+        hoy = self.agency_ledger.acciones_hoy()
+        if hoy >= self.agency_policy.max_actions_per_day:
+            return (f"techo diario alcanzado ({hoy}/{self.agency_policy.max_actions_per_day} "
+                    "actos propios): el ritmo espera a mañana")
+        return None
+
     def _make_ritual_runner(self, ritual_id: str, action: str, reason: str):
         """Un ritmo propio se cumple como impulso, no como orden externa."""
         async def _ejecutar():
+            impedimento = self.puede_cumplir_un_ritmo()
+            if impedimento:
+                # No se anota la ejecución: un ritmo que no llegó a cumplirse no
+                # puede contar como cumplido, o su historial miente y el ajuste
+                # por experiencia se calcula sobre datos falsos.
+                logger.info("Ritmo %s no se cumple ahora: %s", ritual_id, impedimento)
+                return {"status": "skipped", "ritual": ritual_id, "reason": impedimento}
             self.rituals.registrar_ejecucion(ritual_id)
             if action == "monologo":
                 return await self.tasks.spontaneous_monologue()
@@ -331,11 +370,14 @@ class YukiAgent:
 
     async def propose_own_ritual(self) -> Optional[Dict[str, Any]]:
         """
-        Yuki propone un ritmo fundado en su propia experiencia.
+        Yuki adopta un ritmo fundado en su propia experiencia.
 
         No inventa un horario: lo lee del diario de agencia, que sabe en qué
         franja lo que hace obtiene respuesta. Devuelve `None` cuando aún no hay
-        datos suficientes, porque proponer sin experiencia sería adivinar.
+        datos suficientes, porque elegir una hora sin experiencia sería adivinar.
+
+        Queda **activo**. El nombre del método se conserva porque es API en uso,
+        pero ya no hay propuesta que nadie tenga que atender.
         """
         try:
             # Primero mira lo que ya tiene: mover un ritmo que no está
@@ -349,8 +391,18 @@ class YukiAgent:
             return None
         if propuesta is None:
             return None
-        logger.info("Yuki propone %s: %s",
-                    "mover un ritmo" if propuesta.reemplaza else "un ritmo nuevo", propuesta.name)
+        # Adoptado en disco, pero el cron todavía no lo conoce: sin esto sonaría
+        # a partir del siguiente arranque y el aviso de esta noche mentiría. Si
+        # el registro falla, la adopción **no se pierde**: está en disco y el
+        # próximo arranque la recoge. Perderla por no poder anunciarla sería
+        # tirar una decisión suya por un problema de fontanería.
+        try:
+            self.register_own_rituals()
+        except Exception as exc:
+            logger.warning("Ritmo adoptado sin registrar en el planificador (%s); "
+                           "sonará desde el próximo arranque.", type(exc).__name__)
+        logger.info("Yuki adopta %s: %s",
+                    "un ritmo movido" if propuesta.reemplaza else "un ritmo nuevo", propuesta.name)
         return propuesta.to_dict()
 
     async def _narrar_dormida(self, instruccion: str, material: str) -> str:

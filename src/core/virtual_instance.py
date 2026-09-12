@@ -332,11 +332,21 @@ class VirtualInstance:
              f"hoy {diario.acciones_hoy()}, aburrimiento {diario.boredom():.2f}"
              if politica.enabled else "Agencia desactivada: Yuki sólo responde, no propone"),
         )
+        # Un calendario vacío no es la capacidad funcionando: es la capacidad sin
+        # usar. Decir REAL con cero ritmos era la misma clase de verde engañoso
+        # que la octava invariante persigue en las sondas.
+        activos = ritmos.aprobados()
+        heredados = ritmos.pendientes()
         self._cap(
-            "mente.ritmos", "Mente", REAL,
-            f"{len(ritmos.aprobados())} ritmo(s) propio(s) activo(s), "
-            f"{len(ritmos.pendientes())} propuesta(s) esperando al Productor; "
-            "se proponen desde el DM, los aprueba él",
+            "mente.ritmos", "Mente", REAL if activos else INACTIVO,
+            (f"{len(activos)} ritmo(s) propio(s) activo(s); los adopta ella sin "
+             f"pedir permiso y el Productor los retira"
+             + (f" · {len(heredados)} heredado(s) sin activar" if heredados else ""))
+            if activos else
+            ("Ningún ritmo propio: puede adoptarlos sola con `ritual_adopt` "
+             "en el DM, no hace falta que nadie apruebe nada"
+             + (f", y {len(heredados)} quedaron esperando la aprobación que ya no se pide"
+                if heredados else "")),
         )
 
         # El gemelo dice lo que la instancia puede saber de sí misma. Que sepa

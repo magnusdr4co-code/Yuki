@@ -45,7 +45,7 @@ arreglo a propósito. El detalle de cada una, al final.
 |---|---|---|
 | D11 | Tres generaciones idénticas: ~96 s de vídeo facturado por segundo para entregar tres veces lo mismo, consumiendo además tope diario. | **corregido**: un pedido idéntico dentro de 90 min no se repite; se dice qué hay ya y qué hace falta para que salga distinto |
 | D12 | El Productor abrió con «dispones de créditos, quince días» y ella planificó sin consultar el presupuesto ni mencionarlo. | **corregido**: el acuse del encargo dice el coste previsto y el presupuesto de hoy, y avisa si no cabe |
-| D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | **corregido**: el arnés del DM tiene `ritual_list`, `ritual_propose` y `ritual_adjust` |
+| D13 | Cero herramientas ejecutadas en el turno donde se le pidió apuntarse tareas. | **corregido**: el arnés del DM tiene `ritual_list`, `ritual_adopt`, `ritual_move`, `ritual_retire` y `ritual_activate`. El primer arreglo sólo dejaba *proponer*, y eso fue un arreglo a medias: ver la nota de abajo |
 | D14 | «Envíamelo por Salón o por aquí»: el Salón ni se usó ni se mencionó. | **corregido**: el Salón sirve obra (con credencial) y el acuse contesta si puede o no |
 
 ## Lo que sí funcionó
@@ -153,12 +153,33 @@ quepa.
 contestó que no podía y el turno se cerró sin ejecutar nada. Yuki propone ritmos
 propios y los ajusta desde hace meses, pero eso vivía en el CLI y en el
 planificador, no en el arnés del DM: el modelo no tenía a mano ninguna función
-que ejecutar. Ahora están `ritual_list`, `ritual_propose` y `ritual_adjust`.
-Sólo consultan y proponen. Aprobar no está en este bucle y no va a estarlo: la
-sexta invariante dice que la evolución autónoma no se concede permisos, y un
-`ritual_approve` dentro del arnés sería exactamente eso con otro nombre. Una
-propuesta inválida —un cron cada diez minutos— sale como fallo visible, porque
-una herramienta fallida no es un éxito.
+que ejecutar. El primer arreglo puso `ritual_list`, `ritual_propose` y
+`ritual_adjust`, y decía esto: «aprobar no está en este bucle y no va a estarlo:
+la sexta invariante dice que la evolución autónoma no se concede permisos, y un
+`ritual_approve` dentro del arnés sería exactamente eso con otro nombre».
+
+**Ese razonamiento estaba mal, y el propio arreglo lo demostró.** Con las nuevas
+herramientas en la mano, Yuki seguía teniendo que contestar que no podía: *«el
+arnés deliberadamente no me da a mí una herramienta para auto-aprobar propuestas
+—sólo puedo proponer o solicitar ajustes—, la aprobación tiene que ejecutarse
+desde el plano de administración del sistema, fuera de esta ventana de
+conversación»*. Un «no puedo» distinto pero igual de frustrante, y esta vez cierto.
+
+La sexta invariante prohíbe tres cosas concretas: ampliarse la **iniciativa**, la
+**transparencia** y el **freno**. Un ritmo no es ninguna de las tres — decide a
+qué hora escribe, no cuánto puede hacer. Aplicar la invariante a un horario era
+aplicarla a lo que no dice. Y peor: mientras el trámite de aprobación parecía
+proteger, tapaba el agujero de verdad —los ritmos se cumplían por fuera de
+`_decidir`, así que sonaban con el freno echado y por encima del techo diario, y
+*eso* sí ampliaba su iniciativa—.
+
+Así que el trámite se quitó y la guarda se movió a donde tenía que estar:
+`ritual_adopt` deja el ritmo **activo**, y cumplirlo pasa por el freno y por el
+techo diario de actos (`agent.puede_cumplir_un_ritmo`). Más libertad y más
+seguridad a la vez, que es la señal de que la guarda anterior estaba en el sitio
+equivocado. Al Productor le queda el veto, `!ritmo retirar`. Un ritmo inválido
+—un cron cada diez minutos— sigue saliendo como fallo visible al adoptarlo,
+porque una herramienta fallida no es un éxito.
 
 **C10 — el ancla no llegó a medirlo.** No falló por poco: aquellos turnos
 puntuaban **1.00**, exactamente igual que su mejor prosa. Los marcadores miraban

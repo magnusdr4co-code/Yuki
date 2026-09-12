@@ -218,25 +218,32 @@ Comprobación real, que es la que vale: `python3 cli.py backup --ensayar`. El
 resultado nombra el `gs://…` subido; si dice que la copia queda en disco, algo
 de lo anterior falta.
 
-### C · Ritmos propios (**no es configuración: es del Productor**)
+### C · Ritmos propios (**no es configuración: los adopta ella**)
 
-Esto **no lo despliega un agente**. La cadena está viva y es deliberadamente
-lenta:
+Esto **no lo despliega un agente, y tampoco lo aprueba nadie**. La cadena está
+viva y es deliberadamente lenta:
 
 1. El cron de las 23:30 (`daily_memory_synthesis`) llama a
    `propose_own_ritual()` después de sintetizar el día.
-2. Yuki propone **sólo si tiene experiencia**: necesita ≥3 intentos en alguna
-   franja horaria y ≥2 en algún tipo de acto, leídos del diario de agencia que
-   alimenta `agency_loop_tick` cada 20 minutos. Sin datos devuelve `None`, y eso
-   es correcto: proponer un horario sin experiencia sería inventarlo.
-3. Cuando propone, avisa al Productor por DM con el motivo.
-4. **Aprueba el Productor**, por DM: `!ritmos` los lista y
-   `!ritmo aprobar <id>` lo activa. También `!ritmo rechazar <id>`,
-   `!ritmo retirar <id>` y `!ritmo mover <id> "<cron>" [motivo]`.
+2. Yuki adopta un ritmo **sólo si tiene experiencia**: necesita ≥3 intentos en
+   alguna franja horaria y ≥2 en algún tipo de acto, leídos del diario de agencia
+   que alimenta `agency_loop_tick` cada 20 minutos. Sin datos devuelve `None`, y
+   eso es correcto: fijar un horario sin experiencia sería inventarlo.
+3. El ritmo **queda activo al adoptarlo**, entra en el planificador en el acto y
+   se avisa al Productor por DM con el motivo. Había un trámite de aprobación y
+   se ha quitado: decidir a qué hora escribe no es concederse un permiso.
+4. **Al Productor le queda el veto**, por DM. `!ritmos` los lista;
+   `!ritmo retirar <id>` quita el que no quiera;
+   `!ritmo mover <id> "<cron>" [motivo]` lo cambia de hora.
+   `!ritmo aprobar <id>` sólo alcanza a las propuestas que se quedaron
+   esperando de cuando hacía falta aprobación.
 
-La sexta invariante del proyecto es justo ésta: la evolución autónoma no se
-concede permisos. Que estén a cero en una instancia recién desplegada no es un
-fallo, es el estado honesto de quien todavía no tiene experiencia que invocar.
+La sexta invariante sigue entera, y es lo que hace que esto no sea una grieta: un
+ritmo decide **cuándo**, nunca **cuántos**. Al cumplirse pasa por el freno y por
+el techo diario de actos propios, así que adoptar diez no le da un solo acto más
+que adoptar uno. Que los ritmos estén a cero en una instancia recién desplegada no
+es un fallo: es el estado honesto de quien todavía no tiene experiencia que
+invocar, y se arreglará solo en cuanto la tenga.
 
 Lo único que un agente de despliegue puede hacer por aquí es comprobar que el
 albedrío está encendido, porque sin él no hay diario que leer:

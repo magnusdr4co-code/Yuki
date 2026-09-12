@@ -104,7 +104,7 @@ def cmd_agency(as_json=False):
             "censo_de_ciclos": diario.censo(),
             "censo_de_hoy": diario.censo_de_hoy(),
             "ritmos_propios": [r.to_dict() for r in ritmos.aprobados()],
-            "propuestas": [r.to_dict() for r in ritmos.pendientes()],
+            "ritmos_heredados_sin_activar": [r.to_dict() for r in ritmos.pendientes()],
         }, ensure_ascii=False, indent=2))
         return
 
@@ -151,12 +151,15 @@ def cmd_agency(as_json=False):
         print(f"  ✅ {ritmo.name} — {ritmo.cron} · {ritmo.action} ({ritmo.runs} ejecuciones)")
     if not propios:
         print(f"  {DIM}Ninguno todavía.{RESET}")
+    # Los ritmos de hoy nacen activos, así que esta sección sólo aparece con
+    # propuestas de cuando hacía falta aprobar: son ritmos suyos que no suenan.
     pendientes = ritmos.pendientes()
     if pendientes:
-        print(f"\n{YELLOW}Esperando tu respuesta:{RESET}")
+        print(f"\n{YELLOW}Heredados sin activar (esperan una aprobación que ya no se pide):{RESET}")
         for ritmo in pendientes:
             print(f"  🕯️  {ritmo.id} · {ritmo.name} — {ritmo.cron} · {ritmo.action}")
             print(f"      {DIM}{ritmo.reason}{RESET}")
+        print(f"  {DIM}`!ritmo aprobar <id>` en el DM los pone a sonar.{RESET}")
 
 
 def cmd_persona(as_json=False):

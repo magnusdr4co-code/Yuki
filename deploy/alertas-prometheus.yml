@@ -117,14 +117,17 @@ groups:
             `techo_diario`, subir `max_actions_per_day`; `sin_deseos`, mirar
             el aburrimiento y su umbral de espontaneidad.
 
-      - alert: PropuestasSinResponder
+      # Yuki adopta sus ritmos sin pedir permiso, así que esto ya no vigila una
+      # cola de espera: cuenta ritmos suyos de antes del cambio que se quedaron
+      # sin activar. Lo normal es cero, y no volver a verse nunca.
+      - alert: RitmoSuyoAtrapadoSinActivar
         expr: yuki_ritmos_propuestos > 0
-        for: 72h
+        for: 6h
         labels:
           severity: baja
         annotations:
-          resumen: "Yuki propuso ritmos y llevan tres días sin respuesta"
-          accion: "`!ritmos` en el DM para aprobarlos o rechazarlos."
+          resumen: "Un ritmo propio quedó esperando una aprobación que ya no se pide"
+          accion: "`!ritmos` lo lista bajo «heredados sin activar»; `!ritmo aprobar <id>` lo pone a sonar."
 
   - name: yuki-signos-vitales
     rules:

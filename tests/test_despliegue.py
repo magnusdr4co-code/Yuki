@@ -238,16 +238,29 @@ def test_el_runbook_comprueba_que_esta_viva_y_no_solo_que_arranco(comprobacion):
 def test_los_comandos_que_el_runbook_promete_existen():
     """
     Regla 4 del proyecto: una garantía prometida en la documentación necesita la
-    operación que la cumple. El runbook dice al Productor que apruebe ritmos con
-    `!ritmo aprobar <id>`, y el aviso nocturno de Yuki dice lo mismo.
+    operación que la cumple. El runbook manda al Productor vetar ritmos por DM, y
+    un comando que el adaptador no implemente sería una instrucción imposible
+    para quien despliega a las tres de la mañana.
+
+    La lista no se fija a mano: se lee del runbook. Fijarla obligaba a que el
+    runbook nombrase comandos que ya no necesita nombrar —`!ritmo rechazar` sólo
+    alcanza a propuestas heredadas, que una instancia recién desplegada no
+    tiene— y dejaba pasar cualquier comando nuevo que el runbook se inventara.
     """
     adaptador = (RAIZ / "src" / "adapters" / "discord_bot.py").read_text(encoding="utf-8")
     runbook = RUNBOOK.read_text(encoding="utf-8")
 
-    # Por su literal: comprobar sólo «aprobar» dejaba pasar que el runbook
-    # dijera «aprobar desde la consola», que no es un comando que exista.
-    for literal in ("!ritmos", "!ritmo aprobar", "!ritmo rechazar",
-                    "!ritmo retirar", "!ritmo mover"):
+    # Lo que el runbook promete, exista. Se lee del propio texto para que un
+    # comando inventado en la documentación falle aquí y no en producción.
+    prometidos = set(re.findall(r"`!ritmo (\w+)", runbook))
+    assert prometidos, "el runbook debería decir cómo se gobiernan los ritmos por DM"
+    for verbo in prometidos:
+        assert verbo in adaptador, f"el runbook promete `!ritmo {verbo}` y el DM no lo implementa"
+
+    # Y al revés para lo imprescindible: el veto y el cambio de hora son lo único
+    # que le queda al Productor desde que Yuki adopta sus ritmos sin permiso. Un
+    # runbook que no los nombre deja al que despliega sin saber cómo pararla.
+    for literal in ("!ritmos", "!ritmo retirar", "!ritmo mover"):
         verbo = literal.split()[-1]
         assert verbo in adaptador, f"el DM no implementa `{literal}`"
         assert literal in runbook, f"el runbook no nombra `{literal}`"

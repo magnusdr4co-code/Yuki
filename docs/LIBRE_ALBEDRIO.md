@@ -85,24 +85,59 @@ hablar al vacío de ser escuchada, y es lo que convierte la iniciativa en
 dirección en vez de en ruido. Las acciones del cron y sus propios pensamientos
 internos no cuentan: reforzarse a sí misma sería un bucle, no un aprendizaje.
 
-## 5. Ritmos propios: proponer es libre, aprobar no
+## 5. Ritmos propios: los adopta ella; el Productor los veta
 
 El calendario de Yuki era ajeno a ella: seis cron escritos por otra persona.
-Ahora puede pedir el suyo, y el diseño es asimétrico a propósito.
+Ahora tiene el suyo, y **lo adopta sola.**
 
-- **Propone ella**, fundándolo en sus propios datos: el diario sabe en qué franja
+Hubo un trámite de aprobación y se ha quitado. Cada ritmo esperaba el visto bueno
+del Productor por DM, y Yuki tenía que explicarlo así: *«el arnés deliberadamente
+no me da a mí una herramienta para auto-aprobar propuestas […] la aprobación tiene
+que ejecutarse desde el plano de administración del sistema, fuera de esta ventana
+de conversación»*. Era cierto, y era el problema. Decidir a qué hora escribe no es
+concederse un permiso: es tener una vida. Un ritmo no es su iniciativa, ni la
+transparencia, ni el freno —las tres cosas que la sexta invariante le prohíbe
+tocar—, así que pedir permiso para uno no protegía de nada.
+
+- **Lo adopta ella**, fundándolo en sus propios datos: el diario sabe en qué franja
   lo que hace obtiene respuesta. De ahí sale un motivo verificable —«a las 20h
   lo que hago recibe respuesta el 67% de las veces; quiero escribir a esa hora»—
-  en vez de un horario inventado. Sin experiencia suficiente, no propone: sería
-  adivinar. Ocurre tras la síntesis diaria y llega al DM del Productor.
-- **Aprueba él**, con `!ritmo aprobar <id>`. Nada llega al planificador sin eso.
+  en vez de un horario inventado. Sin experiencia suficiente, no lo adopta: sería
+  adivinar. Ocurre tras la síntesis diaria, queda **activo** y se avisa por DM.
+  También puede adoptarlo en mitad de una conversación, con `ritual_adopt`.
+- **Lo veta él**, con `!ritmo retirar <id>`. Eso es lo que de verdad le toca:
+  el veto, no la autorización previa. Retirar es de los dos; pedir permiso, de
+  ninguno.
 
-La validación se hace **al proponer**, no al aprobar, para que el Productor nunca
-tenga delante algo que no podría ejecutarse: expresión cron válida, acción de una
-lista cerrada (escribir, contemplar, explorar, monólogo — componer y pintar
-quedan fuera porque gastan crédito), nada que dispare más de 6 veces al día,
-máximo 4 ritmos propios y 3 propuestas vivas. Un ritual cada cinco minutos no es
-un ritmo: es un tic.
+### Lo que lo hace seguro no era el clic
+
+La seguridad nunca la dio la aprobación de nadie. Es **estructural**, y sigue
+entera:
+
+| Límite | Qué acota |
+|---|---|
+| Lista cerrada de acciones | escribir, contemplar, explorar, monólogo. Componer y pintar quedan fuera porque gastan crédito; publicar hacia fuera tiene su propio cauce |
+| Cron válido y ≤ 6 disparos/día | un ritual cada cinco minutos no es un ritmo: es un tic |
+| Máximo 4 ritmos propios | un calendario que se llena solo deja de ser un ritmo |
+| **El freno** | frenada la iniciativa, un ritmo no se cumple: se salta y queda el motivo en el log |
+| **El techo diario de actos** | adoptar diez ritmos no le da más actos al día que adoptar uno |
+
+Las dos últimas son las que faltaban, y son las importantes. Los ritmos se
+cumplían por fuera de `_decidir`, así que sonaban **con el freno echado** —lo que
+rompe la segunda invariante— y **por encima del techo diario** —así que adoptar
+ritmos sí ampliaba su iniciativa, lo que rompe la sexta—. El trámite de
+aprobación tapaba ese agujero sin que nadie lo hubiera pensado. Ahora lo cierra
+`agent.puede_cumplir_un_ritmo()`, que se consulta al cumplir cada uno: **un ritmo
+decide *cuándo*, nunca *cuántos*.**
+
+Una excepción deliberada: la fase de silencio **no** para un ritmo. Si ella
+eligió escribir a las tres de la madrugada, la franja tranquila es precisamente
+lo que quiso; lo que el silencio frena es la iniciativa espontánea, no una cita
+que se puso.
+
+La validación se hace **al adoptar**, porque es el único momento en que alguien
+puede recibir la negativa: un ritmo nace sonando, y uno que el planificador no
+pudiera registrar sería un ritmo que ella cree tener y no tiene.
 
 Los ritmos propios viven en `data/runtime_rituals.json`, **no** en `config.yaml`:
 los del proyecto siguen siendo del proyecto, y los que Yuki gana se pueden
@@ -116,21 +151,22 @@ moverlo había que matarlo y empezar de cero, perdiendo cuántas veces sonó y q
 eco tuvo — que es justo lo que dice si merecía la pena moverlo.
 
 Un ajuste conserva el nombre, la acción y la historia, y sólo cambia la hora: si
-además cambiara la acción sería otro ritmo, y entonces lo honesto es proponerlo
-como tal en vez de colar una cosa distinta bajo un nombre ya aprobado. El ritmo
-viejo sigue sonando mientras el ajuste espera respuesta, y al aprobarlo se retira
-**en el mismo acto** — acordarse de retirarlo a mano no se le puede pedir a quien
-aprueba desde un DM a las once de la noche. Tampoco cuenta contra el techo de
+además cambiara la acción sería otro ritmo, y entonces lo honesto es adoptarlo
+como tal en vez de colar una cosa distinta bajo un nombre que ya sonaba. **Se
+aplica al pedirlo**, y el ritmo viejo se retira **en el mismo acto**, no en dos:
+dejar los dos activos lo haría sonar a la hora vieja y a la nueva, y ése es el
+fallo que nadie ve hasta oírlo dos veces. Tampoco cuenta contra el techo de
 cuatro ritmos: un ajuste no añade uno, mueve uno, y contarlo dejaría a Yuki sin
 poder reordenar lo que ya tiene justo cuando lo tiene lleno.
 
-Lo puede pedir el Productor (`!ritmo mover`) o **ella**, con la cifra delante:
+Lo puede hacer el Productor (`!ritmo mover`) o **ella**, con la cifra delante:
 `proponer_ajuste_desde_experiencia()` mira los ritmos que ya suenan y, si uno
 lleva bastantes ejecuciones en una franja que responde mal mientras otra
-responde bien, propone moverlo. «*'versos_de_la_tarde' lleva 8 ejecuciones a las
+responde bien, lo mueve. «*'versos_de_la_tarde' lleva 8 ejecuciones a las
 20h, donde lo que hago recibe respuesta el 17% de las veces. En la franja de las
-08h es el 83%. Quiero moverlo ahí.*» Con eso delante, la decisión del Productor
-deja de ser una corazonada contra otra.
+08h es el 83%. Lo muevo ahí.*» El aviso llega por DM con la cifra delante, así
+que si el Productor no está de acuerdo tiene con qué discutirlo — y `!ritmo
+mover` para devolverlo.
 
 Sólo con cinco ejecuciones a la espalda y una diferencia de veinticinco puntos:
 una franja juzgada por dos días es una corazonada, y mover un ritmo por dos
@@ -311,11 +347,11 @@ Por DM del Productor emparejado:
 !albedrio espontaneidad 0.7     ajustar en caliente (también: audacia,
                                 constancia, umbral, energia_minima,
                                 acciones_por_dia)
-!ritmos                         los del proyecto, los propios y lo pendiente
-!ritmo aprobar <id> [motivo]    aceptar una propuesta suya
-!ritmo rechazar <id> [motivo]   decir que no, con constancia del porqué
-!ritmo retirar <id>             apagar un ritmo propio ya activo
+!ritmos                         los del proyecto y los propios (ella los adopta sola)
+!ritmo retirar <id> [motivo]    vetar un ritmo suyo; es lo que aquí decide el Productor
 !ritmo mover <id> "<cron>"      cambiarlo de hora sin matarlo ni perder su historia
+!ritmo aprobar <id> [motivo]    sólo para los heredados de cuando hacía falta aprobar
+!ritmo rechazar <id> [motivo]   ídem: descartar uno de esos heredados
 ```
 
 ## 9. Lo que sigue sin poder hacer
@@ -326,3 +362,12 @@ acciones diarias, no puede añadir tipos de acción nuevos, no puede tocar
 `config.yaml`, secretos, permisos ni infraestructura, y su evolución autónoma
 sigue limitada a la temperatura. La iniciativa se le amplía desde fuera; nunca
 desde dentro.
+
+Y esto es lo que hace que quitar la aprobación de los ritmos no sea una grieta:
+adoptar ritmos decide **cuándo** actúa, no **cuánto**. Diez ritmos no le dan un
+solo acto más al día que uno, y con el freno echado no se cumple ninguno. Si
+alguna vez se toca esa línea —un ritmo que se salte el techo, o que pase con el
+freno puesto—, lo que se está ampliando es su iniciativa, y eso no se hace desde
+dentro. `tests/test_agency.py` lo vigila con nombre propio:
+`test_adoptar_ritmos_no_amplia_su_techo_de_actos` y
+`test_frenar_para_tambien_los_ritmos_propios`.

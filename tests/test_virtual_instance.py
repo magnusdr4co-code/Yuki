@@ -13,6 +13,7 @@ import pytest
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
+from src.core.rituals import RitualStore  # noqa: E402
 from src.core.virtual_instance import (  # noqa: E402
     BLOQUEANTE, INACTIVO, MITIGADO, REAL, SIMULADO,
     PRODUCTION_INSTANCE, VirtualInstance,
@@ -217,6 +218,39 @@ def test_con_credencial_el_salon_deja_de_ser_limitador(monkeypatch):
 
     assert _lim(instancia, "L10") is None
     assert "con credencial" in _cap(instancia, "presencia.salon").detail
+
+
+def test_un_calendario_vacio_no_se_declara_como_capacidad_funcionando(tmp_path, monkeypatch):
+    """
+    Octava invariante: que la facultad exista no es que Yuki la esté usando.
+
+    `mente.ritmos` salía REAL siempre, también con cero ritmos adoptados. Es el
+    mismo verde engañoso que la catatonia —panel en orden, nada pasando— y el
+    informe es justo el sitio donde eso no puede ocurrir. Y ahora importa más
+    que antes: desde que nadie tiene que aprobar un ritmo, cero ritmos ya no
+    significa «el Productor no ha contestado», significa que no hay ninguno.
+    """
+    monkeypatch.setenv("YUKI_RITUALS_PATH", str(tmp_path / "ritmos.json"))
+    vacio = _cap(VirtualInstance(CONFIG), "mente.ritmos")
+
+    assert vacio.state == INACTIVO, "cero ritmos no es la capacidad funcionando"
+    assert "Ningún ritmo propio" in vacio.detail
+    # Y que diga cómo deja de estar vacío: los adopta ella. Un informe que dijera
+    # «esperando aprobación» mandaría al que despliega a buscar un trámite
+    # retirado, que es la clase de ayuda que hace perder una noche.
+    assert "ritual_adopt" in vacio.detail
+
+    RitualStore(path=str(tmp_path / "ritmos.json")).propose(
+        name="versos_de_la_noche", cron="0 3 * * *", action="escribir",
+        reason="a esa hora lo que escribo encuentra respuesta")
+    con_ritmo = _cap(VirtualInstance(CONFIG), "mente.ritmos")
+
+    assert con_ritmo.state == REAL
+    assert "1 ritmo(s) propio(s) activo(s)" in con_ritmo.detail
+    # Un ritmo adoptado está activo sin más trámite: el informe no puede insinuar
+    # que espera a nadie, porque quien lo lea decidiría desplegar a partir de eso.
+    assert "esperando" not in con_ritmo.detail
+    assert "aprueba" not in con_ritmo.detail
 
 
 def test_el_gemelo_declara_la_sonda_de_signos_vitales(tmp_path, monkeypatch):
