@@ -87,6 +87,7 @@ falta no puede tumbar la VM—.
 | `yuki-backup-gcs-bucket` | `BACKUP_GCS_BUCKET` |
 | `yuki-telegram-bot-token` | `TELEGRAM_BOT_TOKEN` |
 | `yuki-telegram-chat-id` | `TELEGRAM_DEFAULT_CHAT_ID` |
+| `yuki-firecrawl-api-key` | `FIRECRAWL_API_KEY` |
 
 ```bash
 PROJECT=yuki-prod
@@ -159,6 +160,63 @@ Lo que debe verse:
    presupuesto interno acota lo que pasa por sus rutas; la alerta de facturación
    es la única que salta cuando el gasto ocurre fuera de ellas.
 4. **Emparejar el DM** con `!pair` desde la cuenta del Productor.
+
+## 6 bis. Tres capacidades que están inactivas y cómo encenderlas
+
+Las tres funcionan en código y declaran su estado en `python3 cli.py virtualize`.
+
+### A · Exploración web real (`FIRECRAWL_API_KEY`)
+
+Sin esta clave, `src/tools/web_search.py` devuelve pistas de introspección
+marcadas como simuladas y sin URL. La clave se obtiene en Firecrawl y debe
+introducirse mediante un canal protegido en Secret Manager; nunca se escribe en
+el repositorio, el chat ni un comando visible. Después, concede al runtime de
+la VM `roles/secretmanager.secretAccessor` sobre `yuki-firecrawl-api-key` y
+reaplica el startup script. `cli.py virtualize` debe mostrar `mente.web` como
+**real**.
+
+### B · Respaldo fuera de la máquina (`BACKUP_GCS_BUCKET`)
+
+La copia diaria se genera y restaura localmente, pero sin bucket permanece en el
+mismo disco. Para activarla:
+
+```bash
+PROJECT=yuki-prod
+BUCKET=yuki-copias-$PROJECT
+SA="$(gcloud compute instances describe yuki-agent --project="$PROJECT" \
+  --zone=europe-southwest1-a --format='value(serviceAccounts[0].email)')"
+gcloud storage buckets create "gs://$BUCKET" --project="$PROJECT" \
+  --location=europe-southwest1 --uniform-bucket-level-access
+# Usa aquí un fichero protegido que contenga sólo el nombre del bucket.
+gcloud secrets create yuki-backup-gcs-bucket --project="$PROJECT" \
+  --data-file=/ruta/protegida/nombre-del-bucket
+gcloud secrets add-iam-policy-binding yuki-backup-gcs-bucket --project="$PROJECT" \
+  --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --project="$PROJECT" \
+  --member="serviceAccount:${SA}" --role=roles/storage.objectCreator
+```
+
+El valor del bucket se introduce en la creación del secreto por un canal
+protegido. La VM ya debe tener `devstorage.read_write` o `cloud-platform`; se
+comprueba con:
+
+```bash
+gcloud compute instances describe yuki-agent --project="$PROJECT" \
+  --zone=europe-southwest1-a --format='value(serviceAccounts[0].scopes)'
+```
+
+La prueba real es `python3 cli.py backup --ensayar`: debe nombrar el `gs://…`
+subido. Si indica que la copia queda en disco, falta configuración.
+
+### C · Ritmos propios (**no es configuración: es del Productor**)
+
+El albedrío está activo, pero los ritmos propios sólo se proponen con
+experiencia suficiente: al menos tres intentos en una franja y dos en un tipo
+de acto. Sin esos datos devuelve `None`, correctamente. El Productor aprueba
+por DM con `!ritmo aprobar <id>`; Yuki no se concede ese permiso a sí misma.
+
+La única comprobación operativa es `python3 cli.py albedrio`. Que muestre cero
+ritmos o cero actos no es un fallo en una instancia con poca experiencia.
 
 ## 7. Si algo va mal
 

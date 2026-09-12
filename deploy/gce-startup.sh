@@ -92,6 +92,8 @@ fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-backup-gcs-bucket/ver
 # Difusión por Telegram. La salida es real; la entrada no está implementada.
 fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-telegram-bot-token/versions/latest" TELEGRAM_BOT_TOKEN
 fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-telegram-chat-id/versions/latest" TELEGRAM_DEFAULT_CHAT_ID
+# Búsqueda web real. Sin esto, web_search devuelve pistas simuladas sin URL.
+fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-firecrawl-api-key/versions/latest" FIRECRAWL_API_KEY
 unset METADATA_TOKEN
 
 # Evita que imágenes antiguas sin etiqueta llenen el disco raíz antes de la
