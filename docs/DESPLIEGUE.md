@@ -39,10 +39,10 @@ propósito, porque arrancar a medias sería peor.
 | `VERTEX_PROJECT_ID` | **Medios reales**: imagen, vídeo, música cantada (Lyria) y voz. Usa la identidad de servicio de la VM, sin claves | Los medios salen como marcador declarado `simulated` |
 | `VERTEX_LOCATION` | Región de los modelos de medios | `global` |
 | `SALON_API_TOKEN` | Credencial de las rutas `/api` **y** la descarga de obra por el Salón | Las rutas `/api` quedan **ABIERTAS** en el 8080 (con techo de 20 peticiones/5 min) y la descarga de obra responde 403. Es lo primero que conviene declarar |
-| `BACKUP_GCS_BUCKET` | Que la copia diaria salga del disco de la instancia | La copia queda en el mismo disco que el original y **lo dice**: no protege de perder el disco |
+| `BACKUP_GCS_BUCKET` | Que la copia diaria salga del disco de la instancia | La copia queda en el mismo disco que el original y **lo dice**: no protege de perder el disco. Ver §6 bis B, incluido el paso de *scopes* que se olvida |
 | `TELEGRAM_BOT_TOKEN` + `TELEGRAM_DEFAULT_CHAT_ID` | Difusión por Telegram (**salida** real; la entrada no está implementada) | No difunde, y cada intento dice por qué |
-| `FIRECRAWL_API_KEY` | Búsqueda web con URL verificable | Devuelve pistas marcadas `simulated` y **sin URL inventada** |
-| `MODEL_ARMOR_PROJECT_ID` | Inspección de prompts y respuestas | Sin inspección de proveedor |
+| `FIRECRAWL_API_KEY` | Búsqueda web con URL verificable | Devuelve pistas marcadas `simulated` y **sin URL inventada**. Ver §6 bis A |
+| `MODEL_ARMOR_PROJECT_ID` | Inspección de prompts y respuestas | Sin inspección de proveedor. **El arranque no la declara hoy**: para activarla hay que añadirla a `/opt/yuki.env` |
 | `YUKI_SOUNDFONT` | Respaldo musical local (con `fluidsynth` y `ffmpeg` en la imagen) | Sin maqueta instrumental de respaldo |
 
 **Quién puede hablar con ella.** Las fija el arranque en `/opt/yuki.env`, no
@@ -87,6 +87,7 @@ falta no puede tumbar la VM—.
 | `yuki-backup-gcs-bucket` | `BACKUP_GCS_BUCKET` |
 | `yuki-telegram-bot-token` | `TELEGRAM_BOT_TOKEN` |
 | `yuki-telegram-chat-id` | `TELEGRAM_DEFAULT_CHAT_ID` |
+| `yuki-firecrawl-api-key` | `FIRECRAWL_API_KEY` |
 
 ```bash
 PROJECT=yuki-prod
@@ -159,6 +160,94 @@ Lo que debe verse:
    presupuesto interno acota lo que pasa por sus rutas; la alerta de facturación
    es la única que salta cuando el gasto ocurre fuera de ellas.
 4. **Emparejar el DM** con `!pair` desde la cuenta del Productor.
+
+## 6 bis. Tres capacidades que están inactivas y cómo encenderlas
+
+Las tres funcionan en código y sólo esperan configuración. Cada una dice ahora
+mismo por qué está inactiva —`python3 cli.py virtualize` las lista—, que es lo
+correcto: inactivo declarado, no capacidad fingida.
+
+### A · Exploración web real (`FIRECRAWL_API_KEY`)
+
+Sin clave, `src/tools/web_search.py` devuelve pistas de introspección marcadas
+`simulated: True` y **sin URL**. Eso es deliberado: antes citaba dos titulares
+fijos con enlaces inventados como si fueran corrientes del mundo.
+
+```bash
+PROJECT=yuki-prod
+SA="$(gcloud compute instances describe yuki-agent --project=$PROJECT       --zone=europe-southwest1-b --format='value(serviceAccounts[0].email)')"
+
+# La clave se saca en firecrawl.dev; aquí sólo se guarda.
+printf '%s' "fc-XXXXXXXXXXXX" |   gcloud secrets create yuki-firecrawl-api-key --project="$PROJECT" --data-file=-
+gcloud secrets add-iam-policy-binding yuki-firecrawl-api-key --project="$PROJECT"   --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
+```
+
+Reinicia la instancia y comprueba: `cli.py virtualize` debe mostrar
+`mente.web` como **real**, no simulado.
+
+### B · Respaldo fuera de la máquina (`BACKUP_GCS_BUCKET`)
+
+La copia diaria se genera, se verifica y **se restaura sola cada noche**, pero
+sin bucket se queda en el mismo disco que el original: no protege del escenario
+que la justifica, perder el disco. El cliente de subida ya está escrito
+(`backup.py`, API de Cloud Storage con credenciales de la VM).
+
+```bash
+PROJECT=yuki-prod; BUCKET=yuki-copias-$PROJECT
+gcloud storage buckets create "gs://$BUCKET" --project="$PROJECT"   --location=europe-southwest1 --uniform-bucket-level-access
+# Retención: la instancia guarda pocas copias locales; en el bucket conviene ciclo de vida.
+printf '%s' "$BUCKET" |   gcloud secrets create yuki-backup-gcs-bucket --project="$PROJECT" --data-file=-
+gcloud secrets add-iam-policy-binding yuki-backup-gcs-bucket --project="$PROJECT"   --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --project="$PROJECT"   --member="serviceAccount:${SA}" --role=roles/storage.objectCreator
+```
+
+> **El paso que se olvida y hace fallar la subida en silencio.** La copia pide
+> credenciales con `devstorage.read_write`. Una VM creada con los *scopes* por
+> defecto sólo tiene **lectura** de Storage, así que el permiso IAM está bien y
+> la subida devuelve 403 igual. Comprobar y, si hace falta, corregir:
+>
+> ```bash
+> gcloud compute instances describe yuki-agent --project=$PROJECT >   --zone=europe-southwest1-b --format='value(serviceAccounts[0].scopes)'
+> # Si no aparece devstorage.read_write ni cloud-platform, con la VM parada:
+> gcloud compute instances stop yuki-agent --project=$PROJECT --zone=europe-southwest1-b
+> gcloud compute instances set-service-account yuki-agent --project=$PROJECT >   --zone=europe-southwest1-b --service-account="$SA" --scopes=cloud-platform
+> gcloud compute instances start yuki-agent --project=$PROJECT --zone=europe-southwest1-b
+> ```
+
+Comprobación real, que es la que vale: `python3 cli.py backup --ensayar`. El
+resultado nombra el `gs://…` subido; si dice que la copia queda en disco, algo
+de lo anterior falta.
+
+### C · Ritmos propios (**no es configuración: es del Productor**)
+
+Esto **no lo despliega un agente**. La cadena está viva y es deliberadamente
+lenta:
+
+1. El cron de las 23:30 (`daily_memory_synthesis`) llama a
+   `propose_own_ritual()` después de sintetizar el día.
+2. Yuki propone **sólo si tiene experiencia**: necesita ≥3 intentos en alguna
+   franja horaria y ≥2 en algún tipo de acto, leídos del diario de agencia que
+   alimenta `agency_loop_tick` cada 20 minutos. Sin datos devuelve `None`, y eso
+   es correcto: proponer un horario sin experiencia sería inventarlo.
+3. Cuando propone, avisa al Productor por DM con el motivo.
+4. **Aprueba el Productor**, por DM: `!ritmos` los lista y
+   `!ritmo aprobar <id>` lo activa. También `!ritmo rechazar <id>`,
+   `!ritmo retirar <id>` y `!ritmo mover <id> "<cron>" [motivo]`.
+
+La sexta invariante del proyecto es justo ésta: la evolución autónoma no se
+concede permisos. Que estén a cero en una instancia recién desplegada no es un
+fallo, es el estado honesto de quien todavía no tiene experiencia que invocar.
+
+Lo único que un agente de despliegue puede hacer por aquí es comprobar que el
+albedrío está encendido, porque sin él no hay diario que leer:
+
+```bash
+python3 cli.py albedrio     # espontaneidad, umbral, actos de hoy, ritmos propios
+```
+
+Si `mente.albedrio` sale **inactivo** en `cli.py virtualize`, la sección
+`agency` de `config.yaml` está deshabilitada y Yuki sólo responde: ahí sí hay
+algo que arreglar, y no se arregla con un secreto.
 
 ## 7. Si algo va mal
 
