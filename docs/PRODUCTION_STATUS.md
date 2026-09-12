@@ -1,6 +1,7 @@
 # Estado de producción — Yuki
 
-**Verificado:** 2026-09-07 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)  
+**Verificado:** 2026-09-11 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)
+
 **Proyecto:** `yuki-prod`  
 **Instancia:** `yuki-agent` · Compute Engine `e2-small` · `europe-southwest1-a`
 
@@ -9,13 +10,86 @@
 | Campo | Valor |
 |---|---|
 | Repositorio | `europe-southwest1-docker.pkg.dev/yuki-prod/yuki/yuki-agent` |
-| Digest desplegado | `sha256:2cd2e807bf0a96f9d188b34d52b9b1fa7afa89c93db8e767807ae3f2569c6810` |
-| Commit de código | `b6e4d65` — ruta explícita de producción multimedia por DM |
-| Build de Cloud Build | `c86e82ab-95d3-4801-957b-cf8586a281c1` |
+| Digest desplegado | `sha256:b0bf0a95e79b14a7eb97da053ff63ded57f96907e8304946bcda8c430dac9c16` |
+| Commit de código | `1f5d90e` — herencia correcta de `VERTEX_PROJECT_ID` desde el entorno |
+| Build de Cloud Build | `e0108418-6373-47df-8e8b-7664466f4550` |
 
 La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto inmutable
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
 arranque los obtiene de Secret Manager y elimina el fichero temporal de runtime al acabar.
+
+## Actualización del 9 de septiembre
+
+- Incorporada por avance directo la rama remota
+  `claude/virtualizacion-mejoras-proyecto-dik9gg`, descendiente de `f4e2f22`.
+  No hubo conflictos ni modificaciones locales que reconciliar.
+- Construcción desde un archivo limpio de Git: no se subieron memoria, pairing,
+  overlays ni creaciones del checkout local. El commit documental posterior no
+  cambia el código ejecutable identificado arriba.
+- Validación local aislada (Python 3.14): Ruff correcto, **735 pruebas aprobadas,
+  2 omitidas**, 12 simulacros de fallo y circuito de copia/restauración correctos.
+  La prueba de humo de CI pasa sobre el archivo limpio del commit. Sobre el
+  checkout de trabajo detecta 166 artefactos antiguos sin marca; no se borraron.
+- Copia previa de SQLite mediante su API de backup, más archivo de estado y
+  creaciones en `data/deploy-backups/20260909-a8a7378/` del disco persistente.
+  Integridad SQLite `ok`, 63 recuerdos y archivo de estado legible.
+- Despliegue mediante el script de arranque existente, sin reiniciar la VM ni
+  cambiar IAM, secretos o volúmenes. Ambos contenedores ejecutan el digest de
+  esta tabla. Se conservan pairing y overlay de configuración.
+- Comprobados: salud HTTP, conexión Discord, intención multimedia por DM,
+  integridad de los 63 recuerdos y dependencias de FluidSynth disponibles.
+  El daemon registra ocho rutinas, incluidas REM y olvido semanal.
+
+### Hallazgos de la sonda sobre el estado heredado
+
+La prueba de humo de producción **no queda completamente en verde**: detecta
+26 archivos antiguos sin marca de origen y, al arrancar, un `last_updated`
+heredado de hace 8,8 horas. La sonda de pulso interpreta ese dato como `ausente`,
+aunque los contenedores y la conexión Discord están activos. Esa marca se
+actualiza en el camino conversacional; no equivale a un heartbeat continuo del
+planificador. No se reescribe artificialmente para silenciar la alerta.
+El ciclo normal de agencia de las 16:20 (Europe/Madrid) creó y persistió
+`agency_ledger.json` en la VM; confirma que el planificador ejecuta tareas,
+aunque la lectura de pulso siga diciendo `ausente` por la marca conversacional.
+
+El inventario detecta 21 capacidades reales, 5 simuladas y 1 inactiva, con seis
+limitadores abiertos y ninguno clasificado como bloqueante. Es una inspección
+de configuración y binarios, **no** una prueba pagada de todos los proveedores.
+La copia automática fuera de la instancia sigue pendiente de `BACKUP_GCS_BUCKET`.
+
+## Actualización del 11 de septiembre — consolidación y runtime actual
+
+- La rama remota `claude/virtualizacion-mejoras-proyecto-dik9gg` avanzó hasta
+  `76638f9` con cuatro commits nuevos. Se integró sin conflictos en `main`
+  mediante el merge `673eb06`; después se corrigió `VertexMediaClient` en
+  `d8f5cbe` para que `project_id=""` desactive medios explícitamente en vez de
+  heredar el proyecto de la VM. `main` quedó publicado en `origin/main`.
+- La integración activa logging real, corrige el reconocimiento de encargos
+  multimedia, hace que música/voz/imagen/vídeo respeten el criterio de la obra,
+  añade runbook de despliegue, secretos opcionales tolerantes y pruebas nuevas.
+- Validación: Ruff correcto, **947 pruebas aprobadas y 2 omitidas**. El fallo
+  inicial de Vertex sin proyecto quedó corregido y la prueba específica pasó.
+- Cloud Build `1a1d11bf-c986-4db8-9b10-8cc7ab6823d3` publicó el digest
+  `sha256:117577a64c665d24784922a62e247be8169533e3619e418e317a5c6dbe942a0d`.
+  El startup script descargó la imagen y recreó ambos contenedores preservando
+  el disco persistente.
+- Verificación posterior: `yuki-daemon` activo, `yuki-salon` saludable, `/health`
+  devuelve `200`, Discord conectado a Temple y Dev Server con todos los canales,
+  pairing persistente, 91 recuerdos íntegros y la ruta de reconocimiento de
+  producción multimedia activa. No se generaron medios facturables como prueba.
+
+### Corrección posterior de Vertex
+
+- La causa de «Sin Vertex configurado» era que `vertex_ai.project_id: ""` en
+  `config.yaml` anulaba `VERTEX_PROJECT_ID=yuki-prod` al construir el portal de
+  medios. `VertexMediaClient.from_config()` ahora trata ese vacío como herencia;
+  `enabled: false` sigue siendo la desactivación explícita.
+- Verificación dentro de `yuki-daemon`: `MEDIA_PROJECT=yuki-prod`,
+  `MEDIA_AVAILABLE=True`, `PORTAL_PROJECT=yuki-prod` y `PORTAL_AVAILABLE=True`.
+- Durante el primer intento de actualización el disco raíz llegó al 100% por 27
+  imágenes antiguas. Se retiraron únicamente imágenes Docker sin etiqueta,
+  liberando unos 15 GB; el script de arranque ahora las limpia antes de cada
+  descarga sin tocar datos persistentes ni contenedores activos.
 
 ## Servicios y conectividad
 

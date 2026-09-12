@@ -167,19 +167,31 @@ Las tres funcionan en código y sólo esperan configuración. Cada una dice ahor
 mismo por qué está inactiva —`python3 cli.py virtualize` las lista—, que es lo
 correcto: inactivo declarado, no capacidad fingida.
 
+> **La zona es `europe-southwest1-a`.** Está en `PRODUCTION_INSTANCE`
+> (`src/core/virtual_instance.py`) y en `PRODUCTION_STATUS.md`. Un runbook que
+> la equivoque hace fallar todos los `gcloud` de aquí abajo con un «instance not
+> found» que parece un problema de permisos y no lo es.
+
 ### A · Exploración web real (`FIRECRAWL_API_KEY`)
 
 Sin clave, `src/tools/web_search.py` devuelve pistas de introspección marcadas
 `simulated: True` y **sin URL**. Eso es deliberado: antes citaba dos titulares
 fijos con enlaces inventados como si fueran corrientes del mundo.
 
+La clave se saca en firecrawl.dev. **No la escribas en el comando**: ni en el
+chat, ni en el repositorio, ni en una línea que quede en el historial del shell.
+Va en un fichero protegido y de ahí al secreto.
+
 ```bash
 PROJECT=yuki-prod
-SA="$(gcloud compute instances describe yuki-agent --project=$PROJECT       --zone=europe-southwest1-b --format='value(serviceAccounts[0].email)')"
+ZONA=europe-southwest1-a
+SA="$(gcloud compute instances describe yuki-agent --project="$PROJECT" \
+  --zone="$ZONA" --format='value(serviceAccounts[0].email)')"
 
-# La clave se saca en firecrawl.dev; aquí sólo se guarda.
-printf '%s' "fc-XXXXXXXXXXXX" |   gcloud secrets create yuki-firecrawl-api-key --project="$PROJECT" --data-file=-
-gcloud secrets add-iam-policy-binding yuki-firecrawl-api-key --project="$PROJECT"   --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
+gcloud secrets create yuki-firecrawl-api-key --project="$PROJECT" \
+  --data-file=/ruta/protegida/firecrawl-api-key
+gcloud secrets add-iam-policy-binding yuki-firecrawl-api-key --project="$PROJECT" \
+  --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
 ```
 
 Reinicia la instancia y comprueba: `cli.py virtualize` debe mostrar
@@ -193,12 +205,22 @@ que la justifica, perder el disco. El cliente de subida ya está escrito
 (`backup.py`, API de Cloud Storage con credenciales de la VM).
 
 ```bash
-PROJECT=yuki-prod; BUCKET=yuki-copias-$PROJECT
-gcloud storage buckets create "gs://$BUCKET" --project="$PROJECT"   --location=europe-southwest1 --uniform-bucket-level-access
+PROJECT=yuki-prod
+ZONA=europe-southwest1-a
+BUCKET=yuki-copias-$PROJECT
+SA="$(gcloud compute instances describe yuki-agent --project="$PROJECT" \
+  --zone="$ZONA" --format='value(serviceAccounts[0].email)')"
+
+gcloud storage buckets create "gs://$BUCKET" --project="$PROJECT" \
+  --location=europe-southwest1 --uniform-bucket-level-access
 # Retención: la instancia guarda pocas copias locales; en el bucket conviene ciclo de vida.
-printf '%s' "$BUCKET" |   gcloud secrets create yuki-backup-gcs-bucket --project="$PROJECT" --data-file=-
-gcloud secrets add-iam-policy-binding yuki-backup-gcs-bucket --project="$PROJECT"   --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
-gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --project="$PROJECT"   --member="serviceAccount:${SA}" --role=roles/storage.objectCreator
+printf '%s' "$BUCKET" > /ruta/protegida/nombre-del-bucket
+gcloud secrets create yuki-backup-gcs-bucket --project="$PROJECT" \
+  --data-file=/ruta/protegida/nombre-del-bucket
+gcloud secrets add-iam-policy-binding yuki-backup-gcs-bucket --project="$PROJECT" \
+  --member="serviceAccount:${SA}" --role=roles/secretmanager.secretAccessor
+gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --project="$PROJECT" \
+  --member="serviceAccount:${SA}" --role=roles/storage.objectCreator
 ```
 
 > **El paso que se olvida y hace fallar la subida en silencio.** La copia pide
@@ -207,11 +229,13 @@ gcloud storage buckets add-iam-policy-binding "gs://$BUCKET" --project="$PROJECT
 > la subida devuelve 403 igual. Comprobar y, si hace falta, corregir:
 >
 > ```bash
-> gcloud compute instances describe yuki-agent --project=$PROJECT >   --zone=europe-southwest1-b --format='value(serviceAccounts[0].scopes)'
+> gcloud compute instances describe yuki-agent --project="$PROJECT" \
+>   --zone="$ZONA" --format='value(serviceAccounts[0].scopes)'
 > # Si no aparece devstorage.read_write ni cloud-platform, con la VM parada:
-> gcloud compute instances stop yuki-agent --project=$PROJECT --zone=europe-southwest1-b
-> gcloud compute instances set-service-account yuki-agent --project=$PROJECT >   --zone=europe-southwest1-b --service-account="$SA" --scopes=cloud-platform
-> gcloud compute instances start yuki-agent --project=$PROJECT --zone=europe-southwest1-b
+> gcloud compute instances stop yuki-agent --project="$PROJECT" --zone="$ZONA"
+> gcloud compute instances set-service-account yuki-agent --project="$PROJECT" \
+>   --zone="$ZONA" --service-account="$SA" --scopes=cloud-platform
+> gcloud compute instances start yuki-agent --project="$PROJECT" --zone="$ZONA"
 > ```
 
 Comprobación real, que es la que vale: `python3 cli.py backup --ensayar`. El

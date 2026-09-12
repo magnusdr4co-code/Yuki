@@ -169,7 +169,8 @@ def test_un_secreto_opcional_que_falta_no_tumba_el_arranque():
 
     assert "fetch_secret_opcional" in arranque
     for opcional in ("yuki-salon-api-token", "yuki-backup-gcs-bucket",
-                     "yuki-telegram-bot-token", "yuki-telegram-chat-id"):
+                     "yuki-telegram-bot-token", "yuki-telegram-chat-id",
+                     "yuki-firecrawl-api-key"):
         linea = next(fila for fila in arranque.splitlines()
                      if opcional in fila and "fetch_secret" in fila)
         assert "fetch_secret_opcional" in linea, f"{opcional} se recoge de forma estricta"

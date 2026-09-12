@@ -108,8 +108,14 @@ class VertexMediaClient:
                  budget: Optional[SpendLedger] = None,
                  marker: Optional[MediaMarker] = None,
                  brake: Optional[Brake] = None):
-        self.project_id = (project_id or os.getenv("VERTEX_PROJECT_ID")
-                           or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
+        # `None` significa «descubre la configuración del entorno»; una cadena
+        # vacía es una desactivación explícita y debe respetarse. Esto importa
+        # tanto para las pruebas como para los arranques que quieran mantener
+        # el motor de medios apagado aunque la VM tenga ADC/proyecto activo.
+        self.project_id = (
+            (os.getenv("VERTEX_PROJECT_ID") or os.getenv("GOOGLE_CLOUD_PROJECT") or "")
+            if project_id is None else project_id
+        )
         self.location = location or os.getenv("VERTEX_LOCATION") or "global"
         self.video_location = video_location or self.location
         self.music_location = music_location or "global"
@@ -159,9 +165,17 @@ class VertexMediaClient:
         """
         vertex_cfg = (config or {}).get("vertex_ai", {}) or {}
         media_cfg = vertex_cfg.get("media", {}) or {}
+        # En `config.yaml` el vacío documenta «hereda VERTEX_PROJECT_ID».
+        # La desactivación explícita se expresa con `enabled: false`; no
+        # conviertas aquí ese marcador de herencia en `project_id=""`, porque
+        # el constructor reserva la cadena vacía para apagar medios de forma
+        # deliberada.
+        project_id = vertex_cfg.get("project_id")
+        if isinstance(project_id, str) and not project_id.strip():
+            project_id = None
 
         parametros: Dict[str, Any] = {
-            "project_id": vertex_cfg.get("project_id"),
+            "project_id": project_id,
             # Los medios pueden necesitar una región distinta del endpoint de
             # texto. Si no se declara, conserva la región global del texto.
             "location": media_cfg.get("location", vertex_cfg.get("location")),
