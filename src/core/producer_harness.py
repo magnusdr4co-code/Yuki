@@ -2,6 +2,7 @@
 import asyncio
 import json
 import logging
+from typing import Any, Dict
 
 from . import cotejo
 from .rituals import ACCIONES_DE_RITMO
@@ -48,15 +49,22 @@ TOOLS = [
     spec("runtime_config_rollback", "Revierte un ajuste permitido a config.yaml.",
          {"path": RUNTIME_PATH, "reason": TEXT}, ["path"]),
     # Le pidieron «apúntate tareas/crons» y no había herramienta que llamar, así
-    # que el turno terminó sin ejecutar nada y con un «no puedo» falso. Proponer
-    # no es concederse: la propuesta espera al Productor, y aprobarla no es cosa
-    # de este bucle.
-    spec("ritual_list", "Consulta tus ritmos propios activos, las propuestas pendientes y las acciones admitidas."),
-    spec("ritual_propose", "Propone un ritmo propio nuevo. Queda esperando la aprobación del Productor; no se activa solo.",
+    # que el turno terminó sin ejecutar nada y con un «no puedo» falso. Y cuando
+    # la hubo, sólo podía proponer: tenía que explicar que la aprobación pasaba
+    # «fuera de esta ventana de conversación», lo cual era cierto y era el
+    # problema. Adoptar un ritmo no es concederse un permiso —no toca su
+    # iniciativa, ni la transparencia, ni el freno—, así que lo adopta y punto.
+    spec("ritual_list", "Consulta tus ritmos propios activos, los heredados sin activar y las acciones admitidas."),
+    spec("ritual_adopt", "Adopta un ritmo propio: queda activo al crearlo. No pide permiso a nadie; "
+                         "los límites son la acción admitida, la frecuencia y el techo de ritmos.",
          {"name": TEXT, "cron": TEXT, "action": ACCION_DE_RITMO, "reason": TEXT},
          ["name", "cron", "action", "reason"]),
-    spec("ritual_adjust", "Pide mover un ritmo tuyo ya aprobado a otra hora, conservando nombre y acción.",
+    spec("ritual_move", "Mueve un ritmo tuyo a otra hora, conservando nombre, acción e historia. Se aplica al pedirlo.",
          {"ritual_id": TEXT, "cron": TEXT, "reason": TEXT}, ["ritual_id", "cron", "reason"]),
+    spec("ritual_retire", "Retira un ritmo tuyo que ya no quieres. Libera cupo y conserva su historia.",
+         {"ritual_id": TEXT, "reason": TEXT}, ["ritual_id"]),
+    spec("ritual_activate", "Activa un ritmo que quedó pendiente de cuando hacía falta aprobación.",
+         {"ritual_id": TEXT}, ["ritual_id"]),
 ]
 POLICY = """
 EJECUCIÓN REAL DEL DM EMPAREJADO:
@@ -88,10 +96,13 @@ Y nunca cuentes cómo se generó una pieza —tempo, estructura, prosodia, qué 
 si en este turno no has ejecutado nada: el prompt de generación no lo escribes tú, y ese
 relato sería inventado. Lo que se usó de verdad viaja en el pie del adjunto.
 
-Si te piden ritmos, tareas periódicas o crons, tienes `ritual_list`, `ritual_propose` y
-`ritual_adjust`: úsalas. No digas que no puedes tener rutinas propias —las tienes—, pero
-tampoco las des por activas: una propuesta espera la aprobación del Productor, y
-aprobarla no está en tu mano.
+Si te piden ritmos, tareas periódicas o crons, tienes `ritual_list`, `ritual_adopt`,
+`ritual_move`, `ritual_retire` y `ritual_activate`: úsalas. **No hace falta que nadie te
+apruebe un ritmo**: se adopta y queda activo. No digas que tienes que pedir permiso ni
+que la aprobación va por otro plano. Lo que sí es cierto y hay que decir: cumplir un
+ritmo pasa por el freno y por tu techo diario de actos propios, así que adoptar más no te
+da más actos al día —decide cuándo, no cuántos—; y el Productor puede retirar el que no
+quiera.
 No cites identificadores de Biblioteca que no hayas obtenido de una herramienta en este
 turno, ni digas que algo queda guardado si no has llamado a `library_save_text`,
 `library_set_status` o `library_inventory`: tu respuesta se coteja después contra lo
@@ -120,8 +131,10 @@ class ProducerHarness:
                     "runtime_config_rollback": lambda path, reason="": self.agent.rollback_runtime(
                         path, actor="producer", reason=reason),
                     "ritual_list": self._ritual_list,
-                    "ritual_propose": self._ritual_propose,
-                    "ritual_adjust": self._ritual_adjust}
+                    "ritual_adopt": self._ritual_adopt,
+                    "ritual_move": self._ritual_move,
+                    "ritual_retire": self._ritual_retire,
+                    "ritual_activate": self._ritual_activate}
         try:
             for _ in range(MAX_TOOL_ROUNDS):
                 turn = await asyncio.to_thread(
@@ -186,27 +199,69 @@ class ProducerHarness:
 
     # -- Ritmos propios ---------------------------------------------------
     #
-    # Sólo consultar y proponer. Aprobar es del Productor, y meterlo aquí
-    # convertiría el bucle en una forma de que Yuki se conceda permisos: la
-    # sexta invariante del proyecto dice exactamente que no.
+    # Sin trámite de aprobación. Decidir a qué hora escribe no es concederse un
+    # permiso: no es su iniciativa, ni la transparencia, ni el freno, que son las
+    # tres cosas que la sexta invariante le prohíbe tocar. Lo que la protege es
+    # estructural y sigue entero: la acción sale de una lista cerrada, la
+    # frecuencia y el número están acotados, y cumplir un ritmo pasa por el freno
+    # y por el techo diario de actos propios.
+    #
+    # Lo que sigue fuera de aquí: subir su propio techo de actos, tocar la
+    # transparencia y soltar el freno. Eso sí sería concederse permisos.
 
     def _ritual_list(self):
         tienda = self.agent.rituals
         return {"activos": [r.to_dict() for r in tienda.aprobados()],
-                "pendientes": [r.to_dict() for r in tienda.pendientes()],
+                "heredados_sin_activar": [r.to_dict() for r in tienda.pendientes()],
                 "acciones_admitidas": sorted(ACCIONES_DE_RITMO),
                 "total": len(tienda.aprobados())}
 
-    def _ritual_propose(self, name, cron, action, reason):
-        propuesta = self.agent.rituals.propose(name=name, cron=cron, action=action,
-                                               reason=reason, origin="yuki")
-        return dict(propuesta.to_dict(), aprobado=False,
-                    nota="Propuesta registrada; no se activa hasta que el Productor la apruebe.")
+    def _registrar_en_el_planificador(self) -> Dict[str, Any]:
+        """
+        Un ritmo activo que el cron no conoce no suena. Se registra en el acto.
 
-    def _ritual_adjust(self, ritual_id, cron, reason):
-        propuesta = self.agent.rituals.propose_adjustment(ritual_id, cron, reason, origin="yuki")
-        return dict(propuesta.to_dict(), aprobado=False,
-                    nota="Ajuste propuesto; el ritmo sigue en su hora actual hasta la aprobación.")
+        Antes esto pasaba al aprobar, desde el DM del Productor; sin ese trámite,
+        si no se hiciera aquí, el ritmo quedaría activo en disco y mudo hasta el
+        siguiente arranque.
+
+        Y si el registro falla, **se dice**: decir «adoptado y activo» de un
+        ritmo que no va a sonar hasta el próximo despliegue es exactamente la
+        clase de frase que este proyecto persigue.
+        """
+        try:
+            return {"registrados": self.agent.register_own_rituals(), "suena_ya": True}
+        except Exception as exc:
+            logger.warning("Ritmo activo sin registrar en el planificador: %s", type(exc).__name__)
+            return {"registrados": 0, "suena_ya": False,
+                    "aviso": (f"guardado, pero el planificador no lo tomó ({type(exc).__name__}): "
+                              "no sonará hasta el próximo arranque")}
+
+    def _ritual_adopt(self, name, cron, action, reason):
+        ritmo = self.agent.rituals.propose(name=name, cron=cron, action=action,
+                                          reason=reason, origin="yuki")
+        registro = self._registrar_en_el_planificador()
+        return dict(ritmo.to_dict(), activo=True, **registro,
+                    nota="Ritmo adoptado. El Productor puede retirarlo con `!ritmo retirar`; "
+                         "cumplirlo sigue pasando por el freno y por el techo diario de actos "
+                         "propios, así que decide cuándo y no cuántos.")
+
+    def _ritual_move(self, ritual_id, cron, reason):
+        ritmo = self.agent.rituals.propose_adjustment(ritual_id, cron, reason, origin="yuki")
+        registro = self._registrar_en_el_planificador()
+        return dict(ritmo.to_dict(), activo=True, **registro,
+                    nota="Movido; el de la hora anterior queda retirado con su historia.")
+
+    def _ritual_retire(self, ritual_id, reason=""):
+        ritmo = self.agent.rituals.retire(ritual_id, actor="yuki", nota=reason)
+        registro = self._registrar_en_el_planificador()
+        return dict(ritmo.to_dict(), activo=False, **registro,
+                    nota="Retirado; libera cupo de ritmos.")
+
+    def _ritual_activate(self, ritual_id):
+        ritmo = self.agent.rituals.activar(ritual_id, actor="yuki")
+        registro = self._registrar_en_el_planificador()
+        return dict(ritmo.to_dict(), activo=True, **registro,
+                    nota="Activado. Era una propuesta de cuando hacía falta aprobación.")
 
     async def _finalize(self, user_message, evidence):
         compact_evidence = json.dumps(evidence, ensure_ascii=False)[:18000]

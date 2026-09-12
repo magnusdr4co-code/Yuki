@@ -589,10 +589,14 @@ class DiscordAdapter:
 
     def _handle_rituals_command(self, content: str, author_id: str, author_name: str) -> str:
         """
-        Ritmos: los del proyecto, los propios de Yuki y lo que espera respuesta.
+        Ritmos: los del proyecto y los propios de Yuki.
 
-        `!ritmos` los lista; `!ritmo aprobar|rechazar|retirar|mover <id>` decide. La
-        decisión es siempre del Productor: Yuki propone y aquí se le contesta.
+        `!ritmos` los lista; `!ritmo retirar|mover <id>` los cambia. Ella los
+        adopta sin pedir permiso —decidir a qué hora escribe no es concederse un
+        permiso, y lo que la protege son los límites, no el clic de nadie—. Aquí
+        queda lo que de verdad le toca al Productor: **el veto, no el visto
+        bueno.** `aprobar` sigue existiendo sólo para las propuestas que se
+        quedaron esperando de cuando hacía falta.
         """
         from ..core.rituals import RitualError
 
@@ -606,30 +610,34 @@ class DiscordAdapter:
                 lineas.append(f"• `{nombre}` — `{job['cron_expr']}` ({estado})")
 
             propios = self.agent.rituals.aprobados()
-            lineas += ["", "**Propios** (propuestos por ella, aprobados por ti):"]
+            lineas += ["", "**Propios** (adoptados por ella, activos):"]
             lineas += [f"• {r.describe()}   ·  {r.runs} ejecución(es)" for r in propios] or ["• Ninguno todavía."]
 
+            # Lo único que puede quedar pendiente son propuestas de cuando hacía
+            # falta aprobar. Anunciar la sección vacía haría creer que sigue
+            # habiendo un trámite que el proyecto ha retirado.
             pendientes = self.agent.rituals.pendientes()
-            lineas += ["", "**Esperando tu respuesta:**"]
-            lineas += [p.describe() for p in pendientes] or ["• Nada pendiente."]
+            if pendientes:
+                lineas += ["", "**Heredados sin activar** (de cuando hacía falta aprobación):"]
+                lineas += [p.describe() for p in pendientes]
+                lineas += ["", "`!ritmo aprobar <id>` activa uno de ésos."]
             return "\n".join(lineas)
 
         if len(partes) >= 3 and partes[0] == "!ritmo":
             accion, ritual_id = partes[1].lower(), partes[2]
             nota = " ".join(partes[3:])
             try:
-                if accion in ("aprobar", "aprueba", "si", "sí"):
+                if accion in ("aprobar", "aprueba", "activar", "si", "sí"):
+                    # Sólo alcanza a lo heredado: los ritmos de hoy nacen
+                    # activos. Se conserva porque, sin esto, una propuesta de
+                    # antes del cambio quedaría atrapada para siempre en un
+                    # trámite que ya no existe.
                     ritmo = self.agent.rituals.approve(ritual_id, actor=author_name, nota=nota)
-                    # Un ajuste retira el ritmo viejo al aprobarse, así que el
-                    # planificador se rehace entero: si sólo se añadiera el
-                    # nuevo, el viejo seguiría sonando a su hora hasta el
-                    # siguiente arranque.
+                    # El planificador se rehace entero, no se le añade uno: si
+                    # el ritmo activado sustituye a otro, el viejo seguiría
+                    # sonando a su hora hasta el siguiente arranque.
                     registrados = self.agent.register_own_rituals()
-                    if ritmo.reemplaza:
-                        return (f"✅ Ritmo **{ritmo.name}** movido a `{ritmo.cron}`. "
-                                f"El anterior queda retirado. Ritmos propios activos: "
-                                f"{registrados}.")
-                    return (f"✅ Ritmo **{ritmo.name}** aprobado y en el planificador "
+                    return (f"✅ Ritmo **{ritmo.name}** activado y en el planificador "
                             f"(`{ritmo.cron}`). Ritmos propios activos: {registrados}.")
                 if accion in ("rechazar", "rechaza", "no"):
                     ritmo = self.agent.rituals.reject(ritual_id, actor=author_name, nota=nota)
@@ -649,15 +657,22 @@ class DiscordAdapter:
                     motivo = " ".join(partes[4:]) or f"ajuste pedido por {author_name}"
                     ajuste = self.agent.rituals.propose_adjustment(
                         ritual_id, cron, motivo, origin="productor")
-                    return (f"🕯️ Ajuste propuesto para **{ajuste.name}**: `{ajuste.cron}`.\n"
-                            f"Sigue sonando a la hora vieja hasta que lo apruebes: "
-                            f"`!ritmo aprobar {ajuste.id}`.")
+                    # El viejo ya queda retirado dentro del ajuste; el
+                    # planificador se rehace entero porque, si sólo se añadiera
+                    # el nuevo, el ritmo sonaría a las dos horas hasta el
+                    # siguiente arranque.
+                    registrados = self.agent.register_own_rituals()
+                    return (f"🕯️ Ritmo **{ajuste.name}** movido a `{ajuste.cron}` "
+                            f"(`{ajuste.id}`). El anterior queda retirado. "
+                            f"Ritmos propios activos: {registrados}.")
             except RitualError as exc:
                 return f"❌ {exc}"
 
         return ("Uso: `!ritmos` para verlos · "
-                "`!ritmo aprobar|rechazar|retirar <id> [motivo]` para decidir · "
-                '`!ritmo mover <id> "<cron>" [motivo]` para cambiarlo de hora.')
+                "`!ritmo retirar <id> [motivo]` para quitar uno · "
+                '`!ritmo mover <id> "<cron>" [motivo]` para cambiarlo de hora · '
+                "`!ritmo aprobar <id>` sólo para los heredados sin activar. "
+                "Ella los adopta sola: aquí se vetan, no se autorizan.")
 
     def _handle_agency_command(self, content: str, author_id: str) -> str:
         """

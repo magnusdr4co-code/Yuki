@@ -141,6 +141,24 @@ def test_todo_secreto_del_arranque_esta_en_el_runbook():
     assert not faltan, f"secretos que el arranque recoge y el runbook no nombra: {faltan}"
 
 
+def test_todo_secreto_que_el_runbook_manda_crear_lo_recoge_el_arranque():
+    """
+    La dirección que faltaba, y es la que se sufre: el runbook le dice al agente
+    de despliegue que cree un secreto, él lo crea, y el arranque no lo lee nunca.
+    La capacidad sigue inactiva y nadie entiende por qué.
+    """
+    arranque = ARRANQUE.read_text(encoding="utf-8")
+    runbook = RUNBOOK.read_text(encoding="utf-8")
+
+    # La tabla de secretos: `| \`yuki-algo\` | \`VARIABLE\` |`
+    mandados = set(re.findall(r"\|\s*`(yuki-[a-z0-9-]+)`\s*\|", runbook))
+    recogidos = set(re.findall(r"secrets/([a-z0-9-]+)/versions", arranque))
+    huerfanos = sorted(mandados - recogidos)
+
+    assert mandados, "el runbook debería listar los secretos que hay que crear"
+    assert not huerfanos, f"el runbook manda crear secretos que el arranque no lee: {huerfanos}"
+
+
 def test_un_secreto_opcional_que_falta_no_tumba_el_arranque():
     """
     `set -euo pipefail` está activo: una recogida estricta de un secreto ausente
@@ -216,3 +234,84 @@ def test_el_runbook_comprueba_que_esta_viva_y_no_solo_que_arranco(comprobacion):
 
     assert comprobacion in seccion, f"la comprobación posterior al despliegue perdió: {comprobacion}"
     assert "catatonica" in seccion, "sin nombrar la catatonia, «arrancó» pasa por «vive»"
+
+
+def test_los_comandos_que_el_runbook_promete_existen():
+    """
+    Regla 4 del proyecto: una garantía prometida en la documentación necesita la
+    operación que la cumple. El runbook manda al Productor vetar ritmos por DM, y
+    un comando que el adaptador no implemente sería una instrucción imposible
+    para quien despliega a las tres de la mañana.
+
+    La lista no se fija a mano: se lee del runbook. Fijarla obligaba a que el
+    runbook nombrase comandos que ya no necesita nombrar —`!ritmo rechazar` sólo
+    alcanza a propuestas heredadas, que una instancia recién desplegada no
+    tiene— y dejaba pasar cualquier comando nuevo que el runbook se inventara.
+    """
+    adaptador = (RAIZ / "src" / "adapters" / "discord_bot.py").read_text(encoding="utf-8")
+    runbook = RUNBOOK.read_text(encoding="utf-8")
+
+    # Lo que el runbook promete, exista. Se lee del propio texto para que un
+    # comando inventado en la documentación falle aquí y no en producción.
+    prometidos = set(re.findall(r"`!ritmo (\w+)", runbook))
+    assert prometidos, "el runbook debería decir cómo se gobiernan los ritmos por DM"
+    for verbo in prometidos:
+        assert verbo in adaptador, f"el runbook promete `!ritmo {verbo}` y el DM no lo implementa"
+
+    # Y al revés para lo imprescindible: el veto y el cambio de hora son lo único
+    # que le queda al Productor desde que Yuki adopta sus ritmos sin permiso. Un
+    # runbook que no los nombre deja al que despliega sin saber cómo pararla.
+    for literal in ("!ritmos", "!ritmo retirar", "!ritmo mover"):
+        verbo = literal.split()[-1]
+        assert verbo in adaptador, f"el DM no implementa `{literal}`"
+        assert literal in runbook, f"el runbook no nombra `{literal}`"
+
+
+def test_el_aviso_nocturno_no_promete_un_comando_inexistente():
+    """
+    El cron de las 23:30 manda por DM «apruébalo con `!ritmo aprobar <id>`». Si
+    ese comando desapareciera, Yuki quedaría prometiendo una operación que no
+    existe cada noche que propusiera algo.
+    """
+    tareas = (RAIZ / "src" / "scheduler" / "tasks.py").read_text(encoding="utf-8")
+    adaptador = (RAIZ / "src" / "adapters" / "discord_bot.py").read_text(encoding="utf-8")
+
+    prometidos = set(re.findall(r"`!ritmo (\w+)", tareas))
+
+    assert prometidos, "el aviso debería nombrar cómo aprobar"
+    for comando in prometidos:
+        assert comando in adaptador, f"el aviso promete `!ritmo {comando}` y no existe"
+
+
+def test_la_busqueda_web_sin_clave_no_inventa_urls():
+    """
+    Es lo que justifica que esté «simulada» y no apagada: antes citaba dos
+    titulares fijos con enlaces inventados como corrientes del mundo. El runbook
+    lo afirma, así que aquí se comprueba contra el código.
+    """
+    buscador = (RAIZ / "src" / "tools" / "web_search.py").read_text(encoding="utf-8")
+
+    assert "simulated" in buscador
+    assert "FIRECRAWL_API_KEY" in buscador
+    assert "sin URL" in RUNBOOK.read_text(encoding="utf-8")
+
+
+def test_el_respaldo_sabe_subir_a_un_bucket():
+    """
+    El runbook manda crear el bucket y dice que la copia sale de la máquina. Si
+    no hubiera cliente de subida, sería una garantía documentada sin operación
+    —el fallo que este proyecto ya cometió dos veces—.
+    """
+    respaldo = (RAIZ / "src" / "tools" / "backup.py").read_text(encoding="utf-8")
+
+    assert "storage.googleapis.com/upload" in respaldo, "no hay subida real a Cloud Storage"
+    assert "devstorage.read_write" in respaldo, "sin ese scope la subida devuelve 403"
+    # Acotado a la sección del respaldo: el término aparece también en el
+    # comando de comprobación, así que buscarlo en todo el documento dejaba
+    # pasar que desapareciera justo del aviso.
+    runbook = RUNBOOK.read_text(encoding="utf-8")
+    seccion = runbook[runbook.index("### B · Respaldo"):runbook.index("### C · Ritmos")]
+    aviso = seccion[seccion.index("El paso que se olvida"):]
+
+    assert "devstorage.read_write" in aviso, \
+        "el aviso del scope perdió el nombre del scope, que es todo su contenido"

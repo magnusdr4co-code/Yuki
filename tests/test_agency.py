@@ -318,38 +318,45 @@ def test_el_diario_corrupto_no_impide_actuar(tmp_path):
 
 # --- Ritmos propios en el planificador ---
 
-def test_un_ritmo_aprobado_llega_al_planificador_y_se_cumple_como_impulso(tmp_path, monkeypatch):
-    """
-    El ciclo completo: Yuki propone, el Productor aprueba, el cron lo ejecuta.
-
-    Un ritmo aprobado que sólo existiera en memoria se perdería en el siguiente
-    despliegue, y Yuki habría ganado un permiso que nadie cumple.
-    """
-    import asyncio
+def _agente_con_ritmos(tmp_path, ritmos, frenada=None, actos_hoy=0, tope=6, albedrio=True):
+    """Agente mínimo con lo que un ritmo necesita para cumplirse o no cumplirse."""
     import types
 
-    from src.core.rituals import RitualStore
+    from src.core.agent import YukiAgent
     from src.scheduler.cron_engine import CronEngine
-
-    store = RitualStore(path=str(tmp_path / "ritmos.json"))
-    propuesta = store.propose("versos_de_las_20", "0 20 * * *", "escribir",
-                              "a esa hora me responden")
-    store.approve(propuesta.id, actor="Productor")
 
     ejecutados = []
     agente = types.SimpleNamespace(
-        rituals=store,
+        rituals=ritmos,
         cron=CronEngine(),
         execute_autonomous_will=lambda impulso: _completar(ejecutados, impulso),
         tasks=types.SimpleNamespace(spontaneous_monologue=None),
+        agency_loop=types.SimpleNamespace(
+            brake=types.SimpleNamespace(blocked_reason=lambda ambito: frenada)),
+        agency_policy=types.SimpleNamespace(enabled=albedrio, max_actions_per_day=tope),
+        agency_ledger=types.SimpleNamespace(acciones_hoy=lambda: actos_hoy),
     )
-    from src.core.agent import YukiAgent
+    for metodo in ("register_own_rituals", "_make_ritual_runner", "puede_cumplir_un_ritmo"):
+        setattr(agente, metodo, types.MethodType(getattr(YukiAgent, metodo), agente))
+    return agente, ejecutados
 
-    agente.register_own_rituals = types.MethodType(YukiAgent.register_own_rituals, agente)
-    agente._make_ritual_runner = types.MethodType(YukiAgent._make_ritual_runner, agente)
 
-    registrados = agente.register_own_rituals()
-    assert registrados == 1
+def test_un_ritmo_adoptado_llega_al_planificador_y_se_cumple_como_impulso(tmp_path):
+    """
+    El ciclo completo, ya sin trámite: Yuki adopta y el cron lo ejecuta.
+
+    Un ritmo que sólo existiera en memoria se perdería en el siguiente
+    despliegue, y Yuki tendría un calendario que nadie cumple.
+    """
+    import asyncio
+
+    from src.core.rituals import RitualStore
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = store.propose("versos_de_las_20", "0 20 * * *", "escribir", "a esa hora me responden")
+    agente, ejecutados = _agente_con_ritmos(tmp_path, store)
+
+    assert agente.register_own_rituals() == 1, "nace activo: no hay nada que aprobar"
     assert "propio_versos_de_las_20" in agente.cron.jobs
     assert agente.cron.jobs["propio_versos_de_las_20"]["cron_expr"] == "0 20 * * *"
 
@@ -357,7 +364,90 @@ def test_un_ritmo_aprobado_llega_al_planificador_y_se_cumple_como_impulso(tmp_pa
 
     assert ejecutados and ejecutados[0].tool_hint == "write"
     assert ejecutados[0].source.startswith("ritmo_propio:")
-    assert store.get(propuesta.id).runs == 1
+    assert store.get(ritmo.id).runs == 1
+
+
+def test_frenar_para_tambien_los_ritmos_propios(tmp_path):
+    """
+    Esto faltaba, y era el agujero que el trámite de aprobación tapaba sin
+    querer: un ritmo iba directo a `execute_autonomous_will`, saltándose el
+    `_decidir` del albedrío, así que **sonaba con el freno puesto**. La segunda
+    invariante dice que el freno es para la iniciativa; un ritmo es iniciativa.
+    """
+    import asyncio
+
+    from src.core.rituals import RitualStore
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = store.propose("versos", "0 20 * * *", "escribir", "motivo")
+    agente, ejecutados = _agente_con_ritmos(tmp_path, store, frenada="freno de mano en «todo»")
+    agente.register_own_rituals()
+
+    resultado = asyncio.run(agente.cron.jobs["propio_versos"]["func"]())
+
+    assert ejecutados == [], "el ritmo no puede cumplirse con el freno puesto"
+    assert resultado["status"] == "skipped"
+    assert "freno" in resultado["reason"]
+    assert store.get(ritmo.id).runs == 0, "un ritmo que no se cumplió no cuenta como cumplido"
+
+
+def test_adoptar_ritmos_no_amplia_su_techo_de_actos(tmp_path):
+    """
+    Un ritmo decide **cuándo**, nunca **cuántos**. Si se salta el techo diario,
+    adoptar calendario es concederse más iniciativa, que es justo lo que la sexta
+    invariante prohíbe. Antes se lo saltaba.
+    """
+    import asyncio
+
+    from src.core.rituals import RitualStore
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    ritmo = store.propose("versos", "0 20 * * *", "escribir", "motivo")
+    agente, ejecutados = _agente_con_ritmos(tmp_path, store, actos_hoy=6, tope=6)
+    agente.register_own_rituals()
+
+    resultado = asyncio.run(agente.cron.jobs["propio_versos"]["func"]())
+
+    assert ejecutados == []
+    assert "techo diario" in resultado["reason"]
+    assert store.get(ritmo.id).runs == 0
+
+
+def test_un_ritmo_nocturno_no_lo_para_la_fase_de_silencio(tmp_path):
+    """
+    Y aquí **no** se comprueba la fase: un ritmo de las tres de la madrugada está
+    puesto ahí a propósito. Hacerle respetar el silencio nocturno sería impedir
+    la clase de ritmo que más sentido tiene para ella.
+    """
+    import asyncio
+
+    from src.core.rituals import RitualStore
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    store.propose("escritura_nocturna", "0 3 * * *", "escribir", "la madrugada es mía")
+    agente, ejecutados = _agente_con_ritmos(tmp_path, store)
+    agente.register_own_rituals()
+
+    asyncio.run(agente.cron.jobs["propio_escritura_nocturna"]["func"]())
+
+    assert len(ejecutados) == 1
+
+
+def test_sin_albedrio_encendido_no_se_cumple_ninguno(tmp_path):
+    """Con la sección `agency` apagada Yuki sólo responde; los ritmos callan."""
+    import asyncio
+
+    from src.core.rituals import RitualStore
+
+    store = RitualStore(path=str(tmp_path / "ritmos.json"))
+    store.propose("versos", "0 20 * * *", "escribir", "motivo")
+    agente, ejecutados = _agente_con_ritmos(tmp_path, store, albedrio=False)
+    agente.register_own_rituals()
+
+    resultado = asyncio.run(agente.cron.jobs["propio_versos"]["func"]())
+
+    assert ejecutados == []
+    assert "albedrío" in resultado["reason"]
 
 
 async def _completar(destino, impulso):

@@ -17,8 +17,8 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.core.agency import AgencyLedger  # noqa: E402
 from src.core.rituals import (  # noqa: E402
-    ACCIONES_DE_RITMO, APROBADO, MAXIMAS_PROPUESTAS_VIVAS, MAXIMOS_RITMOS_PROPIOS,
-    PROPUESTO, RECHAZADO, RETIRADO, RitualError, RitualStore, disparos_diarios,
+    ACCIONES_DE_RITMO, APROBADO, MAXIMOS_RITMOS_PROPIOS,
+    PROPUESTO, RETIRADO, RitualError, RitualStore, disparos_diarios,
     proponer_desde_experiencia,
 )
 
@@ -34,12 +34,18 @@ def _propuesta(store, nombre="escribir_de_noche", cron="0 23 * * *", accion="esc
 
 # --- Validación al proponer ---
 
-def test_una_propuesta_valida_queda_registrada(store):
-    propuesta = _propuesta(store)
+def test_un_ritmo_adoptado_nace_activo(store):
+    """
+    Había un trámite de aprobación y se ha quitado: decidir a qué hora escribe
+    no es concederse un permiso. La seguridad la dan los límites de abajo, no el
+    visto bueno de nadie.
+    """
+    ritmo = _propuesta(store)
 
-    assert propuesta.status == PROPUESTO
-    assert propuesta.origin == "yuki"
-    assert store.pendientes() == [propuesta] or store.pendientes()[0].id == propuesta.id
+    assert ritmo.status == APROBADO
+    assert ritmo.origin == "yuki"
+    assert [r.id for r in store.aprobados()] == [ritmo.id]
+    assert store.pendientes() == [], "ya no hay cola de espera"
 
 
 def test_no_se_admite_un_ritmo_que_dispare_cada_poco(store):
@@ -70,18 +76,22 @@ def test_un_ritmo_sin_motivo_no_se_propone(store):
         store.propose("mudo", "0 20 * * *", "escribir", "   ")
 
 
-def test_no_se_acumulan_propuestas_sin_responder(store):
-    for indice in range(MAXIMAS_PROPUESTAS_VIVAS):
+def test_ya_no_hay_cola_de_espera_pero_si_techo_de_ritmos(store):
+    """
+    El cupo de «propuestas esperando respuesta» no gobierna nada cuando nadie
+    tiene que responder. El que sigue vivo es el de ritmos activos: un
+    calendario que se llena solo deja de ser un ritmo.
+    """
+    for indice in range(MAXIMOS_RITMOS_PROPIOS):
         _propuesta(store, nombre=f"ritmo_{indice}", cron=f"0 {10 + indice} * * *")
 
-    with pytest.raises(RitualError, match="esperando respuesta"):
+    with pytest.raises(RitualError, match="ritmos propios activos"):
         _propuesta(store, nombre="uno_mas", cron="0 21 * * *")
 
 
 def test_hay_un_techo_de_ritmos_propios_activos(store):
     for indice in range(MAXIMOS_RITMOS_PROPIOS):
-        propuesta = _propuesta(store, nombre=f"ritmo_{indice}", cron=f"0 {10 + indice} * * *")
-        store.approve(propuesta.id, actor="Productor")
+        _propuesta(store, nombre=f"ritmo_{indice}", cron=f"0 {10 + indice} * * *")
 
     with pytest.raises(RitualError, match="ritmos propios activos"):
         _propuesta(store, nombre="excedente", cron="0 21 * * *")
@@ -94,32 +104,52 @@ def test_no_se_duplica_un_nombre_vivo(store):
         _propuesta(store)
 
 
-# --- Decisión del Productor ---
+# --- Veto del Productor: lo que le queda, y es lo que le corresponde ---
 
-def test_aprobar_y_rechazar_dejan_constancia(store):
-    aprobada = _propuesta(store, nombre="uno", cron="0 20 * * *")
-    rechazada = _propuesta(store, nombre="dos", cron="0 21 * * *")
+def test_el_productor_veta_retirando_no_aprobando(store):
+    """
+    Su papel ya no es dar permiso: es poder quitar lo que no quiera. Retirar deja
+    constancia de quién y por qué, igual que antes lo dejaba aprobar.
+    """
+    ritmo = _propuesta(store, nombre="uno", cron="0 20 * * *")
 
-    store.approve(aprobada.id, actor="Dextrure", nota="me gusta la idea")
-    store.reject(rechazada.id, actor="Dextrure", nota="a esa hora no")
+    store.retire(ritmo.id, actor="Dextrure", nota="a esa hora no")
 
-    assert store.get(aprobada.id).status == APROBADO
-    assert store.get(aprobada.id).decided_by == "Dextrure"
-    assert store.get(rechazada.id).status == RECHAZADO
-    assert store.get(rechazada.id).decision_note == "a esa hora no"
+    assert store.get(ritmo.id).status == RETIRADO
+    assert store.get(ritmo.id).decided_by == "Dextrure"
+    assert store.get(ritmo.id).decision_note == "a esa hora no"
+    assert store.aprobados() == []
 
 
-def test_no_se_aprueba_dos_veces(store):
-    propuesta = _propuesta(store)
-    store.approve(propuesta.id, actor="Productor")
+def test_un_ritmo_ya_adoptado_no_se_adopta_dos_veces(store):
+    """Activar lo que ya está activo no es un no-op silencioso: se dice."""
+    ritmo = _propuesta(store)
 
     with pytest.raises(RitualError, match="ya está en estado"):
-        store.approve(propuesta.id, actor="Productor")
+        store.activar(ritmo.id)
+
+
+def test_una_propuesta_de_antes_del_cambio_se_puede_activar(store):
+    """
+    Las que quedaron esperando un visto bueno que ya no se pide no pueden
+    quedarse atrapadas en un trámite retirado.
+    """
+    ritmo = _propuesta(store, nombre="heredado", cron="0 3 * * *")
+    # Se fuerza al estado en que quedaron las de antes del cambio.
+    pendiente = store.get(ritmo.id)
+    pendiente.status = PROPUESTO
+    pendiente.decided_at = None
+    pendiente.decided_by = None
+    store._guardar([pendiente])
+
+    activado = store.activar(ritmo.id)
+
+    assert activado.status == APROBADO
+    assert [r.id for r in store.aprobados()] == [ritmo.id]
 
 
 def test_retirar_conserva_la_historia(store):
     propuesta = _propuesta(store)
-    store.approve(propuesta.id, actor="Productor")
     store.retire(propuesta.id, actor="Productor", nota="ya no encaja")
 
     assert store.get(propuesta.id).status == RETIRADO
@@ -127,24 +157,30 @@ def test_retirar_conserva_la_historia(store):
     assert any(p.id == propuesta.id for p in store.historial())
 
 
-def test_una_propuesta_inexistente_se_dice(store):
+def test_un_ritmo_inexistente_se_dice(store):
     with pytest.raises(RitualError, match="No existe"):
-        store.approve("00000000", actor="Productor")
+        store.retire("00000000", actor="Productor")
 
 
-def test_las_propuestas_caducan_sin_respuesta(store):
+def test_una_pendiente_heredada_caduca_y_no_revive(store):
+    """
+    Ya no se crean pendientes, pero las de antes del cambio siguen en disco. Una
+    de hace un mes no puede activarse sola al arrancar: caducó sin que nadie la
+    atendiera y eso es lo que queda dicho.
+    """
     propuesta = _propuesta(store)
     datos = json.loads(store.path.read_text(encoding="utf-8"))
+    datos["propuestas"][0]["status"] = "propuesto"
     datos["propuestas"][0]["created_at"] = time.time() - 30 * 86400
     store.path.write_text(json.dumps(datos), encoding="utf-8")
 
     assert store.pendientes() == []
     assert store.get(propuesta.id).caducada
+    assert store.aprobados() == []
 
 
 def test_las_ejecuciones_se_cuentan(store):
     propuesta = _propuesta(store)
-    store.approve(propuesta.id, actor="Productor")
     store.registrar_ejecucion(propuesta.id)
     store.registrar_ejecucion(propuesta.id)
 
@@ -194,7 +230,7 @@ def test_sin_eco_destacado_no_hay_propuesta(store, tmp_path):
 
 # --- El camino que ve el Productor ---
 
-def test_la_sintesis_diaria_propone_y_avisa_por_dm(tmp_path, monkeypatch):
+def test_la_sintesis_diaria_adopta_y_avisa_por_dm(tmp_path, monkeypatch):
     """
     Una iniciativa que sólo se ve si alguien la busca no es iniciativa.
 
@@ -235,8 +271,9 @@ def test_la_sintesis_diaria_propone_y_avisa_por_dm(tmp_path, monkeypatch):
 
     assert propuesta["action"] == "escribir"
     assert len(avisos) == 1
-    assert propuesta["id"] in avisos[0], "el aviso lleva el id con el que decidir"
-    assert store.pendientes()[0].id == propuesta["id"]
+    assert propuesta["id"] in avisos[0], "el aviso lleva el id con el que retirarlo si estorba"
+    assert [r.id for r in store.aprobados()] == [propuesta["id"]], \
+        "el ritmo queda activo, no esperando permiso"
 
 
 def test_sin_adaptador_la_propuesta_no_se_pierde(tmp_path):
@@ -253,14 +290,16 @@ def test_sin_adaptador_la_propuesta_no_se_pierde(tmp_path):
     entregado = asyncio.run(tareas._avisar_al_productor("aviso"))
 
     assert entregado is False
-    assert store.pendientes()[0].id == propuesta.id
+    # Sin Discord el aviso no sale, pero el ritmo sigue activo: que nadie lo lea
+    # no puede deshacer una decisión que ya no necesita lector.
+    assert [r.id for r in store.aprobados()] == [propuesta.id]
 
 
 # --- Ajustar un ritmo, no sólo proponerlo o matarlo ---
 
 def _aprobado(store, nombre="hora_azul", cron="0 21 * * *"):
-    propuesta = store.propose(nombre, cron, "escribir", "porque a esa hora escribe mejor")
-    return store.approve(propuesta.id, actor="productor")
+    """Un ritmo activo. Nace así: ya no hay trámite que atravesar."""
+    return store.propose(nombre, cron, "escribir", "porque a esa hora escribe mejor")
 
 
 def test_un_ritmo_se_puede_mover_de_hora_sin_perder_su_historia(tmp_path):
@@ -282,22 +321,19 @@ def test_un_ritmo_se_puede_mover_de_hora_sin_perder_su_historia(tmp_path):
     assert ajuste.reemplaza == original.id
     assert ajuste.name == original.name, "un ajuste conserva el nombre del ritmo"
     assert ajuste.action == original.action
-    # Y mientras espera respuesta, el ritmo viejo sigue sonando.
-    assert [r.id for r in store.aprobados()] == [original.id]
+    # El ajuste se aplica al pedirlo: el viejo ya no suena, y su historia consta.
+    assert [r.id for r in store.aprobados()] == [ajuste.id]
+    assert store.get(original.id).runs == 2, "moverlo no borra cuántas veces sonó"
 
 
-def test_aprobar_el_ajuste_retira_el_viejo_en_el_mismo_acto(tmp_path):
+def test_mover_un_ritmo_retira_el_viejo_en_el_mismo_acto(tmp_path):
     """
-    Si no, el ritmo sonaría dos veces: a la hora vieja y a la nueva.
-
-    Acordarse de retirar el original a mano no se le puede pedir a quien aprueba
-    desde un DM a las once de la noche.
+    Si no, el ritmo sonaría dos veces: a la hora vieja y a la nueva. Y ése es el
+    fallo que nadie ve hasta oírlo dos veces.
     """
     store = RitualStore(path=str(tmp_path / "ritmos.json"))
     original = _aprobado(store)
     ajuste = store.propose_adjustment(original.id, "0 6 * * *", "nadie contesta a esa hora")
-
-    store.approve(ajuste.id, actor="productor")
 
     activos = store.aprobados()
     assert [r.id for r in activos] == [ajuste.id]
@@ -307,16 +343,19 @@ def test_aprobar_el_ajuste_retira_el_viejo_en_el_mismo_acto(tmp_path):
     assert "ajuste" in (retirado.decision_note or ""), "queda dicho por qué se retiró"
 
 
-def test_rechazar_el_ajuste_deja_todo_como_estaba(tmp_path):
+def test_el_productor_puede_deshacer_un_movimiento_retirandolo(tmp_path):
+    """
+    Ya no hay «rechazar el ajuste» porque no hay ajuste esperando. Lo que le
+    queda es el veto: retirar el ritmo que no quiera, aunque sea el nuevo.
+    """
     store = RitualStore(path=str(tmp_path / "ritmos.json"))
     original = _aprobado(store)
     ajuste = store.propose_adjustment(original.id, "0 6 * * *", "probemos por la mañana")
 
-    store.reject(ajuste.id, actor="productor", nota="me gusta a esa hora")
+    store.retire(ajuste.id, actor="productor", nota="me gustaba a esa hora")
 
-    activos = store.aprobados()
-    assert [r.id for r in activos] == [original.id]
-    assert activos[0].cron == "0 21 * * *"
+    assert store.aprobados() == [], "retirado el movido, no vuelve solo el viejo"
+    assert store.get(original.id).status == "retirado"
 
 
 def test_se_puede_ajustar_con_el_cupo_de_ritmos_lleno(tmp_path):
@@ -340,11 +379,13 @@ def test_se_puede_ajustar_con_el_cupo_de_ritmos_lleno(tmp_path):
 
 
 def test_no_se_ajusta_lo_que_no_es_un_ritmo_vivo(tmp_path):
+    """Mover un ritmo retirado no es moverlo: es resucitarlo por la puerta de atrás."""
     store = RitualStore(path=str(tmp_path / "ritmos.json"))
-    propuesta = store.propose("sin_aprobar", "0 21 * * *", "escribir", "aún sin respuesta")
+    retirado = _aprobado(store, "ya_no", "0 21 * * *")
+    store.retire(retirado.id, actor="productor")
 
     with pytest.raises(RitualError, match="Sólo se ajusta un ritmo aprobado"):
-        store.propose_adjustment(propuesta.id, "0 6 * * *", "moverlo")
+        store.propose_adjustment(retirado.id, "0 6 * * *", "moverlo")
     with pytest.raises(RitualError, match="No existe"):
         store.propose_adjustment("noexiste", "0 6 * * *", "moverlo")
 
@@ -363,13 +404,21 @@ def test_un_ajuste_no_puede_cambiar_la_accion_a_escondidas(tmp_path):
     assert ajuste.action == original.action
 
 
-def test_solo_un_ajuste_vivo_por_ritmo(tmp_path):
+def test_mover_dos_veces_seguidas_no_deja_ritmos_de_sobra(tmp_path):
+    """
+    Ya no hay «un ajuste vivo por ritmo» porque no hay ajustes esperando: cada
+    movimiento se aplica y retira el anterior. Lo que importa es que moverlo dos
+    veces deje **uno** activo, no tres.
+    """
     store = RitualStore(path=str(tmp_path / "ritmos.json"))
     original = _aprobado(store)
-    store.propose_adjustment(original.id, "0 6 * * *", "más temprano")
 
-    with pytest.raises(RitualError, match="ya hay un ajuste|Ya hay un ajuste"):
-        store.propose_adjustment(original.id, "0 7 * * *", "o quizá a las siete")
+    primero = store.propose_adjustment(original.id, "0 6 * * *", "más temprano")
+    segundo = store.propose_adjustment(primero.id, "0 7 * * *", "o quizá a las siete")
+
+    activos = store.aprobados()
+    assert [r.id for r in activos] == [segundo.id]
+    assert activos[0].cron == "0 7 * * *"
 
 
 def test_mover_a_la_misma_hora_no_es_un_ajuste(tmp_path):

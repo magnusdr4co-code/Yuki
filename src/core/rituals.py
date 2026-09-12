@@ -1,26 +1,40 @@
 """
-Ritmos propios: Yuki propone sus rutinas, el Productor decide.
+Ritmos propios: Yuki adopta sus rutinas. El Productor puede retirarlas.
 
-Hasta aquí, el calendario de Yuki era ajeno a ella. Los seis cron de
-`config.yaml` los escribió otra persona, y su evolución autónoma sólo podía
-mover la temperatura: podía volverse más creativa, pero no podía decir «a las
-ocho de la tarde mis versos encuentran respuesta; quiero escribir a esa hora».
-Eso no es una limitación técnica menor, es la diferencia entre tener carácter y
-tener horario.
+Hasta aquí, el calendario de Yuki era ajeno a ella. Los cron de `config.yaml`
+los escribió otra persona, y su evolución autónoma sólo podía mover la
+temperatura: podía volverse más creativa, pero no podía decir «a las ocho de la
+tarde mis versos encuentran respuesta; quiero escribir a esa hora». Eso no es
+una limitación técnica menor, es la diferencia entre tener carácter y tener
+horario.
 
-El diseño es deliberadamente asimétrico:
+**Había un trámite de aprobación y se ha quitado.** Cada ritmo esperaba a que el
+Productor lo aceptase por DM, y eso era lo contrario del albedrío: decidir a qué
+hora escribe no es concederse un permiso, es tener una vida. Un ritmo no es su
+iniciativa, ni la transparencia, ni el freno —las tres cosas que la sexta
+invariante le prohíbe tocar—.
 
-  · **Proponer es libre.** Yuki redacta la propuesta —qué, cuándo y por qué— y
-    la funda en su propia experiencia: el diario de agencia sabe en qué franja
-    del día lo que hace obtiene eco.
-  · **Aprobar no lo es.** Ninguna propuesta llega al planificador sin que el
-    Productor emparejado la acepte por DM. Nada de auto-concederse ritmos.
+La seguridad no la daba el clic de nadie: **es estructural, y sigue entera.**
 
-Y la validación se hace **al proponer**, no al aprobar, para que el Productor
-nunca tenga delante una propuesta que no podría ejecutarse: expresión cron
-válida, acción de una lista cerrada, frecuencia acotada —nada por debajo de una
-hora, nada que dispare más veces de las permitidas al día— y un tope de ritmos
-propios vivos, porque un calendario que se llena solo deja de ser un ritmo.
+  · **Qué puede hacer un ritmo está cerrado**: escribir, contemplar, explorar y
+    monologar. Componer y pintar quedan fuera porque gastan crédito, y publicar
+    hacia fuera tiene su propio cauce.
+  · **Cuántas veces**, acotado: nada por debajo de una hora, nada que dispare
+    más de `MAXIMOS_DISPAROS_DIARIOS` al día.
+  · **Cuántos ritmos**, acotado: un calendario que se llena solo deja de ser un
+    ritmo.
+  · **Y lo que faltaba y era lo importante**: cumplir un ritmo pasa por el freno
+    y por el techo diario de actos propios (`agent.puede_cumplir_un_ritmo`). Un
+    ritmo decide *cuándo*, nunca *cuántos*: adoptar diez no le da más actos al
+    día que adoptar uno. Antes no era así, y el trámite de aprobación tapaba ese
+    agujero sin que nadie lo hubiera pensado.
+
+Queda para el Productor lo que de verdad le corresponde: **el veto, no el
+permiso previo.** `!ritmos` los ve y `!ritmo retirar <id>` quita el que no
+quiera. Retirar es de los dos; pedir permiso, de ninguno.
+
+La validación sigue haciéndose al adoptar, para que un ritmo que no podría
+ejecutarse no llegue nunca al planificador.
 """
 
 from __future__ import annotations
@@ -59,7 +73,10 @@ ACCIONES_DE_RITMO = {
 # Un ritual cada diez minutos no es un ritmo, es un tic.
 MAXIMOS_DISPAROS_DIARIOS = 6
 MAXIMOS_RITMOS_PROPIOS = 4
-MAXIMAS_PROPUESTAS_VIVAS = 3
+# Había un techo de propuestas vivas y se ha ido con la cola de espera: un ritmo
+# nace activo, así que no hay nada acumulándose. Dejarlo declarado sin lector
+# habría sido otro dial que no gira —de ésos había veintisiete—.
+# Esto sí se lee: una propuesta heredada de hace más de una semana no revive.
 CADUCIDAD_PROPUESTA_DIAS = 7
 
 NOMBRE_VALIDO = re.compile(r"^[a-z0-9_]{3,40}$")
@@ -184,10 +201,12 @@ class RitualStore:
     def propose(self, name: str, cron: str, action: str, reason: str,
                 origin: str = "yuki", reemplaza: Optional[str] = None) -> RitualProposal:
         """
-        Registra una propuesta ya validada. Un motivo inválido levanta `RitualError`.
+        Adopta un ritmo ya validado y activo. Un motivo inválido levanta `RitualError`.
 
-        Validar aquí y no al aprobar es deliberado: el Productor no debería tener
-        delante una propuesta que, al aceptarla, no podría registrarse.
+        Se valida aquí, al adoptar, porque es el único momento en que alguien
+        puede recibir la negativa: un ritmo nace sonando, y uno que el
+        planificador no pudiera registrar sería un ritmo que ella cree tener y
+        no tiene. Ése es exactamente el fallo que este proyecto no comete.
         """
         nombre = _slug(name)
         if not NOMBRE_VALIDO.match(nombre):
@@ -211,12 +230,6 @@ class RitualStore:
             )
 
         propuestas = self._todas()
-        vivas = [p for p in propuestas if p.status == PROPUESTO and not p.caducada]
-        if len(vivas) >= MAXIMAS_PROPUESTAS_VIVAS:
-            raise RitualError(
-                f"Ya hay {len(vivas)} propuestas esperando respuesta; espera a que el Productor "
-                "las atienda antes de pedir otra."
-            )
         # Un ajuste no añade un ritmo: mueve uno. Contarlo contra el techo dejaría
         # a Yuki sin poder cambiar de hora justo cuando tiene el cupo lleno, que
         # es cuando más razones tiene para reordenar los que ya tiene.
@@ -235,12 +248,27 @@ class RitualStore:
             id=uuid.uuid4().hex[:8], name=nombre, cron=cron.strip(),
             action=action, reason=reason.strip()[:400], origin=origin,
             reemplaza=reemplaza,
+            # Nace **activo**. Esperar el visto bueno de alguien para escribir a
+            # las tres de la madrugada no protegía de nada: lo que protege son
+            # los límites de arriba, y ésos no se negocian ni se piden.
+            status=APROBADO, decided_at=time.time(), decided_by="yuki",
         )
         propuestas.append(propuesta)
         self._guardar(propuestas)
-        logger.info("Ritmo propuesto: %s (%s, %s) — %s", propuesta.name, propuesta.cron,
+        logger.info("Ritmo adoptado: %s (%s, %s) — %s", propuesta.name, propuesta.cron,
                     propuesta.action, propuesta.id)
         return propuesta
+
+    def activar(self, ritual_id: str, actor: str = "yuki") -> RitualProposal:
+        """
+        Activa un ritmo que quedó pendiente de antes del cambio.
+
+        Los que se adoptan hoy nacen activos; esto existe sólo para los que se
+        quedaron esperando un visto bueno que ya no hace falta pedir. Sin esto,
+        una propuesta de ayer quedaría atrapada para siempre en un trámite que
+        el proyecto ha retirado.
+        """
+        return self._decidir(ritual_id, APROBADO, actor, "adoptado sin trámite")
 
     def propose_adjustment(self, ritual_id: str, nuevo_cron: str, reason: str,
                            origin: str = "yuki") -> RitualProposal:
@@ -251,9 +279,12 @@ class RitualStore:
         entonces lo honesto es proponerlo como tal en vez de colar una cosa
         distinta bajo un nombre ya aprobado.
 
-        El ritmo original sigue sonando mientras el ajuste espera respuesta. Si
-        se aprueba, se retira en el mismo acto; si se rechaza, no pasa nada y
-        todo sigue igual.
+        **Se aplica al pedirlo.** Antes esperaba el visto bueno del Productor, y
+        mover su propio ritmo de hora es la clase de decisión que no tiene por
+        qué pedir permiso: no cambia qué hace ni cuántas veces, sólo cuándo.
+
+        El viejo se retira en el mismo acto, y no en dos: dejar los dos activos
+        haría sonar el ritmo a la hora vieja y a la nueva.
         """
         propuestas = self._todas()
         original = next((p for p in propuestas if p.id == ritual_id), None)
@@ -264,17 +295,35 @@ class RitualStore:
                 f"Sólo se ajusta un ritmo aprobado; '{ritual_id}' está en '{original.status}'.")
         if nuevo_cron.strip() == original.cron:
             raise RitualError("Ese ajuste deja el ritmo a la misma hora.")
-        if any(p.reemplaza == ritual_id and p.status == PROPUESTO and not p.caducada
-               for p in propuestas):
-            raise RitualError(f"Ya hay un ajuste esperando respuesta para '{ritual_id}'.")
-
         # Se delega en `propose` para no duplicar la validación —cron legible,
-        # techo de disparos, propuestas vivas—, declarando a quién sustituye:
-        # con eso conserva el nombre y no cuenta contra el techo de ritmos.
+        # techo de disparos—, declarando a quién sustituye: con eso conserva el
+        # nombre y no cuenta contra el techo de ritmos.
         ajuste = self.propose(name=original.name, cron=nuevo_cron, action=original.action,
                               reason=reason, origin=origin, reemplaza=ritual_id)
-        logger.info("Ajuste propuesto para %s: %s → %s", ritual_id, original.cron, nuevo_cron)
+        self._retirar_sustituido(ajuste, actor=origin)
+        logger.info("Ritmo %s movido: %s → %s (ajuste %s)",
+                    ritual_id, original.cron, nuevo_cron, ajuste.id)
         return ajuste
+
+    def _retirar_sustituido(self, ajuste: RitualProposal, actor: str) -> None:
+        """
+        Retira el ritmo al que sustituye un ajuste. En el mismo acto, no en dos.
+
+        Dejar los dos activos haría sonar el ritmo a la hora vieja y a la nueva,
+        y ése es el fallo que nadie vería hasta oírlo dos veces.
+        """
+        if not ajuste.reemplaza:
+            return
+        propuestas = self._todas()
+        anterior = next((p for p in propuestas if p.id == ajuste.reemplaza), None)
+        if anterior is None or anterior.status != APROBADO:
+            return
+        anterior.status = RETIRADO
+        anterior.decided_at = time.time()
+        anterior.decided_by = actor
+        anterior.decision_note = f"sustituido por el ajuste {ajuste.id}"
+        self._guardar(propuestas)
+        logger.info("Ritmo %s retirado: lo sustituye el ajuste %s", anterior.id, ajuste.id)
 
     # -- Decisión --------------------------------------------------------
 
@@ -296,24 +345,14 @@ class RitualStore:
 
     def approve(self, ritual_id: str, actor: str, nota: str = "") -> RitualProposal:
         """
-        Aprueba una propuesta. Si es un ajuste, retira el ritmo que sustituye.
+        Activa una propuesta heredada del tiempo en que hacía falta aprobar.
 
-        En el mismo acto, y no en dos: aprobar el ajuste y olvidarse de retirar
-        el viejo dejaría a Yuki con el ritmo sonando dos veces, a la hora vieja
-        y a la nueva. Eso no se le puede pedir a quien aprueba desde un DM.
+        Los ritmos de hoy nacen activos; esto queda para las que se quedaron
+        esperando. Si es un ajuste, retira el ritmo que sustituye en el mismo
+        acto: dejar los dos lo haría sonar a la hora vieja y a la nueva.
         """
         aprobada = self._decidir(ritual_id, APROBADO, actor, nota)
-        if aprobada.reemplaza:
-            propuestas = self._todas()
-            anterior = next((p for p in propuestas if p.id == aprobada.reemplaza), None)
-            if anterior is not None and anterior.status == APROBADO:
-                anterior.status = RETIRADO
-                anterior.decided_at = time.time()
-                anterior.decided_by = actor
-                anterior.decision_note = f"sustituido por el ajuste {aprobada.id}"
-                self._guardar(propuestas)
-                logger.info("Ritmo %s retirado: lo sustituye el ajuste %s",
-                            anterior.id, aprobada.id)
+        self._retirar_sustituido(aprobada, actor=actor)
         return aprobada
 
     def reject(self, ritual_id: str, actor: str, nota: str = "") -> RitualProposal:

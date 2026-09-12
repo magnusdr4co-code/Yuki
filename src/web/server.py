@@ -237,7 +237,11 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         # Ritmos y bitácora.
         ritmos = RitualStore()
         metrica("ritmos_propios", "Ritmos propios activos", len(ritmos.aprobados()))
-        metrica("ritmos_propuestos", "Propuestas esperando al Productor", len(ritmos.pendientes()))
+        # Ya no hay trámite de aprobación: lo que cuente aquí son ritmos que se
+        # quedaron esperando un visto bueno de cuando hacía falta y siguen sin
+        # sonar. Cero es lo normal; distinto de cero es un ritmo suyo atrapado.
+        metrica("ritmos_propuestos", "Ritmos heredados sin activar (esperan `!ritmo aprobar`)",
+                len(ritmos.pendientes()))
         # El freno como número: un panel tiene que poder enseñar que Yuki está
         # parada a propósito, o media hora de silencio parece una avería.
         freno = Brake()
