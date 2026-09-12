@@ -18,7 +18,7 @@ from src.cli.gobierno import (  # noqa: E402
     cmd_backup, cmd_blackbox, cmd_brake, cmd_pulse, cmd_spend, cmd_state, cmd_virtualize,
 )
 from src.cli.mente import (  # noqa: E402
-    cmd_agency, cmd_persona, cmd_sleep, cmd_transparency,
+    cmd_agency, cmd_cuaderno, cmd_persona, cmd_sleep, cmd_transparency,
 )
 from src.cli.operacion import (  # noqa: E402
     cmd_benchmark, cmd_chat, cmd_cron_task, cmd_daemon, cmd_list_skills, cmd_skill,
@@ -93,6 +93,12 @@ def main():
         "albedrio", help="Estado del libre albedrío: carácter, refuerzo y ritmos propios",
     )
     albedrio.add_argument("--json", action="store_true", help="Emite JSON")
+
+    cuaderno = subparsers.add_parser(
+        "cuaderno", help="Cuaderno de taller: qué quedó sin resolver y qué se intentó ya",
+    )
+    cuaderno.add_argument("--obra", default="", help="Sólo lo de esa pieza, abierto y cerrado")
+    cuaderno.add_argument("--json", action="store_true", help="Emite JSON")
 
     transparencia = subparsers.add_parser(
         "transparency",
@@ -195,6 +201,8 @@ def main():
         cmd_backup(as_json=args.json, ensayar=args.ensayar)
     elif args.command == "albedrio":
         cmd_agency(as_json=args.json)
+    elif args.command == "cuaderno":
+        cmd_cuaderno(obra=args.obra, as_json=args.json)
     elif args.command == "transparency":
         cmd_transparency(marcar=args.marcar, as_json=args.json)
     elif args.command == "persona":

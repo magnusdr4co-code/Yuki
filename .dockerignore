@@ -31,6 +31,7 @@ data/spend_ledger.json
 data/agency_ledger.json
 data/runtime_rituals.json
 data/transparency.json
+data/cuaderno_taller.json
 data/persona_drift.json
 data/state_audit.log
 data/bitacora.jsonl

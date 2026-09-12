@@ -162,6 +162,11 @@ class BackupManager:
             # no era verdad, así que perder el disco borraba lo único de su
             # conducta que alguien había aprobado a mano.
             self.data_dir / "runtime_rituals.json",
+            # El cuaderno de taller. Es lo más irremplazable después de la
+            # memoria: una obra perdida se puede rehacer desde su receta, pero
+            # «se probó 4/4 en el puente y dejó de ser el puente» no se deduce
+            # de ningún fichero. Se pierde y se vuelve a tropezar igual.
+            self.data_dir / "cuaderno_taller.json",
             self.data_dir / "discord_pairing.json",
             self.data_dir / "spend_ledger.json",
             self.data_dir / "media_jobs",

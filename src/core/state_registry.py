@@ -177,6 +177,14 @@ def build_registry() -> List[StateItem]:
             actionability="ALTA: cada ritmo aprobado ejecuta al llegar su hora",
         ),
         StateItem(
+            id="cuaderno_taller", path=str(datos / "cuaderno_taller.json"),
+            description="Cuestiones de taller sin resolver: qué se intentó en un pasaje y por qué no cuajó",
+            authority=YUKI, scope="su propio oficio", mutability="mutable con historial de intentos",
+            provenance="apuntes suyos mientras compone o escribe",
+            recoverability="IRREMPLAZABLE: no se deduce de la obra ni se reconstruye con el tiempo",
+            actionability="no ejecuta nada; se declara en el resumen del criterio antes de gastar",
+        ),
+        StateItem(
             id="overlay_config", path=str(datos / "runtime_overrides.json"),
             description="Ajustes en caliente: temperatura, modelos, carácter del albedrío",
             authority=PRODUCTOR, scope="configuración acotada", mutability="mutable y reversible",

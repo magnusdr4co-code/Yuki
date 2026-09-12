@@ -162,6 +162,53 @@ def cmd_agency(as_json=False):
         print(f"  {DIM}`!ritmo aprobar <id>` en el DM los pone a sonar.{RESET}")
 
 
+def cmd_cuaderno(obra="", as_json=False):
+    """Cuaderno de taller: qué quedó sin resolver y qué se intentó ya."""
+    from src.tools.cuaderno import Cuaderno
+
+    libreta = Cuaderno()
+    apuntes = libreta.sobre(obra) if obra else libreta.abiertos()
+
+    if as_json:
+        print(json.dumps({
+            "obra": obra or None,
+            "apuntes": [a.to_dict() for a in apuntes],
+            "obras_con_cuestiones": libreta.obras(),
+        }, ensure_ascii=False, indent=2))
+        return
+
+    print_banner()
+    print(f"{MAGENTA}{BOLD}📓 Cuaderno de taller{RESET}\n")
+    if not apuntes:
+        # Vacío se dice vacío. Un cuaderno sin apuntes no es un fallo, pero
+        # tampoco es un cuaderno funcionando, y la diferencia importa.
+        print(f"  {DIM}Sin apuntes{' sobre ' + obra if obra else ''}. Aquí va lo que quedó sin")
+        print(f"  resolver —un motivo a medio pulir, una tensión métrica—, no la obra:{RESET}")
+        print(f"  {DIM}eso es la Biblioteca.{RESET}")
+        return
+
+    for apunte in apuntes:
+        color = YELLOW if apunte.estado == "abierto" else DIM
+        print(f"  {color}{apunte.describe()}{RESET}")
+        for intento in apunte.intentos:
+            print(f"      {DIM}probó «{intento.que}» → {intento.por_que_no}{RESET}")
+        if apunte.resolucion:
+            print(f"      {GREEN}resuelto: {apunte.resolucion}{RESET}")
+        if apunte.parametros:
+            detalle = " · ".join(f"{k} {v}" for k, v in apunte.parametros.items())
+            print(f"      {DIM}{detalle}{RESET}")
+        # Una cuestión que nadie releyó nunca es la que el cuaderno existe para
+        # rescatar: se marca en vez de dejarla al mismo nivel que las demás.
+        if apunte.estado == "abierto" and not apunte.relecturas:
+            print(f"      {DIM}sin releer desde que se anotó{RESET}")
+
+    pendientes = libreta.obras()
+    if pendientes and not obra:
+        print(f"\n{BOLD}Piezas con cuestiones abiertas{RESET}")
+        for pieza, cuantas in pendientes.items():
+            print(f"  {pieza:<30} {cuantas}")
+
+
 def cmd_persona(as_json=False):
     """Deriva de persona: cuánto se ha ido de su registro y cuántas veces se reancló."""
     import yaml

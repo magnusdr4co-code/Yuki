@@ -28,6 +28,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 | Memoria rápida y por qué FTS5 | [FAST_MEMORY_FTS5.md](FAST_MEMORY_FTS5.md) |
 | Dormir: consolidar, soñar, olvidar | [CICLO_DE_SUENO.md](CICLO_DE_SUENO.md) |
 | Iniciativa propia: carácter, refuerzo, ritmos | [LIBRE_ALBEDRIO.md](LIBRE_ALBEDRIO.md) |
+| Qué quedó sin resolver en una pieza y qué se intentó ya | [CUADERNO_DE_TALLER.md](CUADERNO_DE_TALLER.md) — y por qué no lo cubrían ni la Biblioteca ni la memoria |
 | Tareas autónomas y cron | [AUTONOMOUS_CRON.md](AUTONOMOUS_CRON.md) |
 | Personalidad dialéctica (Honcho) | [HONCHO_DIALECTIC.md](HONCHO_DIALECTIC.md) |
 | Generación de medios | [NOUS_PORTAL_TOOLS.md](NOUS_PORTAL_TOOLS.md) |
