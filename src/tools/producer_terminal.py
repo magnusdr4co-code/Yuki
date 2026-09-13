@@ -88,7 +88,7 @@ class ProducerTerminal:
             env["TMPDIR"] = "/tmp"
         try:
             result = subprocess.run(argv, cwd=self.root, env=env, text=True, capture_output=True,
-                                    timeout=90, check=False)
+                                    timeout=180, check=False)
         except subprocess.TimeoutExpired as exc:
             output = (_as_text(exc.stdout) + _as_text(exc.stderr))[:12000]
             return {"argv": argv, "exit_code": 124,
