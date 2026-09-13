@@ -53,6 +53,9 @@ src/core/       agente, albedrío (agency, spark, rituals), identidad
                 se guarda —atómico, y tolerante a un fichero corrupto—
 src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
+                `cuaderno.py` guarda lo que quedó sin resolver del oficio —no la
+                obra, que es la Biblioteca— y avisa al criterio sin tocar un
+                parámetro,
                 media_jobs, web_search; `criterio_*.py` decide cada arte antes
                 de encargarla —música, imagen, vídeo y voz— leyendo su fuente,
                 y `criterio_base.py` guarda lo único común: manda la fuente, y

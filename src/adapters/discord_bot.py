@@ -32,7 +32,8 @@ from ..core.brake import Brake
 from ..core.spend_budget import SpendLedger
 from ..core.transparency import MediaMarker
 from ..tools.media_jobs import MediaJobStore, TERMINADO, describe_job as describe_media_job
-from ..tools import criterio_audiovisual, criterio_musical, criterio_visual, receta
+from ..tools import (criterio_audiovisual, criterio_musical, criterio_visual, cuaderno,
+                     receta)
 
 logger = logging.getLogger("Yuki.DiscordAdapter")
 
@@ -1247,6 +1248,11 @@ class DiscordAdapter:
             # contradicho en silencio. Ahora lo decide `criterio_musical`
             # leyendo la letra, y manda lo que la letra ya traiga.
             criterio = criterio_musical.leer_criterio(lyrics, titulo=titulo)
+            # Y lo que quedó sin resolver la última vez sobre esta misma pieza.
+            # Va a `observaciones` y no a los parámetros: el cuaderno recuerda,
+            # no compone. Si hace tres semanas el 7/8 del puente atropellaba la
+            # letra, eso se lee ahora, junto al BPM, y no se redescubre pagando.
+            cuaderno.anotar_en_criterio(criterio, titulo, arte="sonora")
             # El criterio se dice **antes** de gastar: si la métrica va a
             # atropellar la voz, eso se sabe ahora y no al escuchar el adjunto.
             await report(criterio.resumen())
@@ -1325,6 +1331,7 @@ class DiscordAdapter:
             # sale de la obra y el criterio decide encuadre y luz.
             visual = criterio_visual.leer_criterio_visual(
                 plan.con_matices(self._semilla_visual(lyrics_entry, lyrics)), titulo=titulo)
+            cuaderno.anotar_en_criterio(visual, titulo, arte="visual")
             await report(visual.resumen())
             portada.attempts += 1
             self.media_jobs.save(job)
@@ -1376,6 +1383,8 @@ class DiscordAdapter:
         guion_visual = criterio_audiovisual.leer_guion(
             script or self._semilla_visual(None, ""), plan.segmentos,
             titulo=(script_entry or {}).get("title", ""))
+        cuaderno.anotar_en_criterio(
+            guion_visual, (script_entry or {}).get("title", ""), arte="audiovisual")
         hechos = sum(1 for i in range(1, plan.segmentos + 1)
                      if job.ensure_step(f"clip_{i}", "clip").is_done())
         if hechos:

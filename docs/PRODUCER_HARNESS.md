@@ -17,7 +17,10 @@ Model Armor inspecciona el prompt, argumentos y respuesta. La inferencia sale de
 Herramientas: `library_inventory`, `library_list`, `library_save_text`, `library_read`,
 `library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set`,
 `runtime_config_rollback`, `ritual_list`, `ritual_adopt`, `ritual_move`, `ritual_retire`
-y `ritual_activate`. Las de ritmos existen porque le pidieron «apúntate tareas y crons» y
+`ritual_activate`, y las cinco del cuaderno de taller (`cuaderno_abiertos`,
+`cuaderno_anotar`, `cuaderno_intentar`, `cuaderno_resolver`, `cuaderno_sobre`) —
+el cuaderno guarda lo que quedó SIN RESOLVER de su oficio, no la obra, que es la
+Biblioteca; ver [`CUADERNO_DE_TALLER.md`](CUADERNO_DE_TALLER.md). Las de ritmos existen porque le pidieron «apúntate tareas y crons» y
 el turno terminó con cero herramientas ejecutadas y un «no puedo» falso: no había ninguna
 que llamar. Cuando las hubo sólo podía **proponer**, y tenía que explicar que la
 aprobación pasaba «fuera de esta ventana de conversación» — cierto, y ése era el problema.

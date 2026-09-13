@@ -349,6 +349,24 @@ class VirtualInstance:
                 if heredados else "")),
         )
 
+        # El cuaderno de taller. Vacío es inactivo por la misma razón que los
+        # ritmos: la facultad existe siempre, y decir REAL sin un solo apunte
+        # sería declarar en verde un cajón sin estrenar.
+        from ..tools.cuaderno import Cuaderno
+
+        libreta = Cuaderno()
+        abiertos = libreta.abiertos()
+        releidos = sum(1 for a in abiertos if a.relecturas)
+        self._cap(
+            "mente.cuaderno", "Mente", REAL if abiertos else INACTIVO,
+            (f"{len(abiertos)} cuestión(es) de taller sin resolver en "
+             f"{len(libreta.obras())} pieza(s); {releidos} releída(s). Llegan al resumen "
+             "del criterio como observación, nunca como parámetro"
+             if abiertos else
+             "Sin apuntes de taller: guarda lo que quedó sin resolver, no la obra "
+             "(eso es la Biblioteca). Se anota con `cuaderno_anotar` en el DM"),
+        )
+
         # El gemelo dice lo que la instancia puede saber de sí misma. Que sepa
         # distinguir «el proceso corre» de «Yuki hace cosas» es una capacidad,
         # no un adorno: sin ella, el fallo más silencioso queda invisible.
