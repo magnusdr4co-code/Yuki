@@ -11,6 +11,15 @@ FORBIDDEN = {"data", ".git", ".env", "deploy", "__pycache__"}
 SECRET_PATTERN = re.compile(r"(?i)(?:api[_-]?key|token|password|secret)\s*[=:]\s*[^\s]+")
 
 
+def _as_text(value):
+    """Normaliza stdout/stderr de excepciones y dobles de subprocess."""
+    if value is None:
+        return ""
+    if isinstance(value, bytes):
+        return value.decode("utf-8", errors="replace")
+    return str(value)
+
+
 class ProducerTerminal:
     def __init__(self, root="."):
         self.root = Path(root).resolve()
@@ -81,7 +90,7 @@ class ProducerTerminal:
             result = subprocess.run(argv, cwd=self.root, env=env, text=True, capture_output=True,
                                     timeout=90, check=False)
         except subprocess.TimeoutExpired as exc:
-            output = ((exc.stdout or "") + (exc.stderr or ""))[:12000]
+            output = (_as_text(exc.stdout) + _as_text(exc.stderr))[:12000]
             return {"argv": argv, "exit_code": 124,
                     "output": SECRET_PATTERN.sub("[REDACTED]", output),
                     "truncated": True, "timed_out": True}
@@ -93,7 +102,8 @@ class ProducerTerminal:
             return {"argv": argv, "exit_code": 126,
                     "output": f"No se pudo ejecutar el comando: {type(exc).__name__}",
                     "truncated": False, "timed_out": False}
-        output = (result.stdout + result.stderr)[:12000]
+        output = (_as_text(result.stdout) + _as_text(result.stderr))[:12000]
         output = SECRET_PATTERN.sub("[REDACTED]", output)
         return {"argv": argv, "exit_code": result.returncode, "output": output,
-                "truncated": len(result.stdout + result.stderr) > len(output), "timed_out": False}
+                "truncated": len(_as_text(result.stdout) + _as_text(result.stderr)) > len(output),
+                "timed_out": False}

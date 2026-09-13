@@ -153,6 +153,20 @@ def test_terminal_converts_missing_executable_to_diagnostic(monkeypatch):
     assert "Comando no encontrado" in result["output"]
 
 
+def test_terminal_normaliza_bytes_en_un_timeout(monkeypatch):
+    terminal = ProducerTerminal()
+
+    def timed_out(*args, **kwargs):
+        raise subprocess.TimeoutExpired(args[0], kwargs["timeout"],
+                                        output=b"salida", stderr=b"stderr")
+
+    import subprocess
+    monkeypatch.setattr("src.tools.producer_terminal.subprocess.run", timed_out)
+    result = terminal.run(["pytest", "--version"])
+    assert result["exit_code"] == 124
+    assert "salida" in result["output"]
+
+
 def test_harness_accepts_deserialized_tool_arguments(tmp_path):
     turns = [
         {"role": "assistant", "content": "", "tool_calls": [{

@@ -15,10 +15,20 @@ nadie usa.
 """
 
 import os
+import shutil
 import sys
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+
+def _requiere_checkout_git():
+    """Los tests de versionado sólo son aplicables al checkout, no a la imagen."""
+    raiz = Path(__file__).resolve().parents[1]
+    if shutil.which("git") is None or not (raiz / ".git").exists():
+        pytest.skip("la imagen de producción no contiene metadatos .git")
 
 
 def test_la_variable_de_entorno_manda_sobre_la_configuracion(monkeypatch, tmp_path):
@@ -276,6 +286,7 @@ def test_el_repositorio_no_lleva_obra_generada():
     """
     import subprocess
 
+    _requiere_checkout_git()
     raiz = Path(__file__).resolve().parents[1]
     seguidos = subprocess.run(["git", "ls-files", "output/"], cwd=raiz,
                               capture_output=True, text=True, timeout=60).stdout.split()
@@ -315,6 +326,7 @@ def test_un_formato_nuevo_en_la_salida_ya_viene_ignorado():
     """
     import subprocess
 
+    _requiere_checkout_git()
     raiz = Path(__file__).resolve().parents[1]
     inventados = [
         "output/music/pista.c2pa.json",

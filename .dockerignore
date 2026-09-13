@@ -76,9 +76,5 @@ Thumbs.db
 *.swp
 .cursorrules
 
-# Documentación (no se necesita en runtime)
-docs/
-*.md
-!SOUL.md
-!MEMORY.md
-!README.md
+# Documentación: forma parte de la superficie de diagnóstico local. Se incluye
+# para que test_despliegue y test_documentacion puedan verificar el runtime.

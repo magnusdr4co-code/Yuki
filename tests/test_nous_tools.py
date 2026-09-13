@@ -58,7 +58,13 @@ def test_empty_config_project_inherits_environment():
 
 def portal_sin_vertex() -> NousPortalClient:
     """Pasarela con el motor real desactivado: la ruta del marcador."""
-    return NousPortalClient(vertex=VertexMediaClient(project_id="", enabled=False))
+    portal = NousPortalClient(vertex=VertexMediaClient(project_id="", enabled=False))
+    # El runtime sí trae el sintetizador local. Estos tests cubren únicamente
+    # la ruta de marcador sin Vertex y deben aislar también ese respaldo.
+    portal.local_music = type("_DisabledLocalMusic", (), {
+        "is_available": lambda self: False,
+    })()
+    return portal
 
 
 class TestMediosSimulados(unittest.TestCase):
