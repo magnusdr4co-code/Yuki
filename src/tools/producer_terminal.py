@@ -1,4 +1,23 @@
-"""Terminal de diagnóstico para el Productor: argv, allowlist, sin shell ni secretos."""
+"""
+Terminal de diagnóstico para el Productor: argv, allowlist, sin shell ni secretos.
+
+Dos cosas de aquí salieron de un turno real en el que Yuki lanzó `pytest` para
+comprobarse y resumió el resultado como «✓ terminal_run: exit=5»:
+
+**Un fallo no puede parecer un éxito.** El retorno traía `exit_code` y nada más,
+así que distinguir bien de mal quedaba en manos de quien leyera el número. Ahora
+hay un veredicto explícito —`ok`— y, cuando falla, un `fallo` que dice en
+castellano qué pasó. La política ya decía «una herramienta fallida no es un
+éxito»; faltaba que el dato lo dijera igual de claro.
+
+**Y pytest no puede funcionar aquí, así que se dice antes de intentarlo.**
+`tests/` está en `.dockerignore`: la imagen de la instancia no lleva la suite, de
+modo que recolectar da cero y `pytest` sale con 5 para siempre. Ofrecer un
+comando estructuralmente imposible es un dial que no gira, y encima devolvía un
+código que parecía un problema del código y no de la imagen. El caché tampoco
+cabía: la raíz del contenedor está en sólo lectura, así que se desactiva —no hay
+nada que cachear en un diagnóstico de un turno— y el temporal va a `/tmp`.
+"""
 from __future__ import annotations
 
 import os
@@ -56,18 +75,48 @@ class ProducerTerminal:
             raise ValueError("La terminal no acepta sintaxis de shell")
         return argv
 
+    def _es_pytest(self, argv):
+        return argv[0] == "pytest" or argv[1:3] == ["-m", "pytest"]
+
+    def suite_disponible(self):
+        """
+        Si la suite está en esta imagen. En la instancia **no**: `tests/` está en
+        `.dockerignore`, y sin esto el diagnóstico sale con 5 —«no recolectó
+        nada»— que se lee como un problema del código y no de la imagen.
+        """
+        return (self.root / "tests").is_dir()
+
     def run(self, argv):
         argv = self._validate(argv)
+        if self._es_pytest(argv) and not self.suite_disponible():
+            # Se dice qué falta y por qué, en vez de dejar que pytest devuelva un
+            # 5 que no significa lo que parece.
+            return {"argv": argv, "exit_code": None, "ok": False,
+                    "fallo": "la suite no está en esta imagen: `tests/` está en "
+                             "`.dockerignore`, así que pytest no puede recolectar nada aquí. "
+                             "No es un fallo del código; se ejecuta en CI y en desarrollo.",
+                    "output": "", "truncated": False, "timed_out": False}
+
         env = {"PATH": os.environ.get("PATH", ""), "LANG": "C.UTF-8", "PYTHONUNBUFFERED": "1"}
+        if self._es_pytest(argv):
+            # La raíz del contenedor es de sólo lectura. Sin esto, pytest muere
+            # con `Permission denied: '.pytest_cache'` antes de ejecutar nada, y
+            # el error parece del proyecto en vez de del montaje.
+            argv = [*argv, "-p", "no:cacheprovider", "--basetemp=/tmp/yuki-pytest"]
+            env["PYTHONDONTWRITEBYTECODE"] = "1"
         try:
             result = subprocess.run(argv, cwd=self.root, env=env, text=True, capture_output=True,
                                     timeout=30, check=False)
         except subprocess.TimeoutExpired as exc:
             output = ((exc.stdout or "") + (exc.stderr or ""))[:12000]
-            return {"argv": argv, "exit_code": 124,
+            return {"argv": argv, "exit_code": 124, "ok": False,
+                    "fallo": "se agotaron los 30 segundos y se mató el proceso",
                     "output": SECRET_PATTERN.sub("[REDACTED]", output),
                     "truncated": True, "timed_out": True}
-        output = (result.stdout + result.stderr)[:12000]
-        output = SECRET_PATTERN.sub("[REDACTED]", output)
-        return {"argv": argv, "exit_code": result.returncode, "output": output,
-                "truncated": len(result.stdout + result.stderr) > len(output), "timed_out": False}
+        crudo = result.stdout + result.stderr
+        output = SECRET_PATTERN.sub("[REDACTED]", crudo[:12000])
+        salida = {"argv": argv, "exit_code": result.returncode, "ok": result.returncode == 0,
+                  "output": output, "truncated": len(crudo) > 12000, "timed_out": False}
+        if result.returncode != 0:
+            salida["fallo"] = f"el comando terminó con código {result.returncode}"
+        return salida

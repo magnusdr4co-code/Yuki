@@ -258,13 +258,19 @@ def cmd_transparency(marcar=False, as_json=False):
 
     politica = TransparencyPolicy.from_config(config)
     registro = DisclosureLedger(reminder_days=politica.reminder_days)
-    auditoria = audit_directory("output")
+    # Sin argumento, para que lo resuelva `salida()`. Pasaba `"output"` a mano
+    # justo en el comando que arregla el incumplimiento del Artículo 50: en una
+    # instancia con `YUKI_OUTPUT_DIR` puesta —la de producción lo tiene— marcaba
+    # un directorio y la métrica que dispara la alerta contaba otro, así que la
+    # alerta seguía encendida después de «arreglarlo». Es el mismo fallo que ya
+    # tuvo esta auditoría una vez y por el que `audit_directory` resuelve sola.
+    auditoria = audit_directory()
 
     if marcar and auditoria["sin_marcar"]:
         marcador = MediaMarker(politica)
         for ruta in list(auditoria["sin_marcar"]):
             marcador.mark(ruta, model="retroactivo", kind="archivo")
-        auditoria = audit_directory("output")
+        auditoria = audit_directory()
 
     if as_json:
         print(json.dumps({

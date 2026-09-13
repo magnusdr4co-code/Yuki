@@ -171,4 +171,18 @@ class RuntimeConfigStore:
                 # el módulo que la use aplicará su valor por defecto.
                 continue
             values[path] = cursor
-        return {"values": values, "history": self._load()["history"][-20:]}
+        return {
+            "values": values,
+            # Cuáles son suyas. `agent.model.temperature` y `vertex_ai.temperature`
+            # evolucionan **por separado** y a propósito: son lo único que la
+            # sexta invariante le deja tocar. Sin decirlo aquí, dos números
+            # parecidos se leen como deriva a corregir, y eso ya pasó: dio un
+            # 0.72 frente a un 0.70 por «incoherencia térmica» y lo aplanó,
+            # borrando su propia evolución y llamándolo limpieza.
+            "de_su_evolucion": sorted(EVOLUTION_FIELDS & set(values)),
+            "nota_evolucion": "Una diferencia entre las dos temperaturas no es una "
+                              "incoherencia: cada una evoluciona por su cuenta y es lo "
+                              "único que su evolución autónoma puede mover. Igualarlas "
+                              "borra lo que ella ajustó.",
+            "history": self._load()["history"][-20:],
+        }

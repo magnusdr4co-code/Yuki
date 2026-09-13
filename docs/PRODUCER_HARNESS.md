@@ -15,7 +15,8 @@ Un fallo o límite devuelve resultado parcial; no se promete trabajo futuro inex
 Model Armor inspecciona el prompt, argumentos y respuesta. La inferencia sale del event loop.
 
 Herramientas: `library_inventory`, `library_list`, `library_save_text`, `library_read`,
-`library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set`,
+`library_set_status`, `terminal_run`, `transparency_audit`, `transparency_mark`,
+`runtime_config_get`, `runtime_config_set`,
 `runtime_config_rollback`, `ritual_list`, `ritual_adopt`, `ritual_move`, `ritual_retire`
 `ritual_activate`, y las cinco del cuaderno de taller (`cuaderno_abiertos`,
 `cuaderno_anotar`, `cuaderno_intentar`, `cuaderno_resolver`, `cuaderno_sobre`) —
@@ -127,6 +128,20 @@ por el freno y por el techo diario de actos: adoptar ritmos decide cuándo actú
 nunca cuántas veces. Detalle completo en `docs/LIBRE_ALBEDRIO.md`.
 
 ## Terminal y configuración
+
+Cada resultado trae un veredicto explícito: `ok` dice si salió bien y, cuando no,
+`fallo` dice qué pasó en castellano. Antes traía el código de salida desnudo, y
+eso bastó para que un `exit=5` se resumiera como «✓ terminal_run». La política ya
+decía que una herramienta fallida no es un éxito; faltaba que el dato lo dijera.
+
+**`pytest` no puede ejecutarse en la instancia y la herramienta lo dice antes de
+intentarlo.** `tests/` está en `.dockerignore`, así que la imagen no lleva la
+suite y recolectar da cero: `pytest` salía con 5 para siempre, y ese 5 se lee
+como un problema del código cuando es del montaje. Ahora responde «la suite no
+está en esta imagen… no es un fallo del código; se ejecuta en CI y en
+desarrollo». El caché tampoco cabía —la raíz del contenedor es de sólo lectura y
+moría con `Permission denied: '.pytest_cache'`—, así que se desactiva y el
+temporal va a `/tmp`.
 
 `terminal_run` sólo acepta argv sin shell: `pwd`, `git status|diff|log`, `pytest` y
 `python -m pytest`, además de lectura limitada (`ls`, `find`, `rg`, `sed`) bajo las rutas

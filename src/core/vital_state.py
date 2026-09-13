@@ -121,7 +121,26 @@ class VitalState:
         self.save()
 
     def save(self):
-        """Persistencia JSON."""
+        """
+        Persiste el estado y **sella el latido**, que es lo que significa el campo.
+
+        `last_updated` lo lee `pulse.py` como el signo vegetativo: «el proceso
+        reescribe su estado vital». Pero lo escribía sólo `update_tick`, y
+        `update_tick` se llama desde un único sitio —el turno de conversación—,
+        mientras que `save()` se llama desde cinco. Así que cada acto por
+        voluntad propia, el ritual del eco y el sueño REM reescribían el fichero
+        y dejaban la marca de tiempo congelada.
+
+        El resultado era una sonda que grita: «ausente, el proceso no está
+        escribiendo» mientras el proceso escribía, sólo porque nadie le había
+        hablado en unas horas. Y una sonda que grita en falso se acaba
+        silenciando, que es como la catatonia de verdad pasaría desapercibida —el
+        fallo que la octava invariante existe para coger—.
+
+        Sellarlo aquí y no en cada llamada es lo que impide que vuelva a pasar:
+        quien añada un sexto escritor no tiene que acordarse de nada.
+        """
+        self.last_updated = datetime.now().isoformat()
         os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
         with open(self.state_path, 'w', encoding='utf-8') as f:
             json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)

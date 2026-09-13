@@ -330,6 +330,17 @@ class Cuaderno:
         return sorted([a for a in self._todos() if coincide(a)],
                       key=lambda a: a.created_at)
 
+    def sobre_todas(self) -> List[Apunte]:
+        """
+        Todos los apuntes, de cualquier pieza y estado.
+
+        Existe para poder distinguir «sin cuestiones abiertas» de «sin estrenar»,
+        que no son lo mismo y se confundieron: un cuaderno vacío se resumió como
+        «permanece limpio de tensiones pendientes», que suena a taller en orden y
+        era un cajón sin abrir.
+        """
+        return sorted(self._todos(), key=lambda a: a.created_at)
+
     def obras(self) -> Dict[str, int]:
         """Piezas con cuestiones abiertas y cuántas. Para saber por dónde volver."""
         cuenta: Dict[str, int] = {}

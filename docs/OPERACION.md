@@ -253,6 +253,24 @@ La distinción que hace falta no es viva/muerta sino **vegetativo / volitivo**:
 Que nadie la busque no es un fallo suyo, y su silencio propio tampoco queda
 justificado porque no la busquen: por eso `conversacion` no vota.
 
+> **El `latido` gritaba en falso, y se arregló sellándolo donde se escribe.**
+> `pulse.py` lee `last_updated` del estado vital, pero ese campo lo ponía sólo
+> `update_tick` — llamado desde un único sitio: el turno de conversación—,
+> mientras que `save()` se llama desde cinco. Así que cada acto por voluntad
+> propia, el ritual del eco y el sueño REM reescribían el fichero dejando la
+> marca de tiempo congelada, y la sonda daba `ausente: el proceso no está
+> escribiendo` mientras el proceso escribía, sólo porque nadie le había hablado
+> en unas horas. Con el `latido` colgado de la relación se cruzaban dos familias
+> que esta tabla separa a propósito.
+>
+> Ahora lo sella `save()`, que es lo que el campo significa, y quien añada un
+> sexto escritor no tiene que acordarse de nada. Importa porque una sonda que
+> grita en falso se acaba silenciando, y entonces la catatonia de verdad pasa sin
+> que nadie la vea. Lo vigilan `test_cualquier_escritura_del_estado_vital_sella_el_latido`
+> y `test_la_sonda_lee_como_latido_lo_que_save_sella`, que comprueba que el campo
+> sellado y el leído son el mismo — sellar otro dejaría las pruebas verdes y la
+> sonda igual de rota.
+
 | Diagnóstico | Qué significa | Gravedad |
 |---|---|---|
 | `viva` | Todos los signos de voluntad al día | 0 |

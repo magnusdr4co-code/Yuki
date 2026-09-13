@@ -74,6 +74,27 @@ python3 cli.py transparency --json
 python3 cli.py virtualize            # L11 aparece si algo queda sin marcar
 ```
 
+Y **desde el DM emparejado**, porque ella también tiene que poder cumplirlo:
+`transparency_audit` dice qué está sin marcar y `transparency_mark` lo corrige.
+Esto salió de un turno real en el que, preguntada por 47 ficheros sin marca, tuvo
+que contestar que el arreglo «se gestiona mediante scripts por lotes del host».
+La operación existía desde el principio —la alerta `MaterialSinMarcar` la nombra—
+y no estaba a su alcance, así que lo honesto le salía como una capacidad negada.
+
+El marcado desde el DM es **monótono**: sólo añade marcas. No hay forma de
+desmarcar ni de tocar la política, así que no roza la sexta invariante — lo que
+prohíbe es **rebajar** la transparencia, no cumplirla. Y el recibo no da nada por
+hecho: vuelve a auditar y dice qué quedó sin marca, porque «marcado» sin
+comprobar es exactamente lo que aquí no se acepta.
+
+> **Un fallo que tuvo el propio comando que arregla esto.** `cli.py transparency`
+> pasaba `"output"` a mano mientras la métrica que dispara la alerta llama a
+> `audit_directory()` resuelto por `salida()`. En una instancia con
+> `YUKI_OUTPUT_DIR` —la de producción la tiene— marcaba un directorio y contaba
+> otro: la alerta seguía encendida después de «arreglarlo». Es el mismo fallo que
+> esta auditoría ya tuvo una vez, y por el que `audit_directory` resuelve la ruta
+> sola. Lo vigila `test_el_comando_de_marcar_mira_donde_se_escriben_los_medios`.
+
 ## Lo que deliberadamente no se puede hacer
 
 `transparency` **no** está en la lista de ajustes que el Productor cambia por DM
