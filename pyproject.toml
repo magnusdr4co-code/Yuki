@@ -66,3 +66,6 @@ show_missing = true
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+# El runtime puede montar `/app` como solo lectura; la caché de pytest es
+# efímera y debe vivir fuera del repositorio de producción.
+cache_dir = "/tmp/yuki-pytest-cache"

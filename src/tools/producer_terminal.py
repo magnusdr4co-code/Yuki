@@ -9,7 +9,6 @@ from pathlib import Path
 SAFE_ROOTS = {".", "src", "tests", "docs", "skills", "scripts", "config.yaml", "AGENTS.md", "SOUL.md", "MEMORY.md", "output/Biblioteca"}
 FORBIDDEN = {"data", ".git", ".env", "deploy", "__pycache__"}
 SECRET_PATTERN = re.compile(r"(?i)(?:api[_-]?key|token|password|secret)\s*[=:]\s*[^\s]+")
-PYTEST_CACHE_DIR = "/tmp/yuki-pytest-cache"
 
 
 class ProducerTerminal:
@@ -57,9 +56,15 @@ class ProducerTerminal:
             raise ValueError("La terminal no acepta sintaxis de shell")
         return argv
 
+    @staticmethod
+    def _is_pytest(argv):
+        """Detecta pytest para aplicar sólo variables de entorno seguras."""
+        return bool(argv) and (argv[0] == "pytest" or
+                               (argv[0] in {"python", "python3"} and
+                                argv[1:3] == ["-m", "pytest"]))
+
     def run(self, argv):
         argv = self._validate(argv)
-        effective_argv = self._pytest_with_writable_cache(argv)
         env = {
             "PATH": os.environ.get("PATH", ""),
             "LANG": "C.UTF-8",
@@ -72,28 +77,14 @@ class ProducerTerminal:
             # destino de escritura ni fallar antes de recolectar tests.
             env["TMPDIR"] = "/tmp"
         try:
-            result = subprocess.run(effective_argv, cwd=self.root, env=env, text=True, capture_output=True,
+            result = subprocess.run(argv, cwd=self.root, env=env, text=True, capture_output=True,
                                     timeout=30, check=False)
         except subprocess.TimeoutExpired as exc:
             output = ((exc.stdout or "") + (exc.stderr or ""))[:12000]
-            return {"argv": effective_argv, "exit_code": 124,
+            return {"argv": argv, "exit_code": 124,
                     "output": SECRET_PATTERN.sub("[REDACTED]", output),
                     "truncated": True, "timed_out": True}
         output = (result.stdout + result.stderr)[:12000]
         output = SECRET_PATTERN.sub("[REDACTED]", output)
-        return {"argv": effective_argv, "exit_code": result.returncode, "output": output,
+        return {"argv": argv, "exit_code": result.returncode, "output": output,
                 "truncated": len(result.stdout + result.stderr) > len(output), "timed_out": False}
-
-    @staticmethod
-    def _is_pytest(argv):
-        return bool(argv) and (argv[0] == "pytest" or
-                               (argv[0] in {"python", "python3"} and
-                                argv[1:3] == ["-m", "pytest"]))
-
-    @classmethod
-    def _pytest_with_writable_cache(cls, argv):
-        if not cls._is_pytest(argv):
-            return argv
-        if any(item == "--cache-dir" or item.startswith("--cache-dir=") for item in argv):
-            return argv
-        return [*argv, f"--cache-dir={PYTEST_CACHE_DIR}"]

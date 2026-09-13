@@ -5,7 +5,7 @@ from types import SimpleNamespace
 import pytest
 
 from src.tools.creation_library import CreationLibrary
-from src.tools.producer_terminal import PYTEST_CACHE_DIR, ProducerTerminal
+from src.tools.producer_terminal import ProducerTerminal
 from src.core.producer_harness import RUTA, ProducerHarness
 from src.core.runtime_config import RuntimeConfigStore
 
@@ -132,14 +132,11 @@ def test_terminal_rejects_shell_and_sensitive_paths():
         terminal.run(["ls", "data"])
 
 
-def test_terminal_reubica_la_cache_de_pytest_fuera_del_runtime_solo_lectura():
-    terminal = ProducerTerminal()
-    assert terminal._pytest_with_writable_cache(["pytest"]) == [
-        "pytest", f"--cache-dir={PYTEST_CACHE_DIR}"]
-    assert terminal._pytest_with_writable_cache(["python3", "-m", "pytest", "tests"])[-1] == \
-        f"--cache-dir={PYTEST_CACHE_DIR}"
-    assert terminal._pytest_with_writable_cache(["pytest", "--cache-dir", "/tmp/cache"]) == [
-        "pytest", "--cache-dir", "/tmp/cache"]
+def test_pytest_declara_cache_efimera_fuera_del_runtime_solo_lectura():
+    from pathlib import Path
+
+    config = (Path(__file__).parents[1] / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'cache_dir = "/tmp/yuki-pytest-cache"' in config
 
 
 def test_runtime_config_evolution_cannot_change_model(tmp_path):
