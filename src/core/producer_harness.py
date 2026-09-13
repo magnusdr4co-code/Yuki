@@ -43,7 +43,7 @@ TOOLS = [
     spec("library_read", "Lee metadatos y texto de una pieza del índice.", {"entry_id": TEXT}, ["entry_id"]),
     spec("library_set_status", "Cambia estado de una pieza conservando copia anterior. Terminado sólo con aprobación del Productor.",
          {"entry_id": TEXT, "state": STATE}, ["entry_id", "state"]),
-    spec("terminal_run", "Ejecuta un diagnóstico local permitido por argv. Sin shell, red, secretos, escritura ni procesos persistentes.",
+    spec("terminal_run", 'Ejecuta un diagnóstico local permitido por argv. Pasa argv como lista, por ejemplo {"argv":["pytest","-q","tests/test_x.py"]}. Sin shell, red, secretos, escritura ni procesos persistentes.',
          {"argv": {"type": "array", "items": TEXT, "minItems": 1, "maxItems": 16}}, ["argv"]),
     spec("runtime_config_get", "Consulta los ajustes públicos y el historial reversible del runtime."),
     spec("runtime_config_set", "Cambia un ajuste explícitamente permitido y lo persiste para reinicios. No modifica código, secretos, permisos ni red.",
@@ -187,7 +187,19 @@ class ProducerHarness:
                     try:
                         if name not in handlers:
                             raise ValueError("Herramienta no autorizada")
-                        arguments = json.loads(function["arguments"])
+                        raw_arguments = function.get("arguments", {})
+                        if isinstance(raw_arguments, str):
+                            arguments = json.loads(raw_arguments or "{}")
+                        elif isinstance(raw_arguments, dict):
+                            # Algunos proveedores ya entregan los argumentos
+                            # deserializados; volver a pasarlos por json.loads
+                            # provocaba el TypeError que dejaba el diagnóstico
+                            # sin oportunidad de reintento.
+                            arguments = raw_arguments
+                        else:
+                            raise ValueError("Los argumentos de la herramienta deben ser un objeto JSON")
+                        if not isinstance(arguments, dict):
+                            raise ValueError("Los argumentos de la herramienta deben ser un objeto JSON")
                         # Inspección de argumentos antes de efectos, igual que el prompt.
                         decision = await asyncio.to_thread(self.agent.model_armor.sanitize_user_prompt,
                                                           json.dumps(arguments, ensure_ascii=False))
@@ -202,8 +214,11 @@ class ProducerHarness:
                         evidence.append({"tool": name, "ok": True, "result": result})
                     except Exception as exc:
                         output = {"ok": False, "error": type(exc).__name__}
-                        receipts.append(f"✗ {name}: {type(exc).__name__}")
-                        evidence.append({"tool": name, "ok": False, "error": type(exc).__name__})
+                        detail = str(exc).strip()[:240]
+                        receipts.append(f"✗ {name}: {type(exc).__name__}"
+                                        + (f" — {detail}" if detail else ""))
+                        evidence.append({"tool": name, "ok": False, "error": type(exc).__name__,
+                                         "detail": detail})
                     logger.info("Acción DM %s ok=%s", name, output["ok"])
                     messages.append({"role": "tool", "tool_call_id": call["id"],
                                      "content": json.dumps(output, ensure_ascii=False)[:30000]})

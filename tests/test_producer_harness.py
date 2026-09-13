@@ -132,6 +132,40 @@ def test_terminal_rejects_shell_and_sensitive_paths():
         terminal.run(["ls", "data"])
 
 
+def test_terminal_accepts_absolute_paths_inside_repository(tmp_path):
+    tests_dir = tmp_path / "tests"
+    tests_dir.mkdir()
+    test_file = tests_dir / "test_sample.py"
+    test_file.write_text("def test_ok(): pass\n", encoding="utf-8")
+    result = ProducerTerminal(tmp_path).run(["pytest", "-q", str(test_file)])
+    assert result["exit_code"] == 0
+
+
+def test_terminal_converts_missing_executable_to_diagnostic(monkeypatch):
+    terminal = ProducerTerminal()
+
+    def missing(*args, **kwargs):
+        raise FileNotFoundError("pytest")
+
+    monkeypatch.setattr("src.tools.producer_terminal.subprocess.run", missing)
+    result = terminal.run(["pytest", "--version"])
+    assert result["exit_code"] == 127
+    assert "Comando no encontrado" in result["output"]
+
+
+def test_harness_accepts_deserialized_tool_arguments(tmp_path):
+    turns = [
+        {"role": "assistant", "content": "", "tool_calls": [{
+            "id": "call-1", "type": "function",
+            "function": {"name": "terminal_run", "arguments": {"argv": ["pwd"]}},
+        }]},
+        {"role": "assistant", "content": "Comprobado."},
+    ]
+    answer = asyncio.run(ProducerHarness(agent_for(tmp_path, turns)).run("Yuki", "comprueba la terminal"))
+    assert "✓ terminal_run: exit=0" in answer
+    assert "TypeError" not in answer
+
+
 def test_pytest_declara_cache_efimera_fuera_del_runtime_solo_lectura():
     from pathlib import Path
 

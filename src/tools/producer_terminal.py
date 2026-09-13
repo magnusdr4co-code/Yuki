@@ -16,7 +16,8 @@ class ProducerTerminal:
         self.root = Path(root).resolve()
 
     def _safe_path(self, value):
-        path = (self.root / value).resolve()
+        candidate = Path(value)
+        path = (candidate if candidate.is_absolute() else self.root / candidate).resolve()
         if not path.is_relative_to(self.root):
             raise ValueError("Ruta fuera del repositorio")
         relative = str(path.relative_to(self.root)) or "."
@@ -78,12 +79,20 @@ class ProducerTerminal:
             env["TMPDIR"] = "/tmp"
         try:
             result = subprocess.run(argv, cwd=self.root, env=env, text=True, capture_output=True,
-                                    timeout=30, check=False)
+                                    timeout=90, check=False)
         except subprocess.TimeoutExpired as exc:
             output = ((exc.stdout or "") + (exc.stderr or ""))[:12000]
             return {"argv": argv, "exit_code": 124,
                     "output": SECRET_PATTERN.sub("[REDACTED]", output),
                     "truncated": True, "timed_out": True}
+        except FileNotFoundError:
+            return {"argv": argv, "exit_code": 127,
+                    "output": f"Comando no encontrado: {argv[0]}",
+                    "truncated": False, "timed_out": False}
+        except OSError as exc:
+            return {"argv": argv, "exit_code": 126,
+                    "output": f"No se pudo ejecutar el comando: {type(exc).__name__}",
+                    "truncated": False, "timed_out": False}
         output = (result.stdout + result.stderr)[:12000]
         output = SECRET_PATTERN.sub("[REDACTED]", output)
         return {"argv": argv, "exit_code": result.returncode, "output": output,
