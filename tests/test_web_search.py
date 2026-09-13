@@ -113,7 +113,9 @@ def test_from_config_lee_los_limites_declarados():
 def test_la_fachada_del_agente_sigue_siendo_asincrona():
     import asyncio
 
-    herramienta = WebSearchTool(engine=FirecrawlSearch(api_key=None))
+    # La VM sí tiene Firecrawl; esta prueba cubre explícitamente la degradación
+    # sin clave y no debe depender del entorno donde se ejecute.
+    herramienta = WebSearchTool(engine=FirecrawlSearch(api_key=""))
 
     resultados = asyncio.run(herramienta.search_news_and_trends("tendencias"))
 
@@ -136,6 +138,9 @@ def test_la_busqueda_del_portal_no_muere_por_un_import_ausente():
     from src.tools.nous_portal import NousPortalClient
 
     portal = NousPortalClient()
+    # Igual que arriba: se prueba la ruta sin buscador, no la credencial real
+    # disponible en producción.
+    portal.web_search = FirecrawlSearch(api_key="")
     resultados = _asyncio.run(portal.search_trends_firecrawl("tendencias", limit=2))
 
     assert resultados and all(r["simulated"] for r in resultados)
