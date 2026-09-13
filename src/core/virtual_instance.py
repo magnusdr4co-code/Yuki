@@ -569,7 +569,7 @@ class VirtualInstance:
             "limitadores_bloqueantes": sum(1 for lim in self.limiters if lim.severity == BLOQUEANTE),
         }
 
-    def bloque_de_capacidades(self, maximo: int = 4000, por_linea: int = 150) -> str:
+    def bloque_de_capacidades(self, maximo: int = 5000, por_linea: int = 150) -> str:
         """
         Lo que Yuki puede hacer ahora mismo, para que lo lea ella y no lo niegue.
 

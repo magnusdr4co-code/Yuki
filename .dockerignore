@@ -61,7 +61,9 @@ env/
 ENV/
 
 # Testing
-tests/
+# Los tests forman parte de la superficie de diagnóstico local del Productor:
+# `terminal_run` permite ejecutar pytest dentro de la imagen de producción.
+# Las cachés y artefactos sí se excluyen; el código de pruebas no.
 **/.pytest_cache/
 .coverage
 htmlcov/
