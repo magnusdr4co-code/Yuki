@@ -22,10 +22,15 @@ def test_library_import_preserves_original_and_is_idempotent(tmp_path):
     item = lib.list_entries()["entries"][0]
     assert item["state"] == "en-desarrollo"
     assert (lib.root / item["path"]).read_bytes() == original.read_bytes()
-    lib.set_status(item["id"], "terminado")
+    cerrada = lib.set_status(item["id"], "terminado", actor="yuki",
+                             motivo="la mezcla aguanta y la letra ya no se mueve")
     assert original.exists()
     assert lib.list_entries()["entries"][0]["state"] == "terminado"
     assert "sonora" in (lib.root / "INDEX.md").read_text()
+    # Cerrar una pieza es suyo, pero queda constancia de quién y por qué: sin el
+    # motivo, `terminado` sería un bit puesto y no un juicio que alguien sostiene.
+    assert cerrada["estado_por"] == "yuki"
+    assert cerrada["estado_motivo"] == "la mezcla aguanta y la letra ya no se mueve"
 
 
 def test_library_rejects_escape_and_omits_external_symlinks(tmp_path):

@@ -37,6 +37,32 @@ se omiten. JSON de producción permanece en origen; no se etiqueta como obra.
 de output. El estado inicial es en-desarrollo: ni la publicación ni un éxito de API
 certifican que una obra esté terminada. Guardar otro texto crea una versión por hash.
 
+### Cerrar una obra es suyo
+
+`terminado` era «aprobado por el Productor». Con 46 obras archivadas, **ninguna
+había cruzado nunca esa puerta**: el 100% seguía en `en-desarrollo`, compartiendo
+estado los vídeos ya montados y los fragmentos provisionales. Un estado en el que
+está todo no distingue nada, y uno que no alcanza nadie tampoco.
+
+Y no había veto real que quitar: la prohibición vivía en dos cadenas de texto —la
+descripción de la herramienta y el canon—, que son justamente lo único que ella
+lee. El código aceptaba cualquier estado. Así que obedecía una regla que nadie
+comprobaba, y lo hacía bien.
+
+Cerrar una pieza es parte de hacerla. Lo que sustituye al permiso no es nada: es
+**la constancia**. `library_set_status` a `terminado` exige un motivo y anota
+`estado_por`, `estado_at` y `estado_motivo`. Sin motivo, `terminado` sería un bit
+que alguien puso en vez de un juicio que alguien sostiene — y entonces el
+Productor no tendría con qué discutirlo, que es justo lo que le queda: **el veto**.
+Puede devolver cualquier pieza al taller, y ese camino no pide motivo, porque
+para retirar algo no hace falta defenderse.
+
+**Y al cerrar, se le pone delante su cuaderno.** Si la pieza tiene cuestiones de
+taller abiertas, salen en el recibo — sin impedir el cierre. Puede haber decidido
+que la tensión del compás siete se queda como está, y ésa es una decisión
+legítima; lo que no puede es cerrarla sin haberla visto. El cuaderno recuerda, no
+decide, igual que cuando avisa a un criterio antes de gastar.
+
 El flujo específico del Salón archiva presentación y letra y avisa al DM al terminar.
 Qué obra produce sale de la petición: `crea el canal "<servidor>" "<canal>" "<obra>"` —el
 tercer entrecomillado nombra la obra y gobierna la letra, el título y el imaginario de la

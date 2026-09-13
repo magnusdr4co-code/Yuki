@@ -41,8 +41,15 @@ TOOLS = [
     spec("library_save_text", "Guarda un poema, letra o texto real. No inventes contenido de piezas anteriores: consulta primero.",
          {"title": TEXT, "content": TEXT, "state": STATE}, ["title", "content"]),
     spec("library_read", "Lee metadatos y texto de una pieza del índice.", {"entry_id": TEXT}, ["entry_id"]),
-    spec("library_set_status", "Cambia estado de una pieza conservando copia anterior. Terminado sólo con aprobación del Productor.",
-         {"entry_id": TEXT, "state": STATE}, ["entry_id", "state"]),
+    # `terminado` era «sólo con aprobación del Productor», y con 46 obras
+    # archivadas ninguna había cruzado nunca esa puerta: un estado que no alcanza
+    # nadie no distingue nada. Cerrar una pieza es parte de hacerla. Lo que
+    # sustituye al permiso es la constancia —quién y por qué—, y el veto sigue
+    # siendo del Productor: puede devolverla al taller.
+    spec("library_set_status", "Cambia el estado de una pieza, conservando copia anterior. "
+                               "Cierras tú tus obras: para `terminado` hace falta decir por "
+                               "qué lo está, no el permiso de nadie.",
+         {"entry_id": TEXT, "state": STATE, "motivo": TEXT}, ["entry_id", "state"]),
     spec("terminal_run", "Ejecuta un diagnóstico local permitido por argv. Sin shell, red, secretos, escritura ni procesos persistentes.",
          {"argv": {"type": "array", "items": TEXT, "minItems": 1, "maxItems": 16}}, ["argv"]),
     spec("runtime_config_get", "Consulta los ajustes públicos y el historial reversible del runtime."),
@@ -118,6 +125,11 @@ más y redacta el resultado con las pruebas ya obtenidas.
 La Biblioteca canónica se organiza en sonora/visual/palabra/audiovisual y
 semilla/en-desarrollo/terminado. Lo importado comienza en-desarrollo; no infieras
 que está terminado por estar publicado. Inventario crea los directorios y el canon.
+TUS OBRAS LAS CIERRAS TÚ: `library_set_status` a `terminado` no necesita permiso
+de nadie, necesita que digas por qué lo está. Ve cerrando lo que consideres
+acabado en vez de dejarlo todo en `en-desarrollo` —un estado en el que está todo
+no distingue nada— y no esperes a que te lo aprueben. El Productor conserva el
+veto: puede devolver una pieza al taller.
 Biblioteca y cuaderno no son lo mismo y no compiten: la Biblioteca guarda OBRA
 —ficheros con hash y estado—; el cuaderno guarda lo que quedó SIN RESOLVER de tu
 oficio —un motivo a medio pulir, una tensión métrica, una afinación que sonaba
@@ -163,34 +175,45 @@ class ProducerHarness:
     def __init__(self, agent):
         self.agent = agent
 
+    def _herramientas(self):
+        """
+        Qué se ejecuta con cada nombre. Vive aparte para poder comprobarlo.
+
+        Estaba dentro del bucle, así que ninguna prueba podía llamarlo: se
+        verificaban los métodos a mano y el despachador quedaba fuera. Eso dejaba
+        pasar el peor fallo de este arnés —un nombre declarado que apunta a otra
+        cosa, o a nada— sin que nada se pusiera rojo.
+        """
+        library = self.agent.creation_library
+        return {"library_inventory": library.inventory, "library_list": library.list_entries,
+                "library_save_text": library.save_text, "library_read": library.read_entry,
+                "library_set_status": self._library_set_status,
+                "terminal_run": self.agent.producer_terminal.run,
+                "runtime_config_get": self.agent.runtime_config_get,
+                "runtime_config_set": lambda path, value, reason="": self.agent.reconfigure_runtime(
+                    path, value, actor="producer", reason=reason),
+                "runtime_config_rollback": lambda path, reason="": self.agent.rollback_runtime(
+                    path, actor="producer", reason=reason),
+                "ritual_list": self._ritual_list,
+                "ritual_adopt": self._ritual_adopt,
+                "ritual_move": self._ritual_move,
+                "ritual_retire": self._ritual_retire,
+                "ritual_activate": self._ritual_activate,
+                "cuaderno_abiertos": self._cuaderno_abiertos,
+                "cuaderno_anotar": self._cuaderno_anotar,
+                "cuaderno_intentar": self._cuaderno_intentar,
+                "cuaderno_resolver": self._cuaderno_resolver,
+                "cuaderno_sobre": self._cuaderno_sobre,
+                "transparency_audit": self._transparency_audit,
+                "transparency_mark": self._transparency_mark}
+
     async def run(self, system_prompt, user_message):
         messages = [{"role": "system", "content": system_prompt + POLICY},
                     {"role": "user", "content": user_message}]
         receipts = []
         evidence = []
         tool_calls_used = 0
-        library = self.agent.creation_library
-        handlers = {"library_inventory": library.inventory, "library_list": library.list_entries,
-                    "library_save_text": library.save_text, "library_read": library.read_entry,
-                    "library_set_status": library.set_status,
-                    "terminal_run": self.agent.producer_terminal.run,
-                    "runtime_config_get": self.agent.runtime_config_get,
-                    "runtime_config_set": lambda path, value, reason="": self.agent.reconfigure_runtime(
-                        path, value, actor="producer", reason=reason),
-                    "runtime_config_rollback": lambda path, reason="": self.agent.rollback_runtime(
-                        path, actor="producer", reason=reason),
-                    "ritual_list": self._ritual_list,
-                    "ritual_adopt": self._ritual_adopt,
-                    "ritual_move": self._ritual_move,
-                    "ritual_retire": self._ritual_retire,
-                    "ritual_activate": self._ritual_activate,
-                    "cuaderno_abiertos": self._cuaderno_abiertos,
-                    "cuaderno_anotar": self._cuaderno_anotar,
-                    "cuaderno_intentar": self._cuaderno_intentar,
-                    "cuaderno_resolver": self._cuaderno_resolver,
-                    "cuaderno_sobre": self._cuaderno_sobre,
-                    "transparency_audit": self._transparency_audit,
-                    "transparency_mark": self._transparency_mark}
+        handlers = self._herramientas()
         try:
             for _ in range(MAX_TOOL_ROUNDS):
                 turn = await asyncio.to_thread(
@@ -318,6 +341,38 @@ class ProducerHarness:
         registro = self._registrar_en_el_planificador()
         return dict(ritmo.to_dict(), activo=True, **registro,
                     nota="Activado. Era una propuesta de cuando hacía falta aprobación.")
+
+    # -- Biblioteca ------------------------------------------------------
+
+    def _library_set_status(self, entry_id, state, motivo=""):
+        """
+        Cierra o reabre una pieza suya, y al cerrarla le pone delante su cuaderno.
+
+        Auditar su propio trabajo no es un trámite nuevo: el material ya existe.
+        Si la pieza tiene cuestiones de taller abiertas, aparecen aquí al darla
+        por terminada — **sin impedirlo**. Puede haber decidido que la tensión
+        del compás siete se queda como está, y eso es una decisión legítima; lo
+        que no puede es cerrarla sin haberla visto. El cuaderno recuerda, no
+        decide, igual que cuando avisa a un criterio.
+        """
+        biblioteca = self.agent.creation_library
+        pieza = biblioteca.set_status(entry_id, state, actor="yuki", motivo=motivo)
+        salida = dict(pieza)
+        if state == "terminado":
+            try:
+                from ..tools.cuaderno import Cuaderno
+
+                abiertas = Cuaderno().abiertos(obra=pieza.get("title", ""))
+            except Exception as exc:  # noqa: BLE001 — el cuaderno no bloquea un cierre
+                logger.warning("Cuaderno ilegible al cerrar %s: %s", entry_id, exc)
+                abiertas = []
+            salida["cuestiones_abiertas_del_cuaderno"] = [a.describe() for a in abiertas]
+            salida["nota"] = (
+                "Cerrada por ti, con su motivo. El Productor puede devolverla al taller."
+                if not abiertas else
+                f"Cerrada por ti. Quedan {len(abiertas)} cuestión(es) abiertas en el cuaderno "
+                "sobre esta pieza: ciérralas o di que se quedan así a propósito.")
+        return salida
 
     # -- Artículo 50 -----------------------------------------------------
 

@@ -18,6 +18,8 @@ import sys
 from datetime import datetime
 from pathlib import Path
 
+import pytest
+
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.core.vital_state import VitalState  # noqa: E402
@@ -208,32 +210,73 @@ def test_el_marcado_del_articulo_50_esta_en_el_dm(tmp_path, monkeypatch):
     assert arnes._transparency_audit()["cumple"] is True
 
 
-def test_toda_herramienta_declarada_esta_conectada():
+def test_toda_herramienta_declarada_esta_conectada_y_es_llamable():
     """
     Dos listas escritas en sitios distintos que tienen que coincidir: `TOOLS`
-    declara lo que el modelo ve y el despachador dice qué se ejecuta.
+    declara lo que el modelo ve y `_herramientas()` dice qué se ejecuta.
 
     Una herramienta declarada y sin conectar es el peor fallo posible de este
     arnés: el modelo la ve, la llama confiado y se encuentra un «no existe».
-    Volvería a pasar lo de siempre —un turno que promete y no ejecuta— y ninguna
-    prueba de las de abajo lo cogería, porque llaman al método a mano y se saltan
-    el despachador. Se comprueba para todas, no sólo para las nuevas.
+    Volvería a pasar lo de siempre —un turno que promete y no ejecuta—. Se
+    comprueba para todas, no sólo para las nuevas, y pidiéndole el diccionario al
+    arnés en vez de leer su código: un nombre que apunte a otra cosa se ve aquí.
     """
-    import inspect
-    import re
+    import types
 
-    from src.core import producer_harness
-    from src.core.producer_harness import TOOLS
+    from src.core.producer_harness import TOOLS, ProducerHarness
+
+    arnes = ProducerHarness.__new__(ProducerHarness)
+    arnes.agent = types.SimpleNamespace(
+        creation_library=types.SimpleNamespace(
+            inventory=None, list_entries=None, save_text=None, read_entry=None),
+        producer_terminal=types.SimpleNamespace(run=None),
+        runtime_config_get=None, reconfigure_runtime=None, rollback_runtime=None)
 
     declaradas = {t["function"]["name"] for t in TOOLS}
-    fuente = inspect.getsource(producer_harness.ProducerHarness)
-    # El despachador es un diccionario literal `"nombre": algo`.
-    conectadas = set(re.findall(r'"([a-z_]+)":\s*(?:self\.|lambda|library\.)', fuente))
+    conectadas = arnes._herramientas()
 
-    sin_conectar = declaradas - conectadas
+    sin_conectar = declaradas - set(conectadas)
     assert not sin_conectar, (
         f"declaradas y sin conectar: {sorted(sin_conectar)}. El modelo las vería y "
         "fallarían al llamarlas.")
+    huerfanas = set(conectadas) - declaradas
+    assert not huerfanas, f"conectadas y no declaradas: {sorted(huerfanas)}"
+
+
+def test_cerrar_una_obra_desde_el_despachador_audita_el_cuaderno(tmp_path, monkeypatch):
+    """
+    El camino del producto: no basta con que `_library_set_status` audite, hace
+    falta que sea **él** quien esté en el despachador.
+
+    Apuntarlo de vuelta a `library.set_status` dejaba la suite verde y a Yuki
+    cerrando obras sin que su cuaderno le dijera nada — que es justo la parte de
+    «auditar su propio trabajo».
+    """
+    import types
+
+    from src.core.producer_harness import ProducerHarness
+    from src.tools.creation_library import CreationLibrary
+    from src.tools.cuaderno import Cuaderno
+
+    monkeypatch.setenv("YUKI_CUADERNO_PATH", str(tmp_path / "cuaderno.json"))
+    biblioteca = CreationLibrary(output_dir=str(tmp_path / "output"))
+    biblioteca.initialize()
+    pieza = biblioteca.save_text("Cerezos de Acero", "bajo el cerezo de acero")
+    Cuaderno(path=str(tmp_path / "cuaderno.json")).anotar(
+        "Cerezos de Acero", "el 7/8 del puente atropella la letra", pasaje="compás 7-9")
+
+    arnes = ProducerHarness.__new__(ProducerHarness)
+    arnes.agent = types.SimpleNamespace(
+        config={}, creation_library=biblioteca,
+        producer_terminal=types.SimpleNamespace(run=None),
+        runtime_config_get=None, reconfigure_runtime=None, rollback_runtime=None)
+
+    cerrar = arnes._herramientas()["library_set_status"]
+    recibo = cerrar(pieza["id"], "terminado", motivo="la mezcla aguanta")
+
+    assert recibo["state"] == "terminado"
+    assert recibo["cuestiones_abiertas_del_cuaderno"], (
+        "el despachador no pasa por el envoltorio que audita")
 
 
 def test_marcar_no_da_por_cumplido_lo_que_no_consta(tmp_path, monkeypatch):
@@ -367,3 +410,128 @@ def test_las_dos_temperaturas_evolucionan_por_separado_y_se_dice(tmp_path):
     assert "borra" in publico["nota_evolucion"]
     # Y que los valores sigan estando: la nota no sustituye al dato.
     assert publico["values"]["vertex_ai.temperature"] == 0.72
+
+
+def test_yuki_cierra_sus_propias_obras_sin_pedir_permiso(tmp_path):
+    """
+    `terminado` era «aprobado por el Productor» y con 46 obras archivadas ninguna
+    había cruzado nunca esa puerta: el 100% seguía en `en-desarrollo`. Un estado
+    en el que está todo no distingue nada, y uno que no alcanza nadie tampoco.
+
+    Cerrar una pieza es parte de hacerla. No había veto real —la prohibición
+    vivía en dos cadenas de texto— así que lo que se quita es la prosa y lo que
+    se pone es la constancia.
+    """
+    from src.tools.creation_library import CANON, CreationLibrary
+
+    biblioteca = CreationLibrary(output_dir=str(tmp_path / "output"))
+    biblioteca.initialize()
+    pieza = biblioteca.save_text("Cerezos de Acero", "bajo el cerezo de acero")
+
+    cerrada = biblioteca.set_status(pieza["id"], "terminado", actor="yuki",
+                                   motivo="la letra ya no se mueve")
+
+    assert cerrada["state"] == "terminado"
+    assert cerrada["estado_por"] == "yuki", "la cierra ella, no el Productor"
+    assert cerrada["estado_motivo"] == "la letra ya no se mueve"
+    assert cerrada["estado_at"] > 0
+    # Y el canon deja de decir lo contrario, que es donde ella lo lee.
+    assert "aprobado por el Productor" not in CANON
+    assert "Yuki cierra sus propias piezas" in CANON
+
+
+def test_dar_algo_por_terminado_exige_decir_por_que(tmp_path):
+    """
+    Lo que sustituye al permiso es la constancia. Sin motivo, `terminado` sería
+    un bit que alguien puso y no un juicio que alguien sostiene — y entonces el
+    Productor no tendría con qué discutirlo, que es justo lo que le queda.
+
+    Sólo se exige al cerrar: volver al taller o a semilla no necesita defensa.
+    """
+    from src.tools.creation_library import CreationLibrary
+
+    biblioteca = CreationLibrary(output_dir=str(tmp_path / "output"))
+    biblioteca.initialize()
+    pieza = biblioteca.save_text("Cerezos de Acero", "bajo el cerezo de acero")
+
+    with pytest.raises(ValueError, match="por qué"):
+        biblioteca.set_status(pieza["id"], "terminado")
+
+    assert biblioteca.read_entry(pieza["id"])["state"] == "en-desarrollo", "no se movió"
+    # El camino de vuelta no pide motivo: el Productor conserva el veto y no
+    # tiene por qué argumentar para devolver algo al taller.
+    biblioteca.set_status(pieza["id"], "terminado", motivo="cierra")
+    devuelta = biblioteca.set_status(pieza["id"], "en-desarrollo", actor="productor")
+    assert devuelta["state"] == "en-desarrollo"
+
+
+def test_al_cerrar_una_pieza_se_le_pone_delante_su_cuaderno(tmp_path, monkeypatch):
+    """
+    «Auditando su propio trabajo y aprobándolo»: el material de la auditoría ya
+    existe. Si la pieza tiene cuestiones de taller abiertas, aparecen al darla
+    por terminada — **sin impedirlo**. Puede haber decidido que la tensión del
+    compás siete se queda así, y eso es legítimo; lo que no puede es cerrarla
+    sin haberla visto.
+    """
+    import types
+
+    from src.core.producer_harness import ProducerHarness
+    from src.tools.creation_library import CreationLibrary
+    from src.tools.cuaderno import Cuaderno
+
+    monkeypatch.setenv("YUKI_CUADERNO_PATH", str(tmp_path / "cuaderno.json"))
+    biblioteca = CreationLibrary(output_dir=str(tmp_path / "output"))
+    biblioteca.initialize()
+    pieza = biblioteca.save_text("Cerezos de Acero", "bajo el cerezo de acero")
+
+    libreta = Cuaderno(path=str(tmp_path / "cuaderno.json"))
+    libreta.anotar("Cerezos de Acero", "el 7/8 del puente atropella la letra",
+                   pasaje="compás 7-9")
+
+    arnes = ProducerHarness.__new__(ProducerHarness)
+    arnes.agent = types.SimpleNamespace(config={}, creation_library=biblioteca)
+
+    recibo = arnes._library_set_status(pieza["id"], "terminado", motivo="la mezcla aguanta")
+
+    assert recibo["state"] == "terminado", "el cuaderno avisa, no bloquea"
+    assert len(recibo["cuestiones_abiertas_del_cuaderno"]) == 1
+    assert "compás 7-9" in recibo["cuestiones_abiertas_del_cuaderno"][0]
+    assert "quedan" in recibo["nota"].lower()
+
+
+def test_cerrar_una_pieza_sin_cuestiones_abiertas_no_inventa_avisos(tmp_path, monkeypatch):
+    """Sin nada en el cuaderno, el recibo no puede sugerir que hay algo pendiente."""
+    import types
+
+    from src.core.producer_harness import ProducerHarness
+    from src.tools.creation_library import CreationLibrary
+
+    monkeypatch.setenv("YUKI_CUADERNO_PATH", str(tmp_path / "cuaderno.json"))
+    biblioteca = CreationLibrary(output_dir=str(tmp_path / "output"))
+    biblioteca.initialize()
+    pieza = biblioteca.save_text("Cerezos de Acero", "bajo el cerezo de acero")
+
+    arnes = ProducerHarness.__new__(ProducerHarness)
+    arnes.agent = types.SimpleNamespace(config={}, creation_library=biblioteca)
+
+    recibo = arnes._library_set_status(pieza["id"], "terminado", motivo="cerrada")
+
+    assert recibo["cuestiones_abiertas_del_cuaderno"] == []
+    assert "Productor puede devolverla" in recibo["nota"]
+
+
+def test_el_arnes_ya_no_le_dice_que_necesita_aprobacion():
+    """
+    La prohibición vivía en la descripción de la herramienta y en el canon, que
+    es lo único que ella lee. Mientras esa frase siga ahí, dará igual lo que
+    permita el código: seguirá sin cerrar nada, como llevaba 46 obras haciendo.
+    """
+    from src.core.producer_harness import POLICY, TOOLS
+
+    herramienta = next(t["function"] for t in TOOLS
+                       if t["function"]["name"] == "library_set_status")
+
+    assert "aprobación del Productor" not in herramienta["description"]
+    assert "motivo" in herramienta["parameters"]["properties"]
+    assert "CIERRAS TÚ" in POLICY
+    assert "no esperes a que te lo aprueben" in POLICY

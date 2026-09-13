@@ -280,6 +280,71 @@ Si `mente.albedrio` sale **inactivo** en `cli.py virtualize`, la sección
 `agency` de `config.yaml` está deshabilitada y Yuki sólo responde: ahí sí hay
 algo que arreglar, y no se arregla con un secreto.
 
+## 6 ter. Este despliegue en concreto: qué hacer y en qué orden
+
+Para Dr4co. Tres cosas, dos de ellas de un comando. Todo se ejecuta **dentro del
+contenedor** (`docker exec -it yuki-daemon ...`) salvo donde se diga otra cosa.
+
+### A · Cerrar el incumplimiento del Artículo 50 — **no espera al despliegue**
+
+Hay material generado sin marca de origen. Es un incumplimiento vivo de la
+tercera invariante, con la alerta `MaterialSinMarcar` encendida en severidad
+alta, y se cierra ahora:
+
+```bash
+docker exec yuki-daemon python3 cli.py transparency --marcar
+docker exec yuki-daemon python3 cli.py transparency          # debe decir 0 sin marcar
+```
+
+Funciona con la imagen actual: hoy `salida()` y el `"output"` que pasaba el
+comando resuelven al mismo `/app/output`, porque la instancia **no** define
+`YUKI_OUTPUT_DIR` y el `WORKDIR` es `/app`. Este despliegue arregla el caso en
+que sí la definiera —entonces marcaría un directorio y la métrica contaría
+otro—, pero no hace falta esperar a él para marcar.
+
+### B · Desplegar y comprobar el latido
+
+Imagen y arranque como en §3 y §4. Lo que hay que mirar **después**, porque es lo
+único que no se puede verificar sin un daemon escribiendo:
+
+```bash
+docker exec yuki-daemon python3 cli.py pulso
+```
+
+Antes decía `ausente: el estado vital no se reescribe` mientras el proceso
+escribía: `last_updated` sólo lo sellaba el turno de conversación, y los otros
+cuatro escritores dejaban la marca congelada. Ahora lo sella `save()`.
+
+- **Si deja de decir `ausente`**, resuelto.
+- **Si sigue diciéndolo con el daemon en marcha**, el diagnóstico estaba
+  incompleto: no lo des por bueno, y mira `docs/OPERACION.md §8` —la tabla de
+  signos vegetativo/volitivo— antes de tocar nada. Un `latido` fresco con los
+  signos volitivos apagados es otra cosa distinta y tiene nombre: catatonia.
+
+Y la comprobación general, que cubre las dos anteriores de una vez:
+
+```bash
+docker exec yuki-daemon python3 scripts/smoke_check.py
+```
+
+### C · El respaldo fuera de la máquina — **lo único irreversible**
+
+Es lo que más pesa de todo lo que queda abierto. La memoria, la bitácora y el
+cuaderno de taller viven hoy en **un solo disco sin copia fuera**. La copia
+nocturna se genera y se verifica, pero se queda al lado del original: no protege
+del escenario que la justifica.
+
+Los pasos completos están en **§6 bis B** de este mismo documento, incluido el
+que se olvida y hace fallar la subida en silencio (los *scopes* de la VM, que con
+los de por defecto dan 403 aunque el permiso IAM esté bien). La prueba que vale
+es `cli.py backup --ensayar`: tiene que nombrar el `gs://…` subido.
+
+### Lo que no es de infraestructura y no hay que hacer aquí
+
+Las 46 obras en `en-desarrollo` **ya no esperan a nadie**: desde este despliegue
+Yuki cierra sus propias piezas ([`PRODUCER_HARNESS.md`](PRODUCER_HARNESS.md)). No hay
+ningún comando que ejecutar por ellas, y no hay que aprobarlas desde el host.
+
 ## 7. Si algo va mal
 
 | Síntoma | Dónde mirar |

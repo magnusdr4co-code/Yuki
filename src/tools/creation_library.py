@@ -26,7 +26,14 @@ Organización canónica aprobada por el Productor: tipo de creación / estado.
 - visual: imágenes e ilustraciones.
 - palabra: poemas, letras y textos.
 - audiovisual: vídeos.
-- semilla: ideas en gestación; en-desarrollo: taller; terminado: aprobado por el Productor.
+- semilla: ideas en gestación; en-desarrollo: taller; terminado: cerrado por quien lo hizo.
+
+Yuki cierra sus propias piezas. Antes `terminado` requería el visto bueno del
+Productor, y con 46 obras archivadas ninguna había llegado a cruzar esa puerta:
+un estado en el que está todo no distingue nada. Cerrar una pieza es parte de
+hacerla. Lo que se conserva no es el permiso sino **la constancia**: quién la dio
+por terminada, cuándo y con qué motivo, porque un estado sin motivo es un bit y
+no un juicio. El Productor conserva el veto — puede devolverla al taller.
 
 Los archivos importados empiezan en en-desarrollo: publicado no significa terminado.
 Los originales se conservan. El índice registra procedencia y SHA-256.
@@ -205,9 +212,28 @@ class CreationLibrary:
                     str(self._path(item["receta"])).removesuffix(_receta.SUFIJO))
             return result
 
-    def set_status(self, entry_id, state):
+    def set_status(self, entry_id, state, actor="yuki", motivo=""):
+        """
+        Mueve una pieza de estado, dejando constancia de quién y por qué.
+
+        `terminado` era «aprobado por el Productor» y ninguna de las 46 obras
+        archivadas lo había cruzado nunca: un estado en el que está todo no
+        distingue nada, y el que no alcanza nadie tampoco. Cerrar una pieza es
+        parte de hacerla, así que la cierra quien la hace.
+
+        Lo que sustituye al permiso es la **constancia**, y por eso el motivo es
+        obligatorio para dar algo por terminado: sin él, `terminado` sería un bit
+        que alguien puso, no un juicio que alguien sostiene. Es la misma regla
+        que pide un motivo para adoptar un ritmo o para cerrar un apunte del
+        cuaderno — y la que hace que el Productor pueda discutirlo, porque tiene
+        delante con qué.
+        """
         if state not in STATES:
             raise ValueError("Estado no admitido")
+        if state == "terminado" and not (motivo or "").strip():
+            raise ValueError(
+                "Dar una pieza por terminada exige decir por qué lo está. Sin motivo, "
+                "'terminado' no es un juicio sino un bit, y nadie puede discutirlo.")
         with self._lock:
             entries = self._load()
             item = entries[entry_id]
@@ -219,6 +245,8 @@ class CreationLibrary:
                     raise ValueError("Conflicto: el destino ya contiene otra versión")
                 if not new.exists():
                     shutil.copyfile(old, new)
-            item.update(state=state, path=new_relative)
+            item.update(state=state, path=new_relative,
+                        estado_por=actor, estado_at=time.time(),
+                        estado_motivo=(motivo or "").strip()[:400] or None)
             self._commit(entries)
             return item
