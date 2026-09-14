@@ -56,7 +56,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from .rutas import salida
+from .rutas import salida, datos as directorio_de_datos
 from . import estado_json
 
 logger = logging.getLogger("Yuki.Transparencia")
@@ -118,6 +118,26 @@ class TransparencyPolicy:
         )
 
 
+def ruta_del_registro(path: Optional[str] = None) -> Path:
+    """
+    Dónde vive el registro de declaraciones. Un solo sitio que lo decida.
+
+    Lo resolvían tres a la vez: este libro —que sí respeta
+    `YUKI_TRANSPARENCY_PATH`—, el borrado del gobierno y el inventario de
+    estado, estos dos a mano y siempre sobre el directorio de la memoria. Con la
+    variable puesta apuntaban a ficheros distintos, y eso no daba ningún error:
+    la supresión de una persona editaba un fichero que no era éste, el recibo
+    decía «0 declaraciones borradas» —indistinguible de «no había ninguna»— y la
+    constancia de habérsele declarado su naturaleza seguía en disco.
+    """
+    if path:
+        return Path(path)
+    del_entorno = os.getenv("YUKI_TRANSPARENCY_PATH", "").strip()
+    if del_entorno:
+        return Path(del_entorno)
+    return directorio_de_datos("transparency.json")
+
+
 class DisclosureLedger:
     """
     A quién se le ha dicho y cuándo.
@@ -128,14 +148,7 @@ class DisclosureLedger:
     """
 
     def __init__(self, path: Optional[str] = None, reminder_days: int = 30):
-        if path:
-            destino = Path(path)
-        elif os.getenv("YUKI_TRANSPARENCY_PATH", "").strip():
-            destino = Path(os.environ["YUKI_TRANSPARENCY_PATH"].strip())
-        else:
-            db_path = os.getenv("DATABASE_PATH", "data/yuki_memory.db")
-            destino = Path(db_path).parent / "transparency.json"
-        self.path = destino
+        self.path = ruta_del_registro(path)
         self.path.parent.mkdir(parents=True, exist_ok=True)
         self.reminder_days = reminder_days
 
@@ -179,6 +192,34 @@ class DisclosureLedger:
 
     def disclosures(self) -> Dict[str, Any]:
         return self._leer()["declaraciones"]
+
+    def disclosures_of(self, user_id: str) -> Dict[str, Any]:
+        """Lo que consta de habérsele declarado a una persona, para el «¿qué sabes de mí?»."""
+        sufijo = f":{user_id}"
+        return {clave: valor for clave, valor in self._leer()["declaraciones"].items()
+                if clave.endswith(sufijo)}
+
+    def forget_subject(self, user_id: str) -> int:
+        """
+        Borra lo que consta de habérsele declarado a una persona. Devuelve cuántas.
+
+        Lo hace el dueño del fichero, y no quien ejerce el olvido. El gobierno lo
+        editaba por su cuenta: otra ruta, `write_text` no atómico sobre el
+        fichero bueno, y un `except: pass` **después** de haber contado. Bastaba
+        que la escritura fallara para que el recibo afirmara tres declaraciones
+        borradas sobre un fichero intacto. Aquí la escritura es atómica y, si
+        falla, la excepción sube: el recibo tiene que poder decirlo.
+        """
+        datos_del_libro = self._leer()
+        declaraciones = datos_del_libro["declaraciones"]
+        sufijo = f":{user_id}"
+        quedan = {clave: valor for clave, valor in declaraciones.items()
+                  if not clave.endswith(sufijo)}
+        borradas = len(declaraciones) - len(quedan)
+        if borradas:
+            datos_del_libro["declaraciones"] = quedan
+            self._escribir(datos_del_libro)
+        return borradas
 
 
 class MediaMarker:

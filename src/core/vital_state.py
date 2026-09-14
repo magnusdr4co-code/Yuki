@@ -3,13 +3,13 @@ Módulo de Estado Vital (Corrientes Vitales) para Yuki.
 Modela 6 corrientes internas como flotantes continuos entre 0.0 y 1.0.
 """
 
-import os
-import json
 import math
 import logging
 from datetime import datetime
+from pathlib import Path
 from typing import Dict, Any, Optional
 
+from . import estado_json
 from .rutas import datos
 
 logger = logging.getLogger("Yuki.VitalState")
@@ -121,22 +121,34 @@ class VitalState:
         self.save()
 
     def save(self):
-        """Persistencia JSON."""
-        os.makedirs(os.path.dirname(self.state_path), exist_ok=True)
-        with open(self.state_path, 'w', encoding='utf-8') as f:
-            json.dump(self.to_dict(), f, indent=2, ensure_ascii=False)
+        """
+        Persistencia atómica, como el resto del estado durable.
+
+        Era el último módulo que escribía su JSON a mano. Un `json.dump` sobre el
+        fichero bueno deja medio fichero si el proceso muere a la mitad —y muere
+        a la mitad justo al desplegar—; al arrancar de nuevo, el estado ilegible
+        se descartaba en silencio y el primer `save()` sellaba los valores por
+        defecto encima. Se perdían los impulsos pendientes (`will_queue`) y
+        `last_sleep_cycle`, que es la única traza de que la noche corrió: la
+        sonda pasaba a leer «nunca» una consolidación que sí había ocurrido.
+        """
+        estado_json.escribir(Path(self.state_path), self.to_dict())
 
     def load(self):
-        """Carga persistencia JSON."""
-        if os.path.exists(self.state_path):
-            try:
-                with open(self.state_path, 'r', encoding='utf-8') as f:
-                    data = json.load(f)
-                    for k, v in data.items():
-                        if hasattr(self, k):
-                            setattr(self, k, v)
-            except Exception as e:
-                logger.error(f"Error loading state from {self.state_path}: {e}")
+        """
+        El estado guardado, o los valores por defecto si no hay o no se entiende.
+
+        `valido` exige que esto tenga forma de estado vital. Sin esa comprobación
+        un JSON de otro módulo pasaba por bueno y se aplicaba a medias, que es la
+        peor forma de fallar: revienta después y lejos de aquí.
+        """
+        guardado = estado_json.leer(
+            Path(self.state_path), dict,
+            valido=lambda d: isinstance(d.get("energy"), (int, float)),
+            que_es="Estado vital")
+        for clave, valor in guardado.items():
+            if hasattr(self, clave):
+                setattr(self, clave, valor)
 
     def to_natural_language(self) -> str:
         """Convierte el estado a una descripción poética para inyección en el prompt."""

@@ -70,6 +70,45 @@ def test_todos_los_que_miran_la_memoria_miran_la_misma(monkeypatch, tmp_path):
     assert str(escribe) == str(copia) == str(vigila) == str(elegida)
 
 
+def test_todos_los_que_tocan_la_transparencia_miran_la_misma(monkeypatch, tmp_path):
+    """
+    El que declara, el que exporta, el que borra y el inventario, de acuerdo.
+
+    `YUKI_TRANSPARENCY_PATH` existía y estaba aislada, así que
+    `test_todo_estado_durable_se_puede_reubicar` pasaba tan contento: comprueba
+    que la variable exista, no que alguien la respete. Y sólo la respetaba el
+    libro. El gobierno resolvía la ruta a mano sobre el directorio de la memoria,
+    de modo que con la variable puesta exportaba y borraba de otro fichero: al
+    ejercer una supresión, el recibo decía «0 declaraciones borradas»
+    —indistinguible de «no había ninguna»— con la constancia intacta en disco.
+    """
+    from src.core.state_registry import StateRegistry, build_registry
+    from src.core.transparency import DisclosureLedger
+
+    elegida = tmp_path / "gobierno" / "transparency.json"
+    monkeypatch.setenv("YUKI_TRANSPARENCY_PATH", str(elegida))
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "data" / "memoria.db"))
+
+    libro = DisclosureLedger()
+    libro.record_disclosure("seguidor_1", "direct_message")
+    libro.record_disclosure("seguidor_2", "direct_message")
+    assert elegida.is_file(), "el libro no escribió donde dijo la variable"
+
+    inventario = next(i for i in build_registry() if i.id == "transparencia")
+    assert Path(inventario.path) == elegida, "el inventario declara otro fichero"
+
+    registro = StateRegistry(db_path=str(tmp_path / "data" / "memoria.db"),
+                             audit_path=str(tmp_path / "auditoria.log"))
+
+    exportado = registro.subject_export("seguidor_1")["declaraciones_de_naturaleza"]
+    assert list(exportado) == ["direct_message:seguidor_1"], "el acceso mira otro fichero"
+
+    recibo = registro.subject_forget("seguidor_1")
+
+    assert recibo["declaraciones_borradas"] == 1
+    assert list(libro.disclosures()) == ["direct_message:seguidor_2"]
+
+
 def test_la_suite_no_deja_recuerdos_en_la_base_de_la_instancia(monkeypatch, tmp_path):
     """
     Construir el agente entero no puede tocar `data/yuki_memory.db`.

@@ -7,7 +7,6 @@ Lo que se prueba aquí es la mitad muda: que se pueda inventariar, exportar y
 —sobre todo— **borrar de verdad**, con recibo y sin fantasmas en el índice.
 """
 
-import json
 import os
 import sqlite3
 import sys
@@ -150,20 +149,61 @@ def test_el_olvido_deja_constancia_sin_conservar_lo_olvidado(memoria, tmp_path):
 
 
 def test_tambien_se_borra_el_registro_de_haberle_declarado(memoria, tmp_path, monkeypatch):
-    ruta = tmp_path / "transparency.json"
-    ruta.write_text(json.dumps({"declaraciones": {
-        "direct_message:seguidor_1": {"at": 1, "iso": "x"},
-        "direct_message:seguidor_2": {"at": 1, "iso": "x"},
-    }}), encoding="utf-8")
+    """
+    Se declara con el libro y se borra con el gobierno: los dos, el mismo sitio.
+
+    Antes esto fabricaba el `transparency.json` a mano en una ruta que coincidía
+    por casualidad, y no llegaba a usar `DisclosureLedger` en ningún momento. Es
+    el punto 8 de `CLAUDE.md`: la prueba no recorría el camino del producto, y
+    por eso pasaba con el fallo dentro.
+    """
+    from src.core.transparency import DisclosureLedger
+
+    libro = DisclosureLedger()
+    libro.record_disclosure("seguidor_1", "direct_message")
+    libro.record_disclosure("seguidor_2", "direct_message")
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "yuki.db"))
     registro = StateRegistry(db_path=str(tmp_path / "yuki.db"),
                              audit_path=str(tmp_path / "auditoria.log"))
 
     recibo = registro.subject_forget("seguidor_1")
 
-    quedan = json.loads(ruta.read_text(encoding="utf-8"))["declaraciones"]
     assert recibo["declaraciones_borradas"] == 1
-    assert list(quedan) == ["direct_message:seguidor_2"]
+    assert list(libro.disclosures()) == ["direct_message:seguidor_2"]
+    assert "incompleto" not in recibo
+
+
+def test_un_olvido_a_medias_no_se_entrega_como_completo(memoria, tmp_path, monkeypatch):
+    """
+    Si las declaraciones no se pudieron borrar, el recibo lo dice y con el error.
+
+    El recuento se hacía **antes** de escribir y el `except: pass` venía después:
+    bastaba que fallara la escritura para que el recibo afirmara haber borrado lo
+    que seguía en disco. Un recibo que exagera es exactamente la forma de
+    deshonestidad que abre `CLAUDE.md` —aparentar lo que no se hizo—, y aquí cae
+    sobre una solicitud de supresión.
+    """
+    from src.core import transparency
+    from src.core.transparency import DisclosureLedger
+
+    libro = DisclosureLedger()
+    libro.record_disclosure("seguidor_1", "direct_message")
+
+    def disco_lleno(path, datos):
+        raise OSError(28, "No space left on device")
+
+    monkeypatch.setattr(transparency.estado_json, "escribir", disco_lleno)
+    monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "yuki.db"))
+    registro = StateRegistry(db_path=str(tmp_path / "yuki.db"),
+                             audit_path=str(tmp_path / "auditoria.log"))
+
+    recibo = registro.subject_forget("seguidor_1")
+
+    assert recibo["declaraciones_borradas"] == 0, "no borró nada: no puede contar ninguna"
+    assert "incompleto" in recibo, "un olvido a medias se entregó como completo"
+    assert "No space left on device" in recibo["incompleto"], "el recibo no dice qué falló"
+    # Y los recuerdos sí se borraron: el recibo no puede negarlo por lo otro.
+    assert recibo["recuerdos_borrados"] == 2
 
 
 def test_lo_que_la_copia_considera_irremplazable_esta_declarado(monkeypatch, tmp_path):

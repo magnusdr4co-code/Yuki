@@ -44,6 +44,7 @@ from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 from .blackbox import BlackBox
+from .transparency import DisclosureLedger, ruta_del_registro
 
 logger = logging.getLogger("Yuki.Estado")
 
@@ -223,7 +224,7 @@ def build_registry() -> List[StateItem]:
             holds_personal_data=False,
         ),
         StateItem(
-            id="transparencia", path=str(datos / "transparency.json"),
+            id="transparencia", path=str(ruta_del_registro()),
             description="A quién se le ha declarado su naturaleza y cuándo",
             authority=SISTEMA, scope="personas con las que ha hablado",
             mutability="append-only", provenance="cada primera interacción",
@@ -295,15 +296,16 @@ class StateRegistry:
             except sqlite3.Error as exc:
                 logger.warning("No se pudo leer la memoria para exportar: %s", exc)
 
+        # Se le pide al dueño del registro. Resolver aquí la ruta a mano hacía
+        # que, con `YUKI_TRANSPARENCY_PATH` puesta, esta respuesta mirase un
+        # fichero que no era el que se escribe: el derecho de acceso contestaba
+        # «ninguna» sobre declaraciones que sí constaban.
         declaraciones = {}
-        ruta_transparencia = _data_dir() / "transparency.json"
-        if ruta_transparencia.is_file():
-            try:
-                todas = json.loads(ruta_transparencia.read_text(encoding="utf-8"))["declaraciones"]
-                declaraciones = {clave: valor for clave, valor in todas.items()
-                                 if clave.endswith(f":{user_id}")}
-            except (json.JSONDecodeError, OSError, KeyError, TypeError):
-                pass
+        try:
+            declaraciones = DisclosureLedger().disclosures_of(user_id)
+        except (OSError, ValueError) as exc:
+            logger.warning("No se pudieron leer las declaraciones de %s: %s",
+                           user_id, type(exc).__name__)
 
         emparejado = False
         ruta_pairing = _data_dir() / "discord_pairing.json"
@@ -354,19 +356,19 @@ class StateRegistry:
                 logger.error("Fallo borrando la memoria de %s: %s", user_id, exc)
                 raise
 
+        # Lo borra el dueño del registro. Antes se editaba aquí a mano, con ruta
+        # propia y escritura no atómica, y el `except: pass` llegaba **después**
+        # de haber contado: un fallo de escritura dejaba un recibo que afirmaba
+        # haber borrado lo que seguía en disco. Un recibo que exagera es
+        # exactamente lo que este proyecto llama aparentar capacidades.
         declaraciones_borradas = 0
-        ruta_transparencia = _data_dir() / "transparency.json"
-        if ruta_transparencia.is_file():
-            try:
-                datos = json.loads(ruta_transparencia.read_text(encoding="utf-8"))
-                antes = len(datos.get("declaraciones", {}))
-                datos["declaraciones"] = {c: v for c, v in datos["declaraciones"].items()
-                                          if not c.endswith(f":{user_id}")}
-                declaraciones_borradas = antes - len(datos["declaraciones"])
-                ruta_transparencia.write_text(json.dumps(datos, ensure_ascii=False, indent=2),
-                                              encoding="utf-8")
-            except (json.JSONDecodeError, OSError, KeyError, TypeError):
-                pass
+        fallo_declaraciones = ""
+        try:
+            declaraciones_borradas = DisclosureLedger().forget_subject(user_id)
+        except (OSError, ValueError) as exc:
+            fallo_declaraciones = f"{type(exc).__name__}: {exc}"
+            logger.error("No se pudieron borrar las declaraciones de %s: %s",
+                         user_id, fallo_declaraciones)
 
         recibo = {
             "sujeto": user_id,
@@ -376,6 +378,12 @@ class StateRegistry:
             "motivo": (reason or "")[:200],
             "cuando": datetime.now(timezone.utc).isoformat(timespec="seconds"),
         }
+        # Un olvido a medias no se puede entregar como completo: quien atiende
+        # una solicitud de supresión tiene que leer en el propio recibo que
+        # queda algo por borrar, y qué falló.
+        if fallo_declaraciones:
+            recibo["incompleto"] = ("no se pudieron borrar las declaraciones de "
+                                    f"transparencia: {fallo_declaraciones}")
         self._registrar_auditoria("olvido", recibo)
         logger.warning("Olvido ejecutado sobre %s: %d recuerdo(s).", user_id, borrados)
         return recibo

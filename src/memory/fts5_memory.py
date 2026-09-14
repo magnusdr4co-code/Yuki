@@ -5,6 +5,7 @@ Permite búsqueda textual y semántica ultrarrápida (<113ms) eliminando el cont
 
 import sqlite3
 import time
+from contextlib import closing
 import math
 import os
 import re
@@ -18,6 +19,17 @@ class FTS5MemoryEngine:
         self._init_db()
 
     def _get_connection(self) -> sqlite3.Connection:
+        """
+        Una conexión nueva por operación. **Quien la pida tiene que cerrarla.**
+
+        `with sqlite3.connect(...)` confirma o deshace la transacción, pero no
+        cierra: las siete llamadas de este módulo la usaban así y filtraban un
+        descriptor cada vez —`search()` corre en cada interacción, en una máquina
+        con 2 GB para todo—. Además dejaba vivos los `-wal`/`-shm`, que es cómo
+        la suite acabó sembrando ficheros sueltos en el `data/` de la instancia:
+        borraba el `.db` y los laterales sobrevivían. Se envuelve en
+        `contextlib.closing`; las escrituras confirman aparte.
+        """
         conn = sqlite3.connect(self.db_path)
         conn.row_factory = sqlite3.Row
         # Activar optimizaciones SQLite para baja latencia
@@ -28,7 +40,7 @@ class FTS5MemoryEngine:
         return conn
 
     def _init_db(self):
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn:
             cursor = conn.cursor()
 
             # Tabla regular para almacenamiento relacional y metadatos
@@ -147,7 +159,7 @@ class FTS5MemoryEngine:
             return
         marcas = ",".join("?" for _ in memory_ids)
         try:
-            with self._get_connection() as conn:
+            with closing(self._get_connection()) as conn:
                 conn.execute(
                     f"UPDATE memories SET recall_count = COALESCE(recall_count, 0) + 1, "
                     f"last_recalled = ? WHERE id IN ({marcas})",
@@ -171,7 +183,7 @@ class FTS5MemoryEngine:
     ) -> int:
         """Inserta un nuevo recuerdo en la memoria relacional e indexa en FTS5."""
         now = time.time()
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO memories (category, title, content, tags, user_id, importance,
@@ -250,7 +262,7 @@ class FTS5MemoryEngine:
         now = time.time()
         results = []
 
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn:
             cursor = conn.cursor()
             try:
                 cursor.execute(sql, params)
@@ -350,7 +362,7 @@ class FTS5MemoryEngine:
     def add_growth_event(self, date: str, domain: str, from_pos: str, to_pos: str, trigger_ids: str, confidence: float) -> int:
         """Inserta un evento de crecimiento (desplazamiento dialectico o evolutivo)."""
         now = time.time()
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO growth_events (date, domain, from_position, to_position, trigger_memory_ids, confidence, created_at)
@@ -361,7 +373,7 @@ class FTS5MemoryEngine:
 
     def get_recent_growth(self, limit: int = 5) -> List[Dict[str, Any]]:
         """Devuelve los eventos de crecimiento más recientes."""
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, date, domain, from_position, to_position, trigger_memory_ids, confidence, created_at
@@ -376,7 +388,7 @@ class FTS5MemoryEngine:
         """Busca pensamientos internos recientes de la memoria."""
         now = time.time()
         threshold = now - (hours * 3600)
-        with self._get_connection() as conn:
+        with closing(self._get_connection()) as conn:
             cursor = conn.cursor()
             cursor.execute("""
                 SELECT id, category, title, content, tags, user_id, importance, created_at

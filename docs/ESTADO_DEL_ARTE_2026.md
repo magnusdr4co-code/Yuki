@@ -157,6 +157,16 @@ dos operaciones que faltaban:
   queda fantasma buscable— y se emite un recibo. La constancia registra el hecho
   y su recuento, **nunca el contenido**: un registro de olvido que guardara lo
   olvidado no sería un olvido.
+- Las dos alcanzan también el registro de transparencia —a quién se le declaró
+  su naturaleza—, y se lo piden a su dueño, `DisclosureLedger`. Lo resolvían por
+  su cuenta sobre el directorio de la memoria, así que con
+  `YUKI_TRANSPARENCY_PATH` puesta exportaban y borraban de otro fichero: el
+  recibo decía «0 declaraciones borradas» —indistinguible de «no había
+  ninguna»— y la constancia seguía en disco.
+- **Un olvido a medias no se entrega como completo.** Si la escritura falla, el
+  recibo trae un campo `incompleto` con el error concreto. Antes se contaba
+  primero y se escribía después, con un `except: pass` en medio: el recibo podía
+  afirmar haber borrado lo que seguía guardado.
 - `general` no se puede olvidar por esa puerta: es la memoria no atribuida
   —canon, síntesis, pensamientos propios— y borrarla sería vaciarle la cabeza.
 
