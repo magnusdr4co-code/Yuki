@@ -349,3 +349,38 @@ def test_construir_el_motor_no_deja_huella_en_el_disco(tmp_path):
     salida = Path(os.environ["YUKI_OUTPUT_DIR"]) / "identity"
     SelfCharacterization()
     assert not salida.exists(), "construir el motor creó directorios de salida"
+
+def test_sin_alma_que_leer_se_caracteriza_igual_y_no_inventa_fichero(tmp_path):
+    """
+    Si `SOUL.md` no está donde se dice, el ritual sigue con el extracto por
+    defecto en vez de reventar a las cuatro de la mañana.
+
+    Es una rama que antes no ejecutaba nadie y ahora corre en la instancia: una
+    imagen de Docker que no copiara `SOUL.md` dejaría el cron fallando cada día
+    en silencio, que es la forma en que este proyecto pierde capacidades.
+    """
+    motor = SelfCharacterization(soul_path=str(tmp_path / "no_hay_alma.md"),
+                                 nous_portal=PortalConGuion([_exito(tmp_path)]))
+
+    manifiesto = asyncio.run(motor.synthesize_identity(ESTACION, _vital()))
+
+    assert manifiesto["soul_extract_summary"]["age_presence"]
+    assert manifiesto["visual_identity"]["avatar_summary"]["con_fichero_verificado"] == 4
+
+
+def test_sin_portal_lo_que_queda_es_la_instruccion_y_se_llama_asi(tmp_path):
+    """
+    Una instancia sin medios configurados no genera avatares: genera los prompts
+    para pintarlos. El manifiesto tiene que decir eso y no «avatar generado»,
+    que es la diferencia entre un plan y una obra.
+    """
+    motor = SelfCharacterization(nous_portal=None)
+
+    manifiesto = asyncio.run(motor.synthesize_identity(ESTACION, _vital()))
+    avatares = manifiesto["visual_identity"]["avatars"]
+
+    assert all(a["status"] == "instrucciones" for a in avatares.values())
+    assert manifiesto["visual_identity"]["avatar_summary"]["con_fichero_verificado"] == 0
+    assert all(Path(a["instruction_path"]).is_file() for a in avatares.values())
+    # Y el aviso va dentro del propio fichero, no sólo en el manifiesto.
+    assert "no un avatar generado" in avatares["atelier"]["note"]
