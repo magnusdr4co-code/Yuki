@@ -397,6 +397,12 @@ scheduler:
       cron: "20 3 * * *"
       action: "rem_dream"
       enabled: true
+    # Autocaracterización estacional: mira a diario si cambió el sekki y, si
+    # cambió, Yuki se redefine. A las 04:00, cuando ya soñó y nadie espera nada.
+    - name: "seasonal_self_characterization"
+      cron: "0 4 * * *"
+      action: "seasonal_self_characterization"
+      enabled: true
     # Olvido intencional: semanal, no diario. Un recuerdo necesita tiempo para
     # demostrar que volvía.
     - name: "weekly_forgetting"

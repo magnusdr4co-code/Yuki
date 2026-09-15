@@ -112,6 +112,26 @@ def exposicion() -> str:
     metrica("material_sin_marcar", "Ficheros generados sin marca (incumplimiento)",
             len(auditoria["sin_marcar"]))
 
+    # Identidad: si el manifiesto sigue el de esta micro-estación y cuántos de
+    # sus avatares existen de verdad. El ritual corre a diario y casi siempre no
+    # hace nada, así que su fallo no se ve por ausencia de ejecución: se ve
+    # porque la identidad se queda atrás. Sin esto, un cron muerto o un
+    # proveedor que rechaza cada imagen no lo notaría nadie.
+    from ..core.seasons import get_current_micro_season
+    from ..core.self_characterization import SelfCharacterization
+
+    identidad = SelfCharacterization()
+    sekki_actual = get_current_micro_season().get("sekki", "")
+    manifiesto = identidad._manifest or {}
+    metrica("identidad_al_dia",
+            "1 si la identidad vigente corresponde a la micro-estación actual "
+            "(0 caducada; -1 si nunca se ha caracterizado)",
+            -1 if not manifiesto else int(not identidad.needs_seasonal_refresh(sekki_actual)))
+    recuento = (manifiesto.get("visual_identity", {}).get("avatar_summary", {}) or {})
+    metrica("identidad_avatares_reales",
+            "Avatares del manifiesto vigente con fichero verificado",
+            recuento.get("con_fichero_verificado", 0))
+
     # Ritmos y bitácora.
     ritmos = RitualStore()
     metrica("ritmos_propios", "Ritmos propios activos", len(ritmos.aprobados()))

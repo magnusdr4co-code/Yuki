@@ -186,3 +186,26 @@ def test_lo_historico_lo_dice_en_su_cabecera(texto_por_documento):
                   and "**Histórico.**" not in texto[:1200]]
 
     assert not sin_avisar, f"documentos históricos que no lo advierten: {sin_avisar}"
+
+
+def test_toda_tarea_del_cron_aparece_en_su_documento():
+    """
+    El documento del cron enseñaba tres tareas de las nueve que corren.
+
+    No mentía por decir de más —lo habitual aquí— sino por decir de menos, que
+    tiene su propia forma de doler: quien lo lea para saber qué hace Yuki sola
+    de madrugada se queda sin seis, y quien copie ese YAML como configuración
+    apaga la mitad de su jornada sin enterarse. Se comprueba contra
+    `config.yaml`, que es lo que de verdad se ejecuta.
+    """
+    import yaml
+
+    documento = (RAIZ / "docs" / "AUTONOMOUS_CRON.md").read_text(encoding="utf-8")
+    with open(RAIZ / "config.yaml", "r", encoding="utf-8") as fichero:
+        config = yaml.safe_load(fichero)
+
+    tareas = {j["name"] for j in config["scheduler"]["cron_jobs"] if j.get("enabled", True)}
+    faltan = sorted(nombre for nombre in tareas if nombre not in documento)
+
+    assert not faltan, (
+        f"tareas que corren todos los días y su documento no nombra: {faltan}")

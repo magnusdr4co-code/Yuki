@@ -167,6 +167,10 @@ class BackupManager:
             # «se probó 4/4 en el puente y dejó de ser el puente» no se deduce
             # de ningún fichero. Se pierde y se vuelve a tropezar igual.
             self.data_dir / "cuaderno_taller.json",
+            # El manifiesto de identidad: la voz y la paleta son una elección
+            # suya, y los cuatro avatares costaron crédito de imagen. Perderlo
+            # no es perder un fichero, es volver a pagarlos.
+            self.data_dir / "identity_manifest.json",
             self.data_dir / "discord_pairing.json",
             self.data_dir / "spend_ledger.json",
             self.data_dir / "media_jobs",

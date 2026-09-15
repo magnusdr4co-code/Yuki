@@ -46,7 +46,8 @@ Romper una de éstas es romper el proyecto, no una prueba:
 ```
 src/core/       agente, albedrío (agency, spark, rituals), identidad
                 (persona_anchor, transparency, cotejo: lo dicho contra lo
-                ejecutado), lenguaje (`llm_router.py` recorre las pasarelas,
+                ejecutado, y `self_characterization`: con qué cara y qué voz se
+                presenta, que decide ella al cambiar el sekki), lenguaje (`llm_router.py` recorre las pasarelas,
                 `llm_proveedores.py` las implementa, `llm_entorno.py` sabe del
                 entorno y de los nombres de modelo), gobierno (state_registry, blackbox, brake,
                 spend_budget, virtual_instance), salud (pulse, registro: el log
@@ -165,10 +166,11 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
    nadie escribe es peor que no tenerlo: `last_sleep_cycle` estuvo declarado y
    serializado durante meses sin un solo escritor.
 10. Y si añadiste un **módulo**, que alguien lo llame. `self_characterization.py`
-   son mil líneas que nadie importa mientras su skill promete que el ritual
-   corre al cambiar el sekki: un módulo grande se confunde con una capacidad, y
-   no falla nunca. `tests/test_modulos_sin_llamador.py` exige que un módulo sin
-   importador lo diga en su docstring —quién lo arranca, o que todavía nadie—.
+   fueron mil líneas que no importaba nadie mientras su skill prometía que el
+   ritual corría al cambiar el sekki —ya está enchufado al cron de las 04:00—:
+   un módulo grande se confunde con una capacidad, y no falla nunca.
+   `tests/test_modulos_sin_llamador.py` exige que un módulo sin importador lo
+   diga en su docstring —quién lo arranca, o que todavía nadie—.
 
 ## Lo que no se hace
 

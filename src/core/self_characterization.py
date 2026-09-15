@@ -1,20 +1,22 @@
 """
 Módulo de Autocaracterización (自己表現 / Jiko-Hyōgen) para Yuki.
 
-Nadie lo llama todavía: no hay importador de este módulo en todo el proyecto
-—ni el agente, ni el cron, ni la CLI, ni una prueba—, así que nada de lo que
-sigue se ejecuta en la instancia. `skills/autocaracterizarse/SKILL.md` describe
-el ritual como si corriera al cambiar el sekki y con `/autocaracterizarse`; esas
-dos puertas no existen. Queda escrito aquí porque un módulo grande y con buena
-pinta es exactamente lo que se confunde con una capacidad.
+Lo dispara el cron `seasonal_self_characterization` (04:00): mira a diario si
+cambió la micro-estación y, cuando cambia, Yuki se redefine. **Sin que nadie lo
+apruebe**, igual que adopta un ritmo: elegir con qué cara y qué voz se presenta
+es suyo. Lo que la acota son los límites de siempre —el freno de iniciativa lo
+comprueba la tarea; el presupuesto y la marca del Artículo 50 se aplican dentro
+del camino de imagen, en `vertex_media`— y no el visto bueno de nadie. También
+se puede pedir a mano con `python3 cli.py identidad --regenerar`.
 
-Para enchufarlo hacen falta cuatro cosas, y ninguna es este fichero: una tarea
-en `src/scheduler/tasks.py` o un comando en `src/cli/`, presupuesto reservado
-antes de pedirle imágenes a Nous Portal, marca del Artículo 50 sobre los
-avatares que genere, y la capacidad declarada en `virtual_instance`. Hasta que
-eso exista, lo honesto es que lo diga el propio módulo.
+Durante meses esto estuvo escrito sin que ningún módulo lo importara, mientras
+su skill prometía que el ritual corría solo. De ahí vienen las dos cautelas que
+gobiernan el fichero: **un avatar sólo cuenta cuando su fichero está en el
+disco** —un `status: success` sin fichero se degrada a error—, y **el manifiesto
+lleva el recuento de lo que salió de verdad**, para que nadie confunda cuatro
+marcadores con cuatro retratos.
 
-Lo que haría cuando lo haga — Yuki lee su propia alma (SOUL.md) y se autodefine:
+Yuki lee su propia alma (SOUL.md) y se autodefine:
 1. Introspección — Extrae tokens de identidad de SOUL.md programáticamente.
 2. Avatares — Genera prompts detallados para 4 variantes visuales.
 3. Voz — Calibra su perfil vocal TTS derivado de su cadencia y personalidad.
@@ -24,11 +26,13 @@ Lo que haría cuando lo haga — Yuki lee su propia alma (SOUL.md) y se autodefi
 
 import os
 import re
-import json
 import time
 import logging
 from typing import Dict, Any, List, Optional
 
+from pathlib import Path
+
+from . import estado_json
 from .rutas import datos, salida
 from datetime import datetime
 
@@ -134,8 +138,11 @@ class SelfCharacterization:
         self.textures_dir = os.path.join(output_base, "textures")
         self.voice_dir = os.path.join(output_base, "voice_profiles")
 
-        for d in [self.avatars_dir, self.textures_dir, self.voice_dir]:
-            os.makedirs(d, exist_ok=True)
+        # Los directorios se crean al escribir, no al construir. Construir esta
+        # clase tiene que ser gratis y sin huella: la sonda de `/metrics` y el
+        # gemelo virtual la instancian sólo para preguntar qué identidad hay
+        # vigente, y una lectura que crea carpetas en `output/` no es una
+        # lectura.
 
         # Cache del extracto del alma
         self._soul_extract: Optional[SoulExtract] = None
@@ -418,50 +425,96 @@ class SelfCharacterization:
             }
         }
 
-        results = {}
+        results: Dict[str, Any] = {}
         for variant_name, spec in avatar_specs.items():
-            # La ruta la decide el portal (`result["local_path"]`): calcularla
+            comun = {
+                "variant": variant_name,
+                "prompt_instruction": spec["prompt"],
+                "lighting": spec["lighting"],
+                "aspect_ratio": spec["aspect_ratio"],
+                "context": spec["context"],
+                "generated_at": time.time(),
+            }
+
+            if not self.nous_portal:
+                # Sin portal no hay avatar: lo que se guarda es la instrucción
+                # para pintarlo después, y se llama así. Presentarlo como un
+                # avatar generado sería decir que existe una imagen que no está.
+                results[variant_name] = self._guardar_instruccion(variant_name, comun)
+                continue
+
+            # La ruta la decide el portal (`resultado["local_path"]`): calcularla
             # aquí era un resto de un diseño anterior y podía hacer creer que el
             # fichero se escribe donde no se escribe.
+            resultado = await self.nous_portal.generate_image_frontier(
+                prompt=spec["prompt"],
+                provider="gemini_image",
+                aspect_ratio=spec["aspect_ratio"],
+                lighting_style=spec["lighting"],
+            )
+            results[variant_name] = self._avatar_desde(resultado, comun)
 
-            # Generar a través de Nous Portal si disponible
-            if self.nous_portal:
-                result = await self.nous_portal.generate_image_frontier(
-                    prompt=spec["prompt"],
-                    provider="gemini_image",
-                    aspect_ratio=spec["aspect_ratio"],
-                    lighting_style=spec["lighting"]
-                )
-                results[variant_name] = {
-                    "local_path": result["local_path"],
-                    "prompt_instruction": spec["prompt"],
-                    "lighting": spec["lighting"],
-                    "aspect_ratio": spec["aspect_ratio"],
-                    "context": spec["context"],
-                    "provider": result["provider"],
-                    "image_url": result["image_url"],
-                    "generated_at": time.time()
-                }
-            else:
-                # Persistir solo las instrucciones de prompt para uso diferido
-                instruction_path = os.path.join(
-                    self.avatars_dir, f"yuki_avatar_{variant_name}_instructions.json"
-                )
-                instruction_data = {
-                    "variant": variant_name,
-                    "prompt_instruction": spec["prompt"],
-                    "lighting": spec["lighting"],
-                    "aspect_ratio": spec["aspect_ratio"],
-                    "context": spec["context"],
-                    "generated_at": time.time()
-                }
-                with open(instruction_path, "w", encoding="utf-8") as f:
-                    json.dump(instruction_data, f, indent=2, ensure_ascii=False)
+            # El presupuesto agotado y el freno no cambian entre una variante y
+            # la siguiente: insistir tres veces más sólo llena el registro de la
+            # misma negativa. Los que quedan se declaran sin intentar, que es
+            # distinto de fallidos.
+            if resultado.get("budget_exceeded") or resultado.get("braked"):
+                pendientes = [n for n in avatar_specs if n not in results]
+                for nombre in pendientes:
+                    results[nombre] = {
+                        "variant": nombre,
+                        "status": "no_intentado",
+                        "simulated": False,
+                        "error": results[variant_name].get("error", "sin detalle"),
+                        "generated_at": time.time(),
+                    }
+                break
 
-                results[variant_name] = instruction_data
-
-        logger.info("🖼️ Avatares generados: %s", ", ".join(results.keys()))
+        reales = [n for n, a in results.items() if a.get("status") == "success"]
+        logger.info(
+            "🖼️ Avatares: %d con fichero verificado de %d (%s)",
+            len(reales), len(avatar_specs),
+            ", ".join(f"{n}:{a.get('status')}" for n, a in results.items()),
+        )
         return results
+
+    def _guardar_instruccion(self, variant_name: str, comun: Dict[str, Any]) -> Dict[str, Any]:
+        """La instrucción de prompt en disco, declarada como lo que es: no una imagen."""
+        entrada = dict(comun, status="instrucciones", simulated=False,
+                       note="Sin portal de medios: esto es el prompt, no un avatar generado.")
+        destino = os.path.join(self.avatars_dir,
+                               f"yuki_avatar_{variant_name}_instructions.json")
+        # `estado_json.escribir` ya crea el directorio del fichero.
+        estado_json.escribir(Path(destino), entrada)
+        entrada["instruction_path"] = destino
+        return entrada
+
+    @staticmethod
+    def _avatar_desde(resultado: Dict[str, Any], comun: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Lo que el proveedor devolvió, sin adornar.
+
+        Antes esto era `result["local_path"]` a secas: con un fallo del
+        proveedor —presupuesto agotado, freno puesto, 503 de Vertex— el
+        diccionario no trae esa clave y el ritual entero moría con `KeyError`.
+        Y si la hubiera traído, el manifiesto habría anotado un avatar que no
+        existe, que es peor que morir.
+
+        Un fichero cuenta como avatar cuando **está en el disco**; un marcador
+        simulado viaja marcado, para que quien lea el manifiesto distinga la
+        obra del sustituto sin abrir el código.
+        """
+        ruta = resultado.get("local_path")
+        if resultado.get("status") == "success" and ruta and os.path.isfile(ruta):
+            return dict(comun, status="success", simulated=False, local_path=ruta,
+                        provider=resultado.get("provider"),
+                        image_url=resultado.get("image_url"),
+                        marking=resultado.get("marking"))
+        if resultado.get("status") == "simulated":
+            return dict(comun, status="simulated", simulated=True,
+                        local_path=ruta, note=resultado.get("note"))
+        return dict(comun, status="error", simulated=False,
+                    error=resultado.get("error") or "el proveedor no devolvió fichero")
 
     # ──────────────────────────────────────────────
     # 3. CALIBRACIÓN DE VOZ
@@ -594,10 +647,10 @@ class SelfCharacterization:
             "calibrated_at": time.time()
         }
 
-        # Persistir perfil vocal
+        # Persistir perfil vocal. Atómico y con el directorio creado al
+        # escribir, como el resto del estado en JSON de este proyecto.
         voice_path = os.path.join(self.voice_dir, f"yuki_voice_calibration_{int(time.time())}.json")
-        with open(voice_path, "w", encoding="utf-8") as f:
-            json.dump(voice_profile, f, indent=2, ensure_ascii=False)
+        estado_json.escribir(Path(voice_path), voice_profile)
 
         logger.info("🎙️ Voz calibrada: '%s' — %s", selected_voice, selection_reasoning)
         return voice_profile
@@ -823,10 +876,15 @@ class SelfCharacterization:
             },
         }
 
-        # Persistir manifiesto
-        os.makedirs(os.path.dirname(self.manifest_path), exist_ok=True)
-        with open(self.manifest_path, "w", encoding="utf-8") as f:
-            json.dump(manifest, f, indent=2, ensure_ascii=False)
+        # Qué salió de verdad, contado en el propio manifiesto. Quien lo lea
+        # —el gemelo virtual, la CLI, ella misma— tiene que poder distinguir
+        # cuatro avatares reales de cuatro marcadores sin abrir cada fichero.
+        manifest["visual_identity"]["avatar_summary"] = self._recuento_de_avatares(avatars)
+
+        # Atómico: el manifiesto es estado durable y el proceso muere a mitad
+        # justo cuando se despliega. Un JSON a medias dejaría a Yuki sin
+        # identidad vigente y sin saberlo.
+        estado_json.escribir(Path(self.manifest_path), manifest)
 
         self._manifest = manifest
 
@@ -839,7 +897,11 @@ class SelfCharacterization:
                 agent_response=(
                     f"Me he redefinido para la estación {season_context.get('sekki', '')}. "
                     f"Elegí la voz '{voice_profile['selected_voice_id']}' porque {voice_profile['selection_reasoning']}. "
-                    f"Mi paleta nace de mis contrastes: {', '.join(soul_extract.sensory_contrasts[:2])}."
+                    f"Mi paleta nace de mis contrastes: {', '.join(soul_extract.sensory_contrasts[:2])}. "
+                    # Lo que recuerda tiene que coincidir con lo que pasó: sin
+                    # esto, un ritual con los cuatro avatares fallidos quedaba
+                    # recordado igual que uno completo.
+                    + self._frase_de_los_avatares(avatars)
                 ),
                 notable_fact=f"Autocaracterización completada para {season_context.get('sekki', '')}"
             )
@@ -918,8 +980,7 @@ class SelfCharacterization:
             }
         }
 
-        with open(self.manifest_path, "w", encoding="utf-8") as f:
-            json.dump(self._manifest, f, indent=2, ensure_ascii=False)
+        estado_json.escribir(Path(self.manifest_path), self._manifest)
 
         logger.info("🔧 Micro-ajuste diario: modo prosódico='%s', iluminación='%s'",
                      active_prosody_mode, adjustments.get("preferred_lighting"))
@@ -930,22 +991,60 @@ class SelfCharacterization:
     # ──────────────────────────────────────────────
 
     def _load_existing_manifest(self):
-        """Carga el manifiesto existente si hay uno."""
-        if os.path.exists(self.manifest_path):
-            try:
-                with open(self.manifest_path, "r", encoding="utf-8") as f:
-                    self._manifest = json.load(f)
-                logger.info("📋 Manifiesto de identidad cargado desde %s", self.manifest_path)
-            except Exception as e:
-                logger.warning("Error cargando manifiesto: %s", e)
-                self._manifest = None
+        """
+        Carga el manifiesto existente si hay uno.
+
+        Un fichero ilegible no tumba el arranque: se trata como si no hubiera
+        manifiesto —`needs_seasonal_refresh` dirá que sí hace falta— y queda el
+        aviso en el registro, que es lo que distingue un fichero corrupto de uno
+        que nunca existió.
+        """
+        vacio = estado_json.leer(Path(self.manifest_path), dict,
+                                 valido=lambda d: "version" in d,
+                                 que_es="manifiesto de identidad")
+        self._manifest = vacio or None
+        if self._manifest:
+            logger.info("📋 Manifiesto de identidad cargado desde %s", self.manifest_path)
+
+    @staticmethod
+    def _recuento_de_avatares(avatars: Dict[str, Any]) -> Dict[str, Any]:
+        """Cuántos salieron de verdad, cuántos son marcador y cuántos no salieron."""
+        recuento: Dict[str, int] = {}
+        for avatar in avatars.values():
+            estado = avatar.get("status", "desconocido")
+            recuento[estado] = recuento.get(estado, 0) + 1
+        return {
+            "por_estado": recuento,
+            "con_fichero_verificado": recuento.get("success", 0),
+            "total_pedidos": len(avatars),
+        }
+
+    @classmethod
+    def _frase_de_los_avatares(cls, avatars: Dict[str, Any]) -> str:
+        """Lo que se puede decir de los avatares sin exagerar ni negar."""
+        recuento = cls._recuento_de_avatares(avatars)
+        reales = recuento["con_fichero_verificado"]
+        total = recuento["total_pedidos"]
+        if reales == total and total:
+            return f"Los {total} avatares salieron con fichero real."
+        if not reales:
+            motivos = {a.get("error") or a.get("note") or a.get("status")
+                       for a in avatars.values()}
+            return ("Ningún avatar llegó a existir esta vez: "
+                    + "; ".join(sorted(m for m in motivos if m)) + ".")
+        return f"Salieron {reales} de {total} avatares con fichero real; el resto no."
 
     def get_active_avatar(self, context: str = "atelier") -> Optional[Dict[str, Any]]:
         """Retorna el avatar activo para un contexto dado."""
         if not self._manifest:
             return None
         avatars = self._manifest.get("visual_identity", {}).get("avatars", {})
-        return avatars.get(context)
+        avatar = avatars.get(context)
+        # Un avatar fallido o sin intentar no es un avatar activo: devolverlo
+        # haría que quien lo use adjuntara una ruta que no existe.
+        if not avatar or avatar.get("status") not in ("success", "simulated"):
+            return None
+        return avatar
 
     def get_active_voice_profile(self) -> Optional[Dict[str, Any]]:
         """Retorna el perfil vocal activo, con micro-ajustes diarios aplicados."""

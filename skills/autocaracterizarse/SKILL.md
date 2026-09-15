@@ -13,15 +13,18 @@ parameters:
 
 # Habilidad: Autocaracterizarse (`/autocaracterizarse`)
 
-> ⚠️ **Hoy no la ejecuta nadie.** `src/core/self_characterization.py` está
-> escrito y no lo importa ningún módulo del proyecto: no hay tarea de cron que
-> lo dispare al cambiar el sekki, ni comando `/autocaracterizarse` que llegue
-> hasta él. Lo que sigue describe lo que haría si se enchufara, no lo que la
-> instancia hace. Para enchufarlo: una tarea en `src/scheduler/tasks.py` o un
-> comando en `src/cli/`, presupuesto reservado antes de pedir imágenes, marca
-> del Artículo 50 sobre los avatares y la capacidad declarada en
-> `virtual_instance`. Mientras tanto, ningún avatar, perfil de voz ni
-> `identity_manifest.json` de los que aquí se nombran existe en la instancia.
+> **Quién la dispara.** El cron `seasonal_self_characterization` (04:00, en
+> `config.yaml`) comprueba a diario si cambió el sekki y ejecuta el ritual
+> cuando cambia, sin que nadie lo apruebe. Los micro-ajustes diarios van dentro
+> del Ritual del Eco (06:30). A mano: `python3 cli.py identidad --regenerar`.
+>
+> **Qué sale de verdad.** Los avatares se piden por el camino de imagen de
+> siempre, así que reservan presupuesto antes de llamar al proveedor y salen
+> marcados (Artículo 50). Si el presupuesto está agotado, el freno puesto o
+> Vertex no responde, el manifiesto anota el fallo con su motivo y **no** anota
+> un avatar: `identity_manifest.json` lleva el recuento de cuántos llegaron a
+> existir. Sin Vertex configurado, lo que se genera son marcadores declarados
+> `simulated`, no retratos.
 
 Permite a **Yuki** ejecutar un ritual de autodefinición completa. En lugar de recibir su identidad visual y vocal del productor, Yuki lee su propia alma (`SOUL.md`), extrae los tokens de identidad y los materializa en artefactos concretos.
 

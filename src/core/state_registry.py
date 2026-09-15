@@ -232,6 +232,15 @@ def build_registry() -> List[StateItem]:
             holds_personal_data=True,
         ),
         StateItem(
+            id="manifiesto_identidad", path=str(datos / "identity_manifest.json"),
+            description="Cómo se presenta: voz elegida, paleta, tipografía y los cuatro avatares",
+            authority=YUKI, scope="su propia imagen y voz", mutability="mutable",
+            provenance="ritual de autocaracterización al cambiar la micro-estación",
+            recoverability=("copia diaria verificada; los avatares viven en output/identity "
+                            "y regenerarlos vuelve a costar crédito de imagen"),
+            actionability="fija con qué cara y qué voz se presenta; no dispara acciones por sí solo",
+        ),
+        StateItem(
             id="deriva_persona", path=str(datos / "persona_drift.json"),
             description="Puntuaciones de registro y reanclajes aplicados",
             authority=SISTEMA, scope="su propia voz", mutability="append-only acotado",
