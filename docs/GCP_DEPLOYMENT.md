@@ -302,7 +302,8 @@ Hay dos formas de llamar a Gemini y solo una consume el crédito:
 | Gemini API (AI Studio) | `GEMINI_API_KEY` | **No.** Excluido desde marzo de 2026 |
 | Vertex AI | Credenciales del proyecto (ADC) | **Sí** |
 
-Por eso `src/core/llm_router.py` no autentica esta ruta con una clave, sino con
+Por eso `VertexProvider` (`src/core/llm_proveedores.py`) no autentica esta ruta
+con una clave, sino con
 las credenciales del proyecto. Si rellenas `GEMINI_API_KEY` esperando gastar el
 crédito, te lo facturarán aparte.
 
@@ -419,7 +420,7 @@ Es el detalle que más caro sale de todo este anexo, porque **no se ve desde el
 código**. Dentro de una VM, las credenciales por defecto (ADC) salen del
 servidor de metadatos, y el token que devuelve lleva **los ámbitos que se le
 fijaron a la máquina al crearla**, no los que pide el programa. Que
-`llm_router.py` llame a `google.auth.default(scopes=[cloud-platform])` no
+`llm_proveedores.py` llame a `google.auth.default(scopes=[cloud-platform])` no
 cambia nada: si la VM no tiene ese ámbito, no lo tendrá el token.
 
 Una VM creada **sin** `--scopes` recibe los de por defecto, que **no incluyen

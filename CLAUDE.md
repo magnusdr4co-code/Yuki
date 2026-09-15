@@ -46,7 +46,9 @@ Romper una de éstas es romper el proyecto, no una prueba:
 ```
 src/core/       agente, albedrío (agency, spark, rituals), identidad
                 (persona_anchor, transparency, cotejo: lo dicho contra lo
-                ejecutado), gobierno (state_registry, blackbox, brake,
+                ejecutado), lenguaje (`llm_router.py` recorre las pasarelas,
+                `llm_proveedores.py` las implementa, `llm_entorno.py` sabe del
+                entorno y de los nombres de modelo), gobierno (state_registry, blackbox, brake,
                 spend_budget, virtual_instance), salud (pulse, registro: el log
                 encendido en los puntos de entrada);
                 `rutas.py` decide dónde vive cada cosa y `estado_json.py` cómo
@@ -62,8 +64,13 @@ src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 lo deducido se declara deducido
 src/adapters/   Discord (el que importa), Telegram (salida real, sin entrada);
                 `encargo.py` traduce el pedido en plan de producción (qué
-                piezas, cuántos segmentos, qué indicaciones van al prompt)
-src/web/        Salón + /metrics
+                piezas, cuántos segmentos, qué indicaciones van al prompt).
+                `discord_bot.py` es sólo el trato con el gateway: lo que se hace
+                con lo que entra vive en `discord_comandos.py` (los `!` del
+                gobierno), `discord_produccion.py` (el encargo durable, que es
+                lo que gasta) y `discord_salon.py` (abrir canal y publicar allí)
+src/web/        Salón (`server.py`) y `/metrics` (`metricas.py`, que no toca el
+                agente: una sonda que lo despertara cambiaría lo que mide)
 src/cli/        los comandos por temas (gobierno, mente, operacion); `cli.py`
                 en la raíz sólo declara argumentos y reparte
 scripts/        smoke_check, chaos_drill, restore_drill, simulate_day,

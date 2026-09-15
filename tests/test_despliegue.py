@@ -236,6 +236,19 @@ def test_el_runbook_comprueba_que_esta_viva_y_no_solo_que_arranco(comprobacion):
     assert "catatonica" in seccion, "sin nombrar la catatonia, «arrancó» pasa por «vive»"
 
 
+def _fuente_del_adaptador() -> str:
+    """
+    Todo el adaptador de Discord, no un fichero suyo.
+
+    Los comandos `!` vivían en `discord_bot.py` y al partirlo se mudaron a
+    `discord_comandos.py`: fijar el nombre del fichero habría hecho fallar esto
+    por una mudanza y, peor, lo habría dejado pasar callando si el comando se
+    mudara sin implementarse.
+    """
+    return "\n".join(f.read_text(encoding="utf-8")
+                     for f in sorted((RAIZ / "src" / "adapters").glob("*.py")))
+
+
 def test_los_comandos_que_el_runbook_promete_existen():
     """
     Regla 4 del proyecto: una garantía prometida en la documentación necesita la
@@ -248,7 +261,7 @@ def test_los_comandos_que_el_runbook_promete_existen():
     alcanza a propuestas heredadas, que una instancia recién desplegada no
     tiene— y dejaba pasar cualquier comando nuevo que el runbook se inventara.
     """
-    adaptador = (RAIZ / "src" / "adapters" / "discord_bot.py").read_text(encoding="utf-8")
+    adaptador = _fuente_del_adaptador()
     runbook = RUNBOOK.read_text(encoding="utf-8")
 
     # Lo que el runbook promete, exista. Se lee del propio texto para que un
@@ -274,7 +287,7 @@ def test_el_aviso_nocturno_no_promete_un_comando_inexistente():
     existe cada noche que propusiera algo.
     """
     tareas = (RAIZ / "src" / "scheduler" / "tasks.py").read_text(encoding="utf-8")
-    adaptador = (RAIZ / "src" / "adapters" / "discord_bot.py").read_text(encoding="utf-8")
+    adaptador = _fuente_del_adaptador()
 
     prometidos = set(re.findall(r"`!ritmo (\w+)", tareas))
 

@@ -213,12 +213,15 @@ def test_todos_los_criterios_del_adaptador_consultan_el_cuaderno():
     """
     import ast
 
-    fuente = (Path(__file__).resolve().parent.parent
-              / "src" / "adapters" / "discord_bot.py").read_text(encoding="utf-8")
-    arbol = ast.parse(fuente)
+    # Todo el paquete de adaptadores, no un fichero: los criterios se mudaron de
+    # `discord_bot.py` a `discord_produccion.py` al partirlo, y un nombre fijo
+    # aquí habría dado por probada una propiedad que ya no miraba nada.
+    adaptadores = sorted((Path(__file__).resolve().parent.parent
+                          / "src" / "adapters").glob("*.py"))
+    arboles = [ast.parse(f.read_text(encoding="utf-8")) for f in adaptadores]
 
     construidos, consultados = {}, set()
-    for nodo in ast.walk(arbol):
+    for nodo in (n for arbol in arboles for n in ast.walk(arbol)):
         # `x = criterio_algo.leer_loquesea(...)`
         if (isinstance(nodo, ast.Assign) and isinstance(nodo.value, ast.Call)
                 and isinstance(nodo.value.func, ast.Attribute)

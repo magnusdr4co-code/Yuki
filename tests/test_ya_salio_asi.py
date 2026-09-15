@@ -156,7 +156,7 @@ def test_el_primer_encargo_nunca_avisa(tmp_path, monkeypatch):
 
 def test_no_poder_comparar_no_es_haber_comparado(tmp_path):
     """Sin la lectura hecha, callar es lo único honesto."""
-    from src.adapters.discord_bot import _mismo_contenido
+    from src.adapters.discord_produccion import _mismo_contenido
 
     assert _mismo_contenido(str(tmp_path / "no-existe.mp3"), str(tmp_path / "tampoco.mp3")) is False
 
