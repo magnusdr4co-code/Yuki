@@ -236,17 +236,32 @@ def test_el_runbook_comprueba_que_esta_viva_y_no_solo_que_arranco(comprobacion):
     assert "catatonica" in seccion, "sin nombrar la catatonia, «arrancó» pasa por «vive»"
 
 
-def _fuente_del_adaptador() -> str:
+def _verbos_de_ritmo() -> set:
     """
-    Todo el adaptador de Discord, no un fichero suyo.
+    Los verbos que el DM **despacha** de verdad, leídos del `in (...)` que decide.
 
-    Los comandos `!` vivían en `discord_bot.py` y al partirlo se mudaron a
-    `discord_comandos.py`: fijar el nombre del fichero habría hecho fallar esto
-    por una mudanza y, peor, lo habría dejado pasar callando si el comando se
-    mudara sin implementarse.
+    Buscar la palabra en el fichero no valía: `retirar` aparece también en el
+    texto de ayuda y en el docstring, así que la comprobación seguía en verde
+    con la rama borrada. Lo que el runbook promete no es que la palabra esté
+    escrita, es que exista la operación; eso son las tuplas contra las que se
+    compara la acción, y se leen del árbol sintáctico para que un comando que
+    se mude de fichero se siga encontrando.
     """
-    return "\n".join(f.read_text(encoding="utf-8")
-                     for f in sorted((RAIZ / "src" / "adapters").glob("*.py")))
+    import ast
+
+    verbos = set()
+    for fichero in sorted((RAIZ / "src" / "adapters").glob("*.py")):
+        arbol = ast.parse(fichero.read_text(encoding="utf-8"))
+        for nodo in ast.walk(arbol):
+            if not isinstance(nodo, ast.Compare) or not nodo.ops:
+                continue
+            if not isinstance(nodo.ops[0], ast.In):
+                continue
+            for comparado in nodo.comparators:
+                if isinstance(comparado, (ast.Tuple, ast.List, ast.Set)):
+                    verbos.update(e.value for e in comparado.elts
+                                  if isinstance(e, ast.Constant) and isinstance(e.value, str))
+    return verbos
 
 
 def test_los_comandos_que_el_runbook_promete_existen():
@@ -261,7 +276,7 @@ def test_los_comandos_que_el_runbook_promete_existen():
     alcanza a propuestas heredadas, que una instancia recién desplegada no
     tiene— y dejaba pasar cualquier comando nuevo que el runbook se inventara.
     """
-    adaptador = _fuente_del_adaptador()
+    despachados = _verbos_de_ritmo()
     runbook = RUNBOOK.read_text(encoding="utf-8")
 
     # Lo que el runbook promete, exista. Se lee del propio texto para que un
@@ -269,14 +284,14 @@ def test_los_comandos_que_el_runbook_promete_existen():
     prometidos = set(re.findall(r"`!ritmo (\w+)", runbook))
     assert prometidos, "el runbook debería decir cómo se gobiernan los ritmos por DM"
     for verbo in prometidos:
-        assert verbo in adaptador, f"el runbook promete `!ritmo {verbo}` y el DM no lo implementa"
+        assert verbo in despachados, f"el runbook promete `!ritmo {verbo}` y el DM no lo despacha"
 
     # Y al revés para lo imprescindible: el veto y el cambio de hora son lo único
     # que le queda al Productor desde que Yuki adopta sus ritmos sin permiso. Un
     # runbook que no los nombre deja al que despliega sin saber cómo pararla.
     for literal in ("!ritmos", "!ritmo retirar", "!ritmo mover"):
         verbo = literal.split()[-1]
-        assert verbo in adaptador, f"el DM no implementa `{literal}`"
+        assert verbo in despachados, f"el DM no despacha `{literal}`"
         assert literal in runbook, f"el runbook no nombra `{literal}`"
 
 
@@ -287,13 +302,13 @@ def test_el_aviso_nocturno_no_promete_un_comando_inexistente():
     existe cada noche que propusiera algo.
     """
     tareas = (RAIZ / "src" / "scheduler" / "tasks.py").read_text(encoding="utf-8")
-    adaptador = _fuente_del_adaptador()
+    despachados = _verbos_de_ritmo()
 
     prometidos = set(re.findall(r"`!ritmo (\w+)", tareas))
 
     assert prometidos, "el aviso debería nombrar cómo aprobar"
     for comando in prometidos:
-        assert comando in adaptador, f"el aviso promete `!ritmo {comando}` y no existe"
+        assert comando in despachados, f"el aviso promete `!ritmo {comando}` y no lo despacha nadie"
 
 
 def test_la_busqueda_web_sin_clave_no_inventa_urls():
