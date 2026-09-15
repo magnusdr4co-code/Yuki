@@ -1,7 +1,20 @@
 """
 Módulo de Autocaracterización (自己表現 / Jiko-Hyōgen) para Yuki.
 
-Yuki lee su propia alma (SOUL.md) y se autodefine:
+Nadie lo llama todavía: no hay importador de este módulo en todo el proyecto
+—ni el agente, ni el cron, ni la CLI, ni una prueba—, así que nada de lo que
+sigue se ejecuta en la instancia. `skills/autocaracterizarse/SKILL.md` describe
+el ritual como si corriera al cambiar el sekki y con `/autocaracterizarse`; esas
+dos puertas no existen. Queda escrito aquí porque un módulo grande y con buena
+pinta es exactamente lo que se confunde con una capacidad.
+
+Para enchufarlo hacen falta cuatro cosas, y ninguna es este fichero: una tarea
+en `src/scheduler/tasks.py` o un comando en `src/cli/`, presupuesto reservado
+antes de pedirle imágenes a Nous Portal, marca del Artículo 50 sobre los
+avatares que genere, y la capacidad declarada en `virtual_instance`. Hasta que
+eso exista, lo honesto es que lo diga el propio módulo.
+
+Lo que haría cuando lo haga — Yuki lee su propia alma (SOUL.md) y se autodefine:
 1. Introspección — Extrae tokens de identidad de SOUL.md programáticamente.
 2. Avatares — Genera prompts detallados para 4 variantes visuales.
 3. Voz — Calibra su perfil vocal TTS derivado de su cadencia y personalidad.

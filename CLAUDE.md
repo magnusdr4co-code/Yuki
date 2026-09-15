@@ -164,6 +164,11 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
 9. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
    nadie escribe es peor que no tenerlo: `last_sleep_cycle` estuvo declarado y
    serializado durante meses sin un solo escritor.
+10. Y si añadiste un **módulo**, que alguien lo llame. `self_characterization.py`
+   son mil líneas que nadie importa mientras su skill promete que el ritual
+   corre al cambiar el sekki: un módulo grande se confunde con una capacidad, y
+   no falla nunca. `tests/test_modulos_sin_llamador.py` exige que un módulo sin
+   importador lo diga en su docstring —quién lo arranca, o que todavía nadie—.
 
 ## Lo que no se hace
 
