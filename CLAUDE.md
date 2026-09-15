@@ -53,7 +53,10 @@ src/core/       agente, albedrío (agency, spark, rituals), identidad
                 encendido en los puntos de entrada);
                 `rutas.py` decide dónde vive cada cosa y `estado_json.py` cómo
                 se guarda —atómico, y tolerante a un fichero corrupto—
-src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
+src/memory/     FTS5 + ciclo de sueño: `sleep_cycle.py` es el armazón (política,
+                conexión, recibo, olvido y noche completa) y cada fase vive en
+                el suyo —`sueno_nrem.py` consolida, `sueno_rem.py` sueña—, con
+                `sueno_comun.py` para el vocabulario y la firma léxica
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 `cuaderno.py` guarda lo que quedó sin resolver del oficio —no la
                 obra, que es la Biblioteca— y avisa al criterio sin tocar un
