@@ -15,7 +15,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 |---|---|
 | Un encargo devuelve siempre lo mismo | [INCIDENTE_ENCARGO_MULTIMEDIA.md](INCIDENTE_ENCARGO_MULTIMEDIA.md) — los catorce hallazgos de la sesión del 9 de septiembre, con su estado |
 | Está desplegado y algo falla | [OPERACION.md](OPERACION.md) — CI, humo, métricas, bitácora, freno, simulacro, restauración, signos vitales |
-| Todo verde y no hace nada | [OPERACION.md §8](OPERACION.md) (signos vitales) y [LIBRE_ALBEDRIO.md §6](LIBRE_ALBEDRIO.md) (censo de ciclos) |
+| Todo verde y no hace nada | [OPERACION.md §8](OPERACION.md) (signos vitales) y [LIBRE_ALBEDRIO.md §6](LIBRE_ALBEDRIO.md) (censo de ciclos). **Medido el 18-09-2026: un acto en nueve días por una energía que sólo baja** — [ALINEAMIENTO_DEL_ARNES.md §2.1](ALINEAMIENTO_DEL_ARNES.md) |
 | Qué puede y qué no puede esta instancia | [VIRTUALIZACION_Y_MEJORAS.md](VIRTUALIZACION_Y_MEJORAS.md) — gemelo virtual y limitadores L1–L11 |
 | En qué estado está producción | [PRODUCTION_STATUS.md](PRODUCTION_STATUS.md) |
 | La copia no sale de la máquina | [PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md](PENDIENTE_COPIA_FUERA_DE_LA_INSTANCIA.md) — **pendiente**: los pasos para declarar `BACKUP_GCS_BUCKET`, que es lo único de la copia que no depende del código |
@@ -28,6 +28,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 | Memoria rápida y por qué FTS5 | [FAST_MEMORY_FTS5.md](FAST_MEMORY_FTS5.md) |
 | Dormir: consolidar, soñar, olvidar | [CICLO_DE_SUENO.md](CICLO_DE_SUENO.md) |
 | Iniciativa propia: carácter, refuerzo, ritmos | [LIBRE_ALBEDRIO.md](LIBRE_ALBEDRIO.md) |
+| Qué esculpe su conducta, y dónde el arnés empuja hacia donde no debe | [ALINEAMIENTO_DEL_ARNES.md](ALINEAMIENTO_DEL_ARNES.md) — **plan, no implementación**: el refuerzo mide atención recibida y ya castigó sus dos ritmos propios |
 | Qué quedó sin resolver en una pieza y qué se intentó ya | [CUADERNO_DE_TALLER.md](CUADERNO_DE_TALLER.md) — y por qué no lo cubrían ni la Biblioteca ni la memoria |
 | Tareas autónomas y cron | [AUTONOMOUS_CRON.md](AUTONOMOUS_CRON.md) |
 | Personalidad dialéctica (Honcho) | [HONCHO_DIALECTIC.md](HONCHO_DIALECTIC.md) |
