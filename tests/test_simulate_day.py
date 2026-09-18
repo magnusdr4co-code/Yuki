@@ -203,3 +203,21 @@ def test_el_mundo_se_puede_describir_por_horas():
     # Las horas no nombradas conservan el perfil: describir las veinticuatro
     # para mover una sería una ceremonia que nadie repite.
     assert perfil[9] == MUNDO_POR_DEFECTO[9]
+
+
+def test_el_diagnostico_denuncia_la_puerta_de_energia():
+    """
+    El aviso que no existía el día que la instancia se paró nueve días.
+
+    El censo ya enseñaba `sin_energia` al 58%, pero el veredicto sólo miraba el
+    techo diario y decía «el carácter se comporta». Un simulador que no puede
+    decir que no, no comprueba nada — y éste avaló los valores con los que la
+    energía nunca se recuperaba.
+    """
+    ahogada = {"actos_por_dia": 2, "techo_diario": 6, "por_tipo": {"write": 2},
+               "censo": {"sin_energia": 420}, "ciclos": 648, "incoherencias": [],
+               "ciclos_hasta_el_primer_acto": 4}
+    holgada = dict(ahogada, censo={"sin_energia": 60})
+
+    assert any("energía bloquea" in a for a in _diagnostico(ahogada))
+    assert not any("energía bloquea" in a for a in _diagnostico(holgada))

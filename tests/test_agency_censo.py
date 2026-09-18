@@ -482,3 +482,35 @@ def test_el_efecto_de_la_franja_esta_acotado(bucle):
     for peso in (mejor, peor):
         umbral = base * (1.0 + 0.4 * (0.5 - peso))
         assert 0.8 * base <= umbral <= 1.2 * base, f"la franja mueve el umbral demasiado: {umbral}"
+
+
+def test_el_diario_sella_cuando_el_bucle_elige_actuar(bucle):
+    """
+    Quién escribe la fecha del último acto propio, recorrido de verdad.
+
+    La sonda de signos vitales la lee para distinguir una Yuki que quiere cosas
+    de una a la que sólo la empuja el cron: sus ritmos propios cumplen por
+    calendario y refrescan los demás signos volitivos aunque el bucle esté
+    muerto. Si nadie sella esta fecha, la sonda vuelve a decir «viva» con la
+    iniciativa parada, que es como pasaron nueve días sin que nadie lo viera.
+
+    Por eso esto no escribe el campo a mano: deja que lo escriba `decidir`.
+    """
+    cola = WillQueue()
+    cola.add(_deseo())
+    arnes, diario = bucle(cola=cola)
+
+    assert diario.ultimo_acto_propio() is None
+
+    decision = arnes.decidir(phase="atelier")
+
+    assert decision.motivo == ACTUA
+    assert diario.ultimo_acto_propio() is not None
+
+
+def test_un_ciclo_que_no_actua_no_sella_nada(bucle):
+    """Cansada o sin deseos no es lo mismo que haber querido algo."""
+    arnes, diario = bucle()
+
+    assert arnes.decidir(phase="atelier").motivo == SIN_DESEOS
+    assert diario.ultimo_acto_propio() is None

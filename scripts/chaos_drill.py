@@ -390,9 +390,15 @@ def hilo_de_tareas_muerto(raiz: Path) -> Tuple[bool, str]:
         (datos / "vital_state.json").write_text(json.dumps(vital), encoding="utf-8")
         recientes = ([{"tool": "write", "at": ahora - volitivo}]
                      if volitivo is not None else [])
+        # `ultimo_acto_propio` va con el resto del pulso volitivo: una instancia
+        # que actúa es una que *eligió* actuar. Dejarlo fuera la diagnosticaría
+        # aletargada —sólo la mueve el cron—, que es un estado distinto y real,
+        # pero no el que este escenario quiere fabricar.
         (datos / "agency_ledger.json").write_text(
             json.dumps({"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
-                        "boredom": 0.0, "recientes": recientes}), encoding="utf-8")
+                        "boredom": 0.0, "recientes": recientes,
+                        "ultimo_acto_propio": (ahora - volitivo) if volitivo is not None
+                        else None}), encoding="utf-8")
         if volitivo is None:
             bitacora.write_text("", encoding="utf-8")
         else:

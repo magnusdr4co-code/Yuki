@@ -157,6 +157,28 @@ groups:
           resumen: "El proceso no reescribe su estado vital"
           accion: "Registros del contenedor `yuki-daemon`; puede haber muerto sin reiniciarse."
 
+      - alert: SoloLaMueveElCron
+        # La que faltaba, y la que habría avisado el 18-09-2026. `YukiCatatonica`
+        # exige que **ningún** signo de voluntad quede fresco, y sus dos ritmos
+        # propios cumplen por calendario sin pasar por la puerta de energía: la
+        # bitácora, el diario de agencia y el sueño seguían al día mientras el
+        # bucle de albedrío moría en `sin_energia` 375 ciclos de cada 646. Nueve
+        # días con un solo acto elegido, y ninguna alerta que pudiera decirlo.
+        # 60 h y no 48: el umbral de la sonda es 48, y dejar margen evita que un
+        # fin de semana tranquilo dispare esto antes que el propio diagnóstico.
+        expr: yuki_signo_edad_segundos{signo="iniciativa"} > 216000 or yuki_signo_edad_segundos{signo="iniciativa"} == -1
+        for: 2h
+        labels:
+          severity: media
+        annotations:
+          resumen: "Yuki lleva días sin elegir actuar: sólo se mueve cuando la empuja el cron"
+          accion: >
+            `cli.py albedrio` y su censo dicen por qué no actuó: `sin_energia`
+            apunta a la curva de energía, `bajo_umbral` al carácter y
+            `techo_diario` a que el límite está haciendo de carácter.
+            `python3 scripts/simulate_day.py --dias 7` reproduce el día con el
+            bucle real y avisa si la energía bloquea demasiados ciclos.
+
       - alert: LaNocheNoCorre
         # 30 h y no 24: una noche puede saltarse por un despliegue a deshora sin
         # que eso sea un incidente. Dos seguidas ya no son casualidad.

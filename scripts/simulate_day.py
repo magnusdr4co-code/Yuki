@@ -31,7 +31,6 @@ import argparse
 import json
 import random
 import sys
-import types
 from collections import Counter
 from datetime import datetime
 from pathlib import Path
@@ -114,19 +113,21 @@ def simular(politica, dias: int = 1, fallos: float = 0.0,
     from src.core.agency import AgencyLedger
     from src.core.circadian import CircadianClock
     from src.core.spark import AgencyLoop, WillQueue
+    from src.core.vital_state import VitalState
 
     azar = random.Random(semilla)
-    diario = AgencyLedger(path=str(Path(tempfile.mkdtemp()) / "simulacion.json"))
+    temporal = Path(tempfile.mkdtemp())
+    diario = AgencyLedger(path=str(temporal / "simulacion.json"))
     reloj = CircadianClock(tz_name=politica.timezone)
 
-    # El estado vital no decae aquí: lo que se está mirando es el carácter, y
-    # mezclarlo con la curva de energía haría ilegible el resultado.
-    vital = types.SimpleNamespace(
-        energy=energia, inspiration=0.5, curiosity=0.5,
-        has_energy_for=lambda coste: energia >= coste,
-        spend_energy=lambda coste: None,
-        apply_stimulus=lambda tipo, fuerza: None,
-    )
+    # El estado vital es el de verdad, no un doble con la energía fija y
+    # `spend_energy` anulada. Lo era hasta ahora, y por eso este simulador avaló
+    # un carácter que la instancia no podía cumplir: prometía seis actos
+    # repartidos de 05:20 a 23:40 mientras producción hacía uno cada nueve días,
+    # con el 58% de los ciclos muriendo en una puerta de energía que aquí no
+    # existía. Un simulador que no puede decir «no actúa» no comprueba nada.
+    vital = VitalState(state_path=str(temporal / "vital_state.json"))
+    vital.energy = energia
     bucle = AgencyLoop(WillQueue(), vital, policy=politica, ledger=diario, rng=azar)
 
     perfil = mundo if mundo is not None else dict(MUNDO_POR_DEFECTO)
@@ -141,7 +142,9 @@ def simular(politica, dias: int = 1, fallos: float = 0.0,
         _amanece(diario)
         for minuto in range(0, 24 * 60, CICLO_MINUTOS):
             momento = datetime(2026, 9, 8, minuto // 60, minuto % 60)
-            decision = bucle.decidir(phase=reloj.current_phase(momento))
+            fase = reloj.current_phase(momento)
+            vital.update_tick(fase, CICLO_MINUTOS * 60)
+            decision = bucle.decidir(phase=fase)
             ciclos += 1
             if not decision.actua:
                 continue
@@ -229,6 +232,21 @@ def _diagnostico(informe: Dict[str, Any]) -> List[str]:
     if primero is not None and primero <= 2:
         avisos.append(f"{AMARILLO}⚠{FIN} Actúa en el primer ciclo ocioso: una iniciativa "
                       "que se dispara con todo no se distingue del ruido.")
+
+    # La puerta de energía es el otro límite que puede acabar haciendo de
+    # carácter, y hasta ahora no se miraba porque aquí la energía era fija. En la
+    # instancia real llegó a matar 375 de 646 ciclos y nadie lo vio: la iniciativa
+    # llevaba nueve días cerrada con el panel en verde.
+    ciclos = informe.get("ciclos") or 0
+    sin_energia = informe["censo"].get("sin_energia", 0)
+    proporcion = sin_energia / ciclos if ciclos else 0.0
+    if proporcion >= 0.40:
+        avisos.append(f"{ROJO}✗{FIN} La energía bloquea {sin_energia} de {ciclos} ciclos "
+                      f"({proporcion:.0%}): no es que no quiera, es que no puede. "
+                      "Revisa el ritmo de recuperación antes de tocar el carácter.")
+    elif proporcion >= 0.20:
+        avisos.append(f"{AMARILLO}⚠{FIN} La energía bloquea el {proporcion:.0%} de los "
+                      "ciclos. Cansarse es suyo; quedarse sin días enteros, no.")
 
     if not avisos:
         avisos.append(f"{VERDE}✓{FIN} El carácter se comporta: quiere cosas, no siempre "

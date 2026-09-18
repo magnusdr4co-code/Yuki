@@ -179,3 +179,34 @@ def test_un_estado_ilegible_no_tumba_la_instancia(tmp_path):
     destino.write_text('{"energy": 0.4, "mo', encoding="utf-8")
 
     assert VitalState(state_path=str(destino)).energy == 0.75
+
+
+def test_ninguna_corriente_se_queda_clavada_en_el_techo(vital_state):
+    """
+    El volcado de la instancia las enseñaba a 1.00 y no bajaban nunca.
+
+    `sociability` y `mood` sólo las tocaba `apply_stimulus`, que suma; su única
+    vuelta eran las dinámicas por tiempo, multiplicadas por cero. Una corriente
+    de un solo sentido deja de informar en cuanto toca el techo: da igual lo que
+    pase, siempre dice lo mismo.
+    """
+    vital_state.sociability = 1.0
+    vital_state.vulnerability = 1.0
+
+    _recorrer(vital_state, datetime(2026, 9, 21, 0, 0, 0))
+
+    assert vital_state.sociability < 1.0
+    assert vital_state.vulnerability < 1.0
+
+
+def test_la_vulnerabilidad_se_abre_de_noche_y_se_cierra_de_dia(vital_state):
+    """Su hora de sombra la abre; el taller la cierra. Antes no se movía nunca."""
+    vital_state.vulnerability = 0.30
+    _recorrer(vital_state, datetime(2026, 9, 21, 2, 0, 0), horas=3)   # kage
+    de_noche = vital_state.vulnerability
+
+    _recorrer(vital_state, datetime(2026, 9, 21, 9, 0, 0), horas=9)   # atelier
+    de_dia = vital_state.vulnerability
+
+    assert de_noche > 0.30
+    assert de_dia < de_noche

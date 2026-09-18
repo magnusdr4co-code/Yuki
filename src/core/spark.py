@@ -9,7 +9,8 @@ import logging
 from dataclasses import dataclass
 from typing import Any, Dict, List, Optional
 
-from .agency import ACCIONES as ACCIONES_CONOCIDAS, AgencyLedger, AgencyPolicy, ReinforcementModel
+from .agency import (ACCIONES as ACCIONES_CONOCIDAS, MOTIVO_ACTUA, AgencyLedger,
+                     AgencyPolicy, ReinforcementModel)
 from .brake import Brake
 
 logger = logging.getLogger("Yuki.Spark")
@@ -182,7 +183,8 @@ class EchoRitual:
 # «Yuki no hace nada» era un misterio que sólo se podía investigar leyendo
 # registros. Con nombre y censo se convierte en una frase: «de los últimos 72
 # ciclos, 68 fueron fase de silencio y 4 no llegaron al umbral».
-ACTUA = "actua"
+# Una sola definición: el diario lo compara para sellar la fecha del acto.
+ACTUA = MOTIVO_ACTUA
 DESACTIVADO = "desactivado"
 FRENADA = "frenada"
 FASE_DE_SILENCIO = "fase_de_silencio"

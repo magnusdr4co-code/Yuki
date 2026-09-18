@@ -71,6 +71,9 @@ EDADES_POR_DEFECTO = {
     "latido": 6 * HORA,
     "bitacora": 30 * HORA,
     "albedrio": 30 * HORA,
+    # Dos días. Sus actos propios son hasta seis diarios, así que una racha
+    # tranquila cabe de sobra; dos días enteros sin querer nada, no.
+    "iniciativa": 48 * HORA,
     "sueno": 30 * HORA,
     "conversacion": 14 * 24 * HORA,
 }
@@ -239,6 +242,30 @@ class Pulse:
             fuente="data/agency_ledger.json",
             nota=f"aburrimiento {float(datos.get('boredom') or 0.0):.2f}")
 
+    def _iniciativa(self) -> Signo:
+        """
+        La última vez que el bucle de albedrío **eligió** actuar.
+
+        Es distinto de `albedrio`, y la diferencia es justo la que se nos escapó
+        durante nueve días: sus ritmos propios cumplen por calendario sin pasar
+        por la puerta de energía, así que seguían refrescando la bitácora, el
+        diario de agencia y el sueño mientras el bucle moría en `sin_energia` 375
+        ciclos de cada 646. Todos los signos volitivos frescos, y un solo acto
+        elegido en nueve días. Sin esta traza, arreglar el latido habría dejado
+        el panel en verde con ella parada, que es exactamente el fallo que la
+        octava invariante nombra.
+        """
+        datos = _json(self.data_dir / "agency_ledger.json")
+        censo = datos.get("ciclos", {})
+        evaluados = sum(int(n) for dia in censo.values() if isinstance(dia, dict)
+                        for n in dia.values() if isinstance(n, (int, float)))
+        return Signo(
+            id="iniciativa", tipo=VOLITIVO,
+            descripcion="elige actuar por su cuenta, no por calendario",
+            ultimo=_epoch(datos.get("ultimo_acto_propio")),
+            max_edad=self.edades["iniciativa"], fuente="data/agency_ledger.json",
+            nota=f"{evaluados} ciclo(s) evaluados")
+
     def _sueno(self) -> Signo:
         vital = _json(self.data_dir / "vital_state.json")
         return Signo(
@@ -275,7 +302,7 @@ class Pulse:
 
     def read(self) -> Lectura:
         signos = [self._latido(), self._bitacora(), self._albedrio(),
-                  self._sueno(), self._conversacion()]
+                  self._iniciativa(), self._sueno(), self._conversacion()]
         latido = signos[0]
         volitivos = [s for s in signos if s.tipo == VOLITIVO]
         vivos = [s for s in volitivos if s.fresco]

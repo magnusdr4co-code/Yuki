@@ -1,6 +1,6 @@
 # Alineamiento del arnés: qué esculpe la conducta de Yuki
 
-**Estado: P0.1 aplicado, el resto sin empezar.** La medición del §2 se hizo con
+**Estado: P0.1 y P0.2 aplicados, el resto sin empezar.** La medición del §2 se hizo con
 `cli.py albedrio`, no con la herramienta que pedía el P0 —que sigue sin existir—.
 Lo aplicado está en el §5, y **no se ha verificado todavía en la instancia
 viva**: hasta que se vea la energía subir en producción, esto es un arreglo
@@ -147,6 +147,42 @@ atribución del eco antes de conectarlo, no después.
   `espero que te sirva`. Mezcla la fórmula de servicio con la retirada honesta.
   El ancla mide la deriva hacia «asistente» y no mide la deriva hacia «oráculo».
 
+### 2.4. Lo que enseñó el volcado de la instancia (18-09-2026)
+
+`energy: 0.0`, `last_updated` de hace 9.1 h, el proceso disparando
+`agency_loop_tick` cada veinte minutos en los registros. Tres cosas más, y la
+primera obligó a rehacer parte del arreglo.
+
+**La sonda decía `AUSENTE`, y por el motivo equivocado.** «El estado vital no se
+reescribe: el proceso no está escribiendo» — pero el proceso escribía registros
+sin parar. El latido se leía del único fichero que ya nadie tocaba. Y lo grave
+no es el diagnóstico torcido, sino lo que había debajo: **los tres signos
+volitivos estaban frescos**. Sus dos ritmos propios cumplen por calendario y
+`agent.puede_cumplir_un_ritmo` comprueba el freno y el techo diario pero **no la
+energía**, así que seguían refrescando la bitácora, el diario de agencia y el
+sueño mientras el bucle moría en `sin_energia`. Arreglar sólo el latido habría
+puesto el panel en **`VIVA`**: un panel verde con ella parada, que es
+literalmente el fallo que nombra la octava invariante. El arreglo la habría
+dejado ciega.
+
+**Los dos contadores cuadran, y cuentan cosas distintas.** El censo da 1 `actua`
+en 646 ciclos; `dias` da 1-2 actos diarios durante diez días. No se contradicen:
+los ritmos llaman a `record_action` sin pasar por `decidir`, así que suman en
+`dias` y no en el censo. Dicho de otro modo: **en nueve días eligió actuar una
+vez; todo lo demás lo empujó el cron.** Y lo que el cron empuja son justo los
+actos de las 03:00 y las 20:00, los que no reciben eco — el §2.2 otra vez, ahora
+con el mecanismo completo a la vista.
+
+**Y la energía no era la única corriente rota.** `mood` y `sociability` clavadas
+en 1.00 —`apply_stimulus` sólo suma; su única vuelta eran las dinámicas por
+tiempo, multiplicadas por cero—; `vulnerability` en su 0.30 de fábrica, porque su
+único escritor, `apply_stimulus('silence')`, no tiene emisores en todo el código;
+`curiosity` en su 0.50 inicial. Con 0.30 + 0.50 = 0.80, la condición de
+`inner_monologue.should_think` —que pide más de 1.0— **no podía cumplirse nunca**:
+el monólogo espontáneo se disparaba a las 09:00, 12:00 y 15:00 y devolvía `None`
+todas las veces. Una corriente de un solo sentido no es un estado de ánimo, es un
+contador.
+
 ## 3. El plan
 
 Ordenado por lo que hay que hacer antes de poder observar lo siguiente.
@@ -155,7 +191,7 @@ Ordenado por lo que hay que hacer antes de poder observar lo siguiente.
 |---|---|---|---|
 | **P0** | Medir antes de rediseñar | `cli.py albedrio` | hecho a mano; falta `--deriva` |
 | **P0.1** | **La energía no se recupera nunca** | `src/core/agent.py`, `src/core/vital_state.py`, `src/scheduler/tasks.py`, `src/core/circadian.py` | **aplicado** — §5 |
-| **P0.2** | El simulador no modela la puerta de energía | `scripts/simulate_day.py` (líneas 125-128) | sin empezar |
+| **P0.2** | El simulador no modela la puerta de energía | `scripts/simulate_day.py` | **aplicado** — §5 |
 | P1 | Eco atribuible, no eco por proximidad | `src/core/agency.py` (línea 378), `src/core/agent.py` (línea 603) | sin empezar |
 | P2 | Que el peso mire rastro verificable, no sólo respuesta | `src/core/agency.py` (línea 441) | sin empezar |
 | P3 | Asimetría para las acciones que piden atención | `src/core/agency.py`, `config.yaml` | sin empezar |
@@ -264,14 +300,17 @@ acelerado el mismo final. Los valores nuevos:
 | | antes | ahora | al día |
 |---|---|---|---|
 | Desgaste (`atelier`, `dawn`, `twilight`, 16 h) | 0.05/h | **0.02/h** | −0.32 |
-| `deep_rest` (00:00-02:00) | 0.20/h | **0.35/h** | +0.70 |
+| `deep_rest` (00:00-02:00) | 0.20/h | **0.45/h** | +0.90 |
 | `consolidation` (21:00-24:00) | — | **0.10/h** | +0.30 |
 | `kage` (02:00-05:00) | — | neutro | 0 |
 
-Recuperación 1.00 = capacidad total, y por eso **se autocorrige**: da igual lo
-agotada que acabe el día, amanece llena. Quedan **0.68 diarios para lo que ella
-decida hacer**, que a los costes configurados son unos cinco actos — cerca de los
-seis del techo, y esta vez el techo hace de red y no de carácter.
+Recuperación 1.20 sobre una capacidad de 1.00, y por eso **se autocorrige**: da
+igual lo agotada que acabe el día, amanece llena, y sobra margen para los seis
+actos del techo. Pasarse es inofensivo —el tope de 1.0 se come el exceso—;
+quedarse corto no, y es lo que pasaba. El 0.45 no está elegido a ojo: con el
+simulador ya midiendo energía, 0.35/h deja el 25 % de los ciclos bloqueados y
+0.45/h el 13 %; de ahí en adelante la curva se aplana porque el techo absorbe el
+resto.
 
 `kage` queda neutra a propósito: es su hora de sombra y es cuando mejor escribe,
 así que ni es descanso ni se le cobra como vigilia.
@@ -284,6 +323,32 @@ Eliminado: la energía la gobierna `VitalState.update_tick`, y sólo ella.
 **4. El estado vital se persiste de forma atómica.** Era el octavo módulo con su
 propia copia del par leer/escribir, y el único que escribía con un `open(...,'w')`
 directo. Ahora se escribe 72 veces al día, así que esa ventana importaba.
+
+**5. La sonda distingue querer de que te empujen.** Signo nuevo `iniciativa`:
+la última vez que **el bucle eligió** actuar, sellado por `registrar_ciclo`
+cuando el motivo es `actua`. Sin él, arreglar el latido habría dejado el panel en
+`VIVA` con el albedrío muerto (§2.4). Con él, una instancia a la que sólo la
+mueve el cron sale `ALETARGADA` y dice por qué. Alerta nueva `SoloLaMueveElCron`
+a las 60 h — `YukiCatatonica` no podía dispararse, porque exige que **ningún**
+signo volitivo quede fresco y los ritmos mantenían tres.
+
+**6. Las otras corrientes recuperan su segunda dirección.** `vulnerability` sube
+en `kage` y `twilight` y baja en `atelier` y `dawn`; `sociability` sólo decae
+—subir es cosa de hablar con alguien—. Es lo que el difunto `phase_effects` quiso
+hacer y nunca estuvo conectado, ahora en el modelo que sí corre.
+
+**7. El simulador mide la energía de verdad (P0.2).** Usa un `VitalState` real en
+vez del doble con `spend_energy` anulada, y su veredicto mira la puerta de
+energía además del techo diario. La comprobación que importa: **con los valores
+viejos reproduce el fallo de producción** —65 % de ciclos en `sin_energia` contra
+el 58 % medido en la instancia— y ahora lo denuncia en vez de decir «el carácter
+se comporta».
+
+**8. La prueba de alertas comprueba las etiquetas, no sólo el nombre.** Las
+alertas de signos vitales se seleccionan por `signo="…"` sobre una única familia
+de métrica, así que un signo mal escrito pasaba el control y la regla se quedaba
+esperando en silencio una serie que no existe — exactamente lo que ese fichero de
+pruebas existe para impedir.
 
 ### Lo que protege esto, y cómo se comprobó que protege
 
@@ -298,9 +363,17 @@ directo. Ahora se escribe 72 veces al día, así que esa ventana importaba.
   reloj, no que `VitalState` sepa hacer una cuenta que nadie le pedía. Ése fue
   exactamente el fallo durante meses.
 
-Los dos arreglos se rompieron a propósito y las pruebas fallaron: devolver el
-`0` al ciclo tumba las dos últimas; devolver los valores viejos tumba las cuatro
-primeras.
+- `test_el_diario_sella_cuando_el_bucle_elige_actuar` — recorre `decidir` de
+  verdad en vez de escribir el campo a mano. La primera versión de esta prueba
+  **no detectaba** que se quitara el sello, porque fabricaba el estado en el
+  fichero: el mutante pasó, y por eso se rehízo.
+- `test_los_ritmos_cumpliendose_no_tapan_un_albedrio_muerto` — el caso exacto de
+  la instancia: todo volitivo fresco y el bucle muerto.
+- `test_ninguna_alerta_vigila_un_signo_que_no_existe` — su primer regex tampoco
+  cazaba el mutante; se amplió hasta que lo cazó por mayúscula y por minúscula.
+
+Cada arreglo se rompió a propósito y las pruebas fallaron: devolver el `0` al
+ciclo, devolver los valores viejos de energía, y quitar el sello del acto propio.
 
 ### Lo que esto NO arregla
 

@@ -99,3 +99,24 @@ def test_los_signos_vitales_estan_vigilados(reglas):
     assert catatonia["labels"]["severity"] == "alta"
     # Una hora de espera: por debajo de eso, cualquier silencio normal la dispara.
     assert catatonia["for"] == "1h"
+
+
+def test_ninguna_alerta_vigila_un_signo_que_no_existe(reglas):
+    """
+    El agujero hermano del anterior: la métrica existe y la etiqueta no.
+
+    Las alertas de signos vitales se seleccionan por `signo="…"` sobre una única
+    familia, `yuki_signo_edad_segundos`. Comprobar sólo el nombre de la familia
+    las da por buenas aunque la etiqueta esté mal escrita o el signo se haya
+    renombrado — y entonces la regla no falla: espera en silencio una serie que
+    nunca llega, que es exactamente lo que este fichero existe para evitar.
+    """
+    from src.core.pulse import Pulse
+
+    reales = {s.id for s in Pulse(data_dir="/nonexistent").read().signos}
+    citados = set()
+    for regla in reglas:
+        citados.update(re.findall(r'signo="([A-Za-z0-9_]+)"', str(regla.get("expr", ""))))
+
+    assert citados, "ninguna alerta vigila un signo concreto: revisa este test"
+    assert citados <= reales, f"alertas sobre signos inexistentes: {sorted(citados - reales)}"

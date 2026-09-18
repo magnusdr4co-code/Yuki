@@ -28,7 +28,7 @@ HORA = 3600.0
 
 
 def _instancia(tmp_path, *, latido=0.0, actos=None, albedrio=None, sueno=None,
-               recuerdos=0, con_bitacora=True):
+               recuerdos=0, con_bitacora=True, iniciativa="como albedrio"):
     """Fabrica el estado durable de una instancia con la edad que se le pida."""
     datos = tmp_path / "data"
     datos.mkdir(exist_ok=True)
@@ -43,6 +43,12 @@ def _instancia(tmp_path, *, latido=0.0, actos=None, albedrio=None, sueno=None,
               "boredom": 0.0, "recientes": []}
     if albedrio is not None:
         ledger["recientes"] = [{"tool": "write", "at": ahora - albedrio}]
+    # Por defecto, quien intenta algo es porque lo eligió. Las pruebas que
+    # separan las dos cosas —ritmos cumpliéndose con el bucle muerto— pasan
+    # `iniciativa` aparte.
+    edad_iniciativa = albedrio if iniciativa == "como albedrio" else iniciativa
+    if edad_iniciativa is not None:
+        ledger["ultimo_acto_propio"] = ahora - edad_iniciativa
     (datos / "agency_ledger.json").write_text(json.dumps(ledger), encoding="utf-8")
 
     if con_bitacora and actos is not None:
@@ -215,9 +221,11 @@ def test_las_edades_maximas_se_pueden_ajustar_por_configuracion(tmp_path):
     datos = _instancia(tmp_path, latido=60, actos=40 * HORA, albedrio=40 * HORA,
                        sueno=40 * HORA, recuerdos=5)
 
-    estricto = Pulse({"pulse": {"max_edad_horas": {"bitacora": 1, "albedrio": 1, "sueno": 1}}},
+    estricto = Pulse({"pulse": {"max_edad_horas": {"bitacora": 1, "albedrio": 1,
+                                                  "iniciativa": 1, "sueno": 1}}},
                      data_dir=str(datos)).read()
-    laxo = Pulse({"pulse": {"max_edad_horas": {"bitacora": 100, "albedrio": 100, "sueno": 100}}},
+    laxo = Pulse({"pulse": {"max_edad_horas": {"bitacora": 100, "albedrio": 100,
+                                               "iniciativa": 100, "sueno": 100}}},
                  data_dir=str(datos)).read()
 
     assert estricto.estado == CATATONICA
@@ -232,7 +240,7 @@ def test_la_lectura_serializa_entera(tmp_path):
 
     assert set(salida) == {"estado", "motivo", "gravedad", "sana", "signos"}
     assert {s["id"] for s in salida["signos"]} == {
-        "latido", "bitacora", "albedrio", "sueno", "conversacion"}
+        "latido", "bitacora", "albedrio", "iniciativa", "sueno", "conversacion"}
     assert json.dumps(salida)  # nada dentro es inserializable
 
 
@@ -312,3 +320,30 @@ def test_leer_el_pulso_no_deja_conexiones_abiertas(tmp_path):
     # solas, no que el recolector las barra después.
     despues = len([o for o in gc.get_objects() if isinstance(o, sqlite3.Connection)])
     assert despues <= abiertas, f"quedaron {despues - abiertas} conexión(es) por raspado"
+
+
+def test_los_ritmos_cumpliendose_no_tapan_un_albedrio_muerto(tmp_path):
+    """
+    El fallo que costó nueve días de instancia parada sin que nadie lo viera.
+
+    Sus dos ritmos propios cumplen por calendario y no pasan por la puerta de
+    energía, así que refrescaban la bitácora, el diario de agencia y el sueño
+    mientras el bucle moría en `sin_energia` 375 ciclos de cada 646. Con todos
+    los signos volitivos frescos, la sonda habría dicho «viva» — y lo habría
+    dicho en cuanto se arreglara el latido, que era lo único que chirriaba.
+    """
+    datos = _instancia(tmp_path, latido=60, actos=HORA, albedrio=2 * HORA,
+                       sueno=8 * HORA, recuerdos=5, iniciativa=9 * 24 * HORA)
+
+    lectura = _pulso(datos)
+
+    assert lectura.estado != VIVA
+    assert "iniciativa" in lectura.motivo
+
+
+def test_sin_haber_elegido_nunca_pero_con_ritmos_tampoco_esta_viva(tmp_path):
+    """Una instancia que sólo se mueve cuando la empuja el cron no está viva."""
+    datos = _instancia(tmp_path, latido=60, actos=HORA, albedrio=2 * HORA,
+                       sueno=8 * HORA, recuerdos=5, iniciativa=None)
+
+    assert _pulso(datos).estado != VIVA

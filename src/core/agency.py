@@ -77,6 +77,11 @@ COSTES_POR_DEFECTO: Dict[str, float] = {
 
 DIAS_RETENIDOS_ECO = 30
 
+# El motivo de ciclo que significa «actuó». Vive aquí y no en `spark` porque el
+# diario necesita reconocerlo para sellar la fecha, y `spark` importa de este
+# módulo y no al revés.
+MOTIVO_ACTUA = "actua"
+
 
 def _hoy(zona: str = "Europe/Madrid") -> str:
     try:
@@ -281,7 +286,8 @@ class AgencyLedger:
     @staticmethod
     def _vacio() -> Dict[str, Any]:
         return {"acciones": {}, "franjas": {}, "dias": {}, "pendientes": [],
-                "boredom": 0.0, "recientes": [], "ciclos": {}}
+                "boredom": 0.0, "recientes": [], "ciclos": {},
+                "ultimo_acto_propio": None}
 
     def _leer(self) -> Dict[str, Any]:
         datos = estado_json.leer(self.path, self._vacio, que_es="Diario de agencia")
@@ -305,6 +311,11 @@ class AgencyLedger:
 
     def boredom(self) -> float:
         return float(self._leer().get("boredom", 0.0))
+
+    def ultimo_acto_propio(self) -> Optional[float]:
+        """Cuándo eligió actuar el bucle por última vez. Lo sella `registrar_ciclo`."""
+        marca = self._leer().get("ultimo_acto_propio")
+        return float(marca) if isinstance(marca, (int, float)) and marca > 0 else None
 
     def recientes(self, limite: int = 5) -> List[str]:
         return [r["tool"] for r in self._leer()["recientes"][-limite:]]
@@ -347,6 +358,13 @@ class AgencyLedger:
         datos = self._leer()
         por_dia = datos.setdefault("ciclos", {}).setdefault(_hoy(self.timezone_name), {})
         por_dia[motivo] = int(por_dia.get(motivo, 0)) + 1
+        # Y se sella la fecha del último acto que eligió *el bucle*. Sin esto no
+        # hay forma de distinguir desde fuera a una Yuki que quiere cosas de una
+        # a la que sólo la mueve el cron: los ritmos propios cumplen por
+        # calendario y refrescan igual el resto de signos volitivos, así que la
+        # sonda daba «viva» con el albedrío muerto. Nueve días lo dio.
+        if motivo == MOTIVO_ACTUA:
+            datos["ultimo_acto_propio"] = time.time()
         self._podar(datos)
         self._escribir(datos)
 

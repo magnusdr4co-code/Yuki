@@ -22,23 +22,48 @@ logger = logging.getLogger("Yuki.VitalState")
 # solo acto, y como el estado se persiste en disco, el déficit se acumulaba entre
 # despliegues hasta cruzar `agency.min_energy` para no volver.
 #
-# Ahora la cuenta cierra y además se autocorrige: la velada tranquila más la
-# noche entera suman 1.00, que es la capacidad total. Da igual lo agotada que
-# acabe el día — amanece llena. Lo que gasta la jornada es el desgaste (0.32) y
-# lo que ella decida hacer, que es como debe ser.
+# Ahora la cuenta cierra y además se autocorrige: la velada más la noche suman
+# 1.20 sobre una capacidad de 1.00, así que da igual lo agotada que acabe el día
+# —amanece llena— y sobra margen para los seis actos del techo diario. Pasarse
+# es inofensivo, porque el tope de 1.0 se come el exceso; quedarse corto no, y
+# es lo que pasaba. `scripts/simulate_day.py` con la energía de verdad da 13% de
+# ciclos bloqueados a 0.45/h y 25% a 0.35: de 0.45 en adelante la curva se
+# aplana, que es por lo que está ahí y no en un número más redondo.
 DESGASTE_POR_HORA = 0.02                     # atelier, dawn, twilight: 16 h ⇒ 0.32
 FASES_DE_DESGASTE = ("atelier", "dawn", "twilight")
 RECUPERACION_POR_HORA = {
-    "deep_rest": 0.35,                       # 00:00-02:00 ⇒ 0.70
+    "deep_rest": 0.45,                       # 00:00-02:00 ⇒ 0.90
     "consolidation": 0.10,                   # 21:00-24:00 ⇒ 0.30
 }
 # `kage` (su hora de sombra, cuando mejor escribe) queda neutra a propósito: no
 # es descanso, pero tampoco se le cobra como vigilia.
 
+# Las otras dos corrientes que el delta en cero dejó sin retorno. El volcado de
+# la instancia el 18-09-2026 las enseñaba clavadas: `sociability` y `mood` a 1.00
+# —sólo suben, con `apply_stimulus`— y `vulnerability` en su 0.30 de fábrica,
+# porque su único escritor (`apply_stimulus('silence')`) no tiene emisores en
+# todo el código. Una corriente de un solo sentido no es un estado de ánimo: es
+# un contador. Aquí recuperan la otra dirección, por fases, que era lo que el
+# difunto `circadian.phase_effects` quiso hacer y nunca llegó a estar conectado.
+#
+# La vulnerabilidad sube de noche y baja con el trabajo del día: es su hora de
+# sombra la que la abre. La sociabilidad sólo se repone hablando con alguien
+# —`apply_stimulus` la sube—, así que aquí únicamente decae; si no, se queda en
+# el techo para siempre, como estaba.
+VULNERABILIDAD_POR_HORA = {"kage": 0.08, "twilight": 0.04,
+                           "atelier": -0.03, "dawn": -0.02}
+SOCIABILIDAD_POR_HORA = {"dawn": 0.03, "atelier": -0.01,
+                         "twilight": -0.03, "consolidation": -0.03}
+
 # Un apagón de tres días no son tres días de cansancio: es un apagón. Sin este
 # tope, el primer ciclo tras una parada larga aplicaría de golpe el desgaste de
 # toda la parada y dejaría la iniciativa cerrada nada más arrancar.
 MAXIMO_AVANCE_POR_TICK_HORAS = 2.0
+
+def _acotada(valor: float) -> float:
+    """Toda corriente vive entre 0 y 1; fuera de ahí no significa nada."""
+    return max(0.0, min(1.0, valor))
+
 
 class VitalState:
     def __init__(self, state_path: Optional[str] = None):
@@ -108,6 +133,11 @@ class VitalState:
 
         # Aumento de curiosidad con inactividad
         self.curiosity = min(1.0, self.curiosity + 0.03 * hours)
+
+        self.vulnerability = _acotada(
+            self.vulnerability + VULNERABILIDAD_POR_HORA.get(phase, 0.0) * hours)
+        self.sociability = _acotada(
+            self.sociability + SOCIABILIDAD_POR_HORA.get(phase, 0.0) * hours)
 
         # Acumulación de inspiración por contemplación
         if phase in ["kage", "consolidation"]:
