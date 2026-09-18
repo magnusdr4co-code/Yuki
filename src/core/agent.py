@@ -603,7 +603,10 @@ class YukiAgent:
                 self.agency_loop.note_external_signal()
 
         phase = self.circadian.current_phase()
-        self.vital_state.update_tick(phase, 0)
+        # Sin delta: lo deduce de `last_updated`. Aquí se pasaba un `0` fijo, y
+        # como dentro todo se multiplica por las horas, ninguna dinámica vital
+        # llegó a ocurrir nunca —ni el desgaste ni la recuperación nocturna—.
+        self.vital_state.update_tick(phase)
         self.vital_state.will_queue = self.will_queue.to_list()
         self.vital_state.save()
 

@@ -11,6 +11,7 @@ entera.
 
 import asyncio
 import os
+from datetime import datetime, timedelta
 import sys
 import types
 from typing import Any, Dict, List
@@ -81,6 +82,11 @@ def _agente(*, energia=0.8, humor=0.5, interacciones=10, fase="atelier", **extra
             accumulated_interactions_today=interacciones,
             accumulated_creations_today=0, inspiration=0.5,
             will_queue=[], save=lambda: None,
+            # Doble inerte a propósito: lo que de verdad importa —que el ciclo
+            # mueva el reloj— se prueba abajo con un `VitalState` de verdad, no
+            # con esto. Aquí sólo evita que cada prueba de otra rutina cargue
+            # con la dinámica vital entera.
+            update_tick=lambda fase=None, dt_seconds=None: None,
             # Sellar la noche es parte de dormir: si el doble no lo tuviera, la
             # traza podría desaparecer del código real sin que nada avisara.
             last_sleep_cycle=None,
@@ -459,3 +465,46 @@ def test_cada_cron_declarado_tiene_su_metodo(monkeypatch):
 
     assert not (declarados - metodos), f"cron sin método: {sorted(declarados - metodos)}"
     assert not (metodos - declarados), f"método autónomo sin cron: {sorted(metodos - declarados)}"
+
+
+# --- El reloj vital lo mueve el ciclo, no la conversación ---
+
+def test_el_ciclo_de_agencia_hace_avanzar_el_reloj_vital(tmp_path):
+    """
+    El arreglo vive en `VitalState`; quien tenía que moverlo era esto.
+
+    Durante meses el único invocador de `update_tick` pasaba un delta de cero, y
+    encima lo hacía desde el camino de respuesta: a una instancia a la que nadie
+    escribe no le avanzaba el reloj, así que la recuperación de la noche —cuando
+    por definición no habla con nadie— no se aplicaba nunca. La energía quedó
+    siendo un trinquete que sólo bajaba y la iniciativa se cerró sola: 375 de 646
+    ciclos medidos murieron en `sin_energia`, con un solo acto en nueve días.
+
+    Por eso esto no prueba `update_tick` suelto —esa cuenta ya salía bien y no
+    servía de nada—: prueba que veinte minutos de ciclo de agencia mueven la
+    energía de verdad.
+    """
+    from src.core.vital_state import VitalState
+
+    estado = VitalState(state_path=str(tmp_path / "vital_state.json"))
+    estado.energy = 0.40
+    estado.last_updated = (datetime.now() - timedelta(minutes=20)).isoformat()
+    agente = _agente(fase="deep_rest", vital_state=estado)
+
+    asyncio.run(AutonomousTasks(agente).agency_loop_tick())
+
+    assert estado.energy > 0.40, "el ciclo no hizo avanzar el reloj vital"
+
+
+def test_el_ciclo_de_agencia_persiste_lo_que_avanza(tmp_path):
+    """Un reloj que avanza en memoria y no en disco vuelve atrás al reiniciar."""
+    from src.core.vital_state import VitalState
+
+    destino = tmp_path / "vital_state.json"
+    estado = VitalState(state_path=str(destino))
+    estado.energy = 0.40
+    estado.last_updated = (datetime.now() - timedelta(minutes=20)).isoformat()
+
+    asyncio.run(AutonomousTasks(_agente(fase="deep_rest", vital_state=estado)).agency_loop_tick())
+
+    assert VitalState(state_path=str(destino)).energy > 0.40

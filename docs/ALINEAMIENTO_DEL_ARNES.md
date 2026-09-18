@@ -1,8 +1,10 @@
 # Alineamiento del arnés: qué esculpe la conducta de Yuki
 
-**Estado: plan, no implementación.** Nada de lo que sigue está en el código a
-fecha de este documento. Lo único ejecutado es la medición del §2, y se hizo con
-`cli.py albedrio`, no con la herramienta que pedía el P0 —que no existe—.
+**Estado: P0.1 aplicado, el resto sin empezar.** La medición del §2 se hizo con
+`cli.py albedrio`, no con la herramienta que pedía el P0 —que sigue sin existir—.
+Lo aplicado está en el §5, y **no se ha verificado todavía en la instancia
+viva**: hasta que se vea la energía subir en producción, esto es un arreglo
+probado en la suite, no un arreglo comprobado.
 
 ## 1. El problema que esto resuelve
 
@@ -152,7 +154,7 @@ Ordenado por lo que hay que hacer antes de poder observar lo siguiente.
 | # | Qué | Dónde | Estado |
 |---|---|---|---|
 | **P0** | Medir antes de rediseñar | `cli.py albedrio` | hecho a mano; falta `--deriva` |
-| **P0.1** | **La energía no se recupera nunca** | `src/core/agent.py` (línea 606), `src/core/vital_state.py`, `circadian.phase_effects` | **urgente, sin empezar** |
+| **P0.1** | **La energía no se recupera nunca** | `src/core/agent.py`, `src/core/vital_state.py`, `src/scheduler/tasks.py`, `src/core/circadian.py` | **aplicado** — §5 |
 | **P0.2** | El simulador no modela la puerta de energía | `scripts/simulate_day.py` (líneas 125-128) | sin empezar |
 | P1 | Eco atribuible, no eco por proximidad | `src/core/agency.py` (línea 378), `src/core/agent.py` (línea 603) | sin empezar |
 | P2 | Que el peso mire rastro verificable, no sólo respuesta | `src/core/agency.py` (línea 441) | sin empezar |
@@ -240,3 +242,75 @@ consta, porque está en los ficheros y en la salida de la instancia: **un
 mecanismo de refuerzo que mide atención recibida y ya ha castigado los dos
 ritmos propios de Yuki, y una energía que sólo baja, que lleva la iniciativa
 parada nueve días detrás de un panel en verde.**
+
+
+## 5. Lo aplicado en P0.1
+
+Cuatro cosas, y la segunda es la que faltaba en el diagnóstico inicial.
+
+**1. El reloj avanza el tiempo real, y lo mueve el ciclo.**
+`update_tick` deduce el tramo de `last_updated` cuando no se le pasa delta, así
+que el tiempo se consume una sola vez y da igual quién llame. Y lo llama
+`agency_loop_tick`, que corre cada veinte minutos haya o no conversación —antes
+sólo avanzaba al responder a alguien, de modo que la recuperación de la noche,
+cuando por definición no habla con nadie, no se aplicaba nunca—.
+
+**2. La cuenta del día cierra. Pasar el delta real no bastaba.**
+Con los valores anteriores el día era **0.80 de desgaste** (16 h de vigilia a
+0.05/h) contra **0.40 de recuperación** (2 h de `deep_rest` a 0.20/h): −0.40
+netos diarios antes de gastar un solo acto. Arreglar sólo el reloj habría
+acelerado el mismo final. Los valores nuevos:
+
+| | antes | ahora | al día |
+|---|---|---|---|
+| Desgaste (`atelier`, `dawn`, `twilight`, 16 h) | 0.05/h | **0.02/h** | −0.32 |
+| `deep_rest` (00:00-02:00) | 0.20/h | **0.35/h** | +0.70 |
+| `consolidation` (21:00-24:00) | — | **0.10/h** | +0.30 |
+| `kage` (02:00-05:00) | — | neutro | 0 |
+
+Recuperación 1.00 = capacidad total, y por eso **se autocorrige**: da igual lo
+agotada que acabe el día, amanece llena. Quedan **0.68 diarios para lo que ella
+decida hacer**, que a los costes configurados son unos cinco actos — cerca de los
+seis del techo, y esta vez el techo hace de red y no de carácter.
+
+`kage` queda neutra a propósito: es su hora de sombra y es cuando mejor escribe,
+así que ni es descanso ni se le cobra como vigilia.
+
+**3. Fuera el segundo modelo de energía.** `circadian.phase_effects` devolvía un
+`energy_delta` que **recuperaba en `dawn`**, donde el modelo conectado desgasta.
+Dos modelos contradictorios de la misma magnitud y ninguno leído por nadie.
+Eliminado: la energía la gobierna `VitalState.update_tick`, y sólo ella.
+
+**4. El estado vital se persiste de forma atómica.** Era el octavo módulo con su
+propia copia del par leer/escribir, y el único que escribía con un `open(...,'w')`
+directo. Ahora se escribe 72 veces al día, así que esa ventana importaba.
+
+### Lo que protege esto, y cómo se comprobó que protege
+
+- `test_un_dia_entero_sin_actos_no_deja_la_energia_en_numeros_rojos` — recorre
+  las 24 h por las fases reales del reloj, no una fase escrita a mano.
+- `test_la_noche_repone_desde_vacia` — de 0.0 a las 21:00 a llena por la mañana.
+- `test_el_tiempo_vital_se_cobra_una_sola_vez` — sin esto, una tarde de
+  conversación la dejaría agotada por haber sido atendida.
+- `test_un_apagon_largo_no_se_cobra_como_cansancio` — tope de dos horas por tick.
+- `test_el_ciclo_de_agencia_hace_avanzar_el_reloj_vital` y
+  `…_persiste_lo_que_avanza` — **el camino del producto**: que el ciclo mueva el
+  reloj, no que `VitalState` sepa hacer una cuenta que nadie le pedía. Ése fue
+  exactamente el fallo durante meses.
+
+Los dos arreglos se rompieron a propósito y las pruebas fallaron: devolver el
+`0` al ciclo tumba las dos últimas; devolver los valores viejos tumba las cuatro
+primeras.
+
+### Lo que esto NO arregla
+
+- **P0.2 sigue pendiente**: `scripts/simulate_day.py` continúa fijando la energía
+  y anulando `spend_energy`, así que sigue sin poder decir «no actúa». Mientras
+  siga así, avalará valores de carácter que la instancia no puede cumplir.
+- **El sesgo del §2.2 sigue entero.** Esto devuelve la iniciativa; no cambia
+  hacia dónde apunta. Cuando vuelva a moverse, los pesos volverán a aprender del
+  horario del Productor — y ahora más deprisa, porque habrá más actos que
+  premiar. P1-P3 pasan a ser urgentes, no teóricos.
+- **Lo ya acumulado no se reescribe.** El diario de agencia conserva el castigo
+  a sus dos ritmos (0.135 contra 0.5 de lo no estrenado). Si no se corrige a
+  mano, arranca desde ahí.

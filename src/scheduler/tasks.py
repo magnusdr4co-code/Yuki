@@ -355,6 +355,15 @@ class AutonomousTasks:
         impulsos y la tensión ha subido bastante, nace uno.
         """
         phase = self.agent.circadian.current_phase()
+        # El reloj vital lo mueve este ciclo, que corre cada veinte minutos haya
+        # o no conversación. Antes sólo avanzaba al responder a alguien: una
+        # instancia a la que nadie escribe no se cansaba ni se reponía, y la
+        # recuperación de la noche —cuando por definición no habla con nadie— no
+        # llegaba a aplicarse jamás. Va antes de decidir para que la puerta de
+        # energía mire el valor de ahora y no el del último que le habló.
+        self.agent.vital_state.update_tick(phase)
+        self.agent.vital_state.save()
+
         decision = self.agent.agency_loop.decidir(phase=phase)
         if decision.impulso is not None:
             return await self.agent.execute_autonomous_will(decision.impulso)

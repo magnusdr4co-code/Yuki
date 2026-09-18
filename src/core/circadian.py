@@ -3,7 +3,6 @@ Módulo de Ritmo Circadiano para Yuki.
 Modela 6 fases diarias con transiciones suaves y fluctuaciones (jitter).
 """
 
-import math
 import logging
 import hashlib
 from datetime import datetime, timezone
@@ -24,6 +23,12 @@ class CircadianClock:
             self.tz = timezone.utc
 
         self.jitter_minutes = jitter_minutes
+
+        # Aquí vivía además `phase_effects`, que devolvía un `energy_delta` por
+        # fase —recuperando en `dawn`, donde el modelo que sí estaba conectado
+        # desgasta—. Dos modelos contradictorios de la misma magnitud y ninguno
+        # de los dos leído por nadie. Se ha ido: la energía la gobierna
+        # `VitalState.update_tick`, y sólo ella.
 
         # Definición de fases por horas (inicio, fin)
         self.phases_schedule = {
@@ -97,45 +102,6 @@ class CircadianClock:
 
         progress = (hours - start) / duration
         return max(0.0, min(1.0, progress))
-
-    def _sigmoid(self, x: float, midpoint: float = 0.5, k: float = 10.0) -> float:
-        """Función sigmoide para transiciones suaves."""
-        return 1.0 / (1.0 + math.exp(-k * (x - midpoint)))
-
-    def phase_effects(self, dt: Optional[datetime] = None) -> Dict[str, float]:
-        """Retorna multiplicadores de corrientes vitales para la fase actual."""
-        dt = self._get_dt(dt)
-        phase = self.current_phase(dt)
-        progress = self.phase_progress(dt)
-
-        effects = {
-            "energy_delta": 0.0,
-            "vulnerability_delta": 0.0,
-            "curiosity_delta": 0.0,
-            "sociability_delta": 0.0
-        }
-
-        transition = self._sigmoid(progress)
-
-        if phase == "deep_rest":
-            effects["energy_delta"] = 0.5 * transition
-            effects["vulnerability_delta"] = 0.0
-        elif phase == "kage":
-            effects["vulnerability_delta"] = 0.5 + 0.5 * transition
-            effects["curiosity_delta"] = 0.3 * transition
-        elif phase == "dawn":
-            effects["energy_delta"] = 0.3 * transition
-            effects["sociability_delta"] = 0.2 * transition
-        elif phase == "atelier":
-            effects["energy_delta"] = -0.1 * transition
-            effects["vulnerability_delta"] = -0.2 * transition
-        elif phase == "twilight":
-            effects["vulnerability_delta"] = 0.2 * transition
-            effects["sociability_delta"] = -0.2 * transition
-        elif phase == "consolidation":
-            effects["curiosity_delta"] = -0.1 * transition
-
-        return effects
 
     def is_responsive(self, dt: Optional[datetime] = None) -> bool:
         """Devuelve False durante deep_rest para indicar que Yuki no debería responder o solo responder mínimamente."""
