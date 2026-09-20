@@ -236,8 +236,10 @@ def build_registry() -> List[StateItem]:
             description="Cómo se presenta: voz elegida, paleta, tipografía y los cuatro avatares",
             authority=YUKI, scope="su propia imagen y voz", mutability="mutable",
             provenance="ritual de autocaracterización al cambiar la micro-estación",
-            recoverability=("copia diaria verificada; los avatares viven en output/identity "
-                            "y regenerarlos vuelve a costar crédito de imagen"),
+            recoverability=("copia diaria verificada. Los avatares **no**: los escribe el "
+                            "camino de imagen en output/art, que no entra en ninguna copia, "
+                            "así que perder el disco deja este manifiesto apuntando a "
+                            "ficheros que ya no están y regenerarlos vuelve a costar crédito"),
             actionability="fija con qué cara y qué voz se presenta; no dispara acciones por sí solo",
         ),
         StateItem(
