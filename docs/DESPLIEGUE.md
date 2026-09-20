@@ -135,6 +135,7 @@ curl -s localhost:8080/health                      # sonda barata: ¿arrancó?
 python3 cli.py pulso                               # ¿respira **y** hace cosas suyas?
 python3 cli.py virtualize                          # qué es real, qué simulado, qué inactivo
 python3 cli.py spend                               # gasto de hoy, y por tarea
+python3 cli.py identidad                           # con qué cara y voz se presenta hoy
 python3 scripts/smoke_check.py                     # memoria, bitácora, Artículo 50, carácter
 python3 cli.py backup --ensayar                    # copia, y se restaura para darla por buena
 ```
@@ -146,6 +147,11 @@ Lo que debe verse:
 - `virtualize` sin limitadores **bloqueantes** abiertos. Con `VERTEX_PROJECT_ID`
   sin declarar hay uno, y es correcto que lo haya.
 - `smoke_check` en verde, incluido el marcado del Artículo 50.
+- `identidad` dirá «sin manifiesto todavía» en una instancia recién desplegada, y
+  eso es correcto: la decide ella al cambiar la micro-estación, en el cron de las
+  04:00. Cuando ya lo haya hecho, lo que importa de esa salida es **cuántos
+  avatares tienen fichero real**: si salieron menos de cuatro, el motivo de cada
+  uno está ahí escrito, y es información, no una avería del despliegue.
 
 ## 6. Lo primero que conviene hacer después
 
@@ -289,5 +295,6 @@ algo que arreglar, y no se arregla con un secreto.
 | Un encargo multimedia no llegó | `!status` en el DM, `/api/trabajos` en el Salón, o `data/media_jobs/` |
 | Medios que salen como marcador | Falta `VERTEX_PROJECT_ID`. Es un estado declarado, no un fallo silencioso |
 | La copia no sale del disco | Falta `BACKUP_GCS_BUCKET`; el resultado de `cli.py backup` lo dice |
+| Sigue con la cara de la estación pasada | `cli.py identidad` dice de qué sekki es el manifiesto y por qué falló cada avatar; el cron es `seasonal_self_characterization` (04:00) y la alerta, `IdentidadCaducada` |
 
 Con lo urgente en [`OPERACION.md`](OPERACION.md).

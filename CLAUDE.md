@@ -46,12 +46,18 @@ Romper una de éstas es romper el proyecto, no una prueba:
 ```
 src/core/       agente, albedrío (agency, spark, rituals), identidad
                 (persona_anchor, transparency, cotejo: lo dicho contra lo
-                ejecutado), gobierno (state_registry, blackbox, brake,
+                ejecutado, y `self_characterization`: con qué cara y qué voz se
+                presenta, que decide ella al cambiar el sekki), lenguaje (`llm_router.py` recorre las pasarelas,
+                `llm_proveedores.py` las implementa, `llm_entorno.py` sabe del
+                entorno y de los nombres de modelo), gobierno (state_registry, blackbox, brake,
                 spend_budget, virtual_instance), salud (pulse, registro: el log
                 encendido en los puntos de entrada);
                 `rutas.py` decide dónde vive cada cosa y `estado_json.py` cómo
                 se guarda —atómico, y tolerante a un fichero corrupto—
-src/memory/     FTS5 + ciclo de sueño (sleep_cycle)
+src/memory/     FTS5 + ciclo de sueño: `sleep_cycle.py` es el armazón (política,
+                conexión, recibo, olvido y noche completa) y cada fase vive en
+                el suyo —`sueno_nrem.py` consolida, `sueno_rem.py` sueña—, con
+                `sueno_comun.py` para el vocabulario y la firma léxica
 src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 `cuaderno.py` guarda lo que quedó sin resolver del oficio —no la
                 obra, que es la Biblioteca— y avisa al criterio sin tocar un
@@ -62,8 +68,13 @@ src/tools/      medios (vertex_media, music_fallback), biblioteca, backup,
                 lo deducido se declara deducido
 src/adapters/   Discord (el que importa), Telegram (salida real, sin entrada);
                 `encargo.py` traduce el pedido en plan de producción (qué
-                piezas, cuántos segmentos, qué indicaciones van al prompt)
-src/web/        Salón + /metrics
+                piezas, cuántos segmentos, qué indicaciones van al prompt).
+                `discord_bot.py` es sólo el trato con el gateway: lo que se hace
+                con lo que entra vive en `discord_comandos.py` (los `!` del
+                gobierno), `discord_produccion.py` (el encargo durable, que es
+                lo que gasta) y `discord_salon.py` (abrir canal y publicar allí)
+src/web/        Salón (`server.py`) y `/metrics` (`metricas.py`, que no toca el
+                agente: una sonda que lo despertara cambiaría lo que mide)
 src/cli/        los comandos por temas (gobierno, mente, operacion); `cli.py`
                 en la raíz sólo declara argumentos y reparte
 scripts/        smoke_check, chaos_drill, restore_drill, simulate_day,
@@ -154,6 +165,12 @@ make cobertura   # con informe por fichero; el umbral vive en pyproject
 9. Si añadiste un campo de estado, escribe también quién lo sella. Un campo que
    nadie escribe es peor que no tenerlo: `last_sleep_cycle` estuvo declarado y
    serializado durante meses sin un solo escritor.
+10. Y si añadiste un **módulo**, que alguien lo llame. `self_characterization.py`
+   fueron mil líneas que no importaba nadie mientras su skill prometía que el
+   ritual corría al cambiar el sekki —ya está enchufado al cron de las 04:00—:
+   un módulo grande se confunde con una capacidad, y no falla nunca.
+   `tests/test_modulos_sin_llamador.py` exige que un módulo sin importador lo
+   diga en su docstring —quién lo arranca, o que todavía nadie—.
 
 ## Lo que no se hace
 

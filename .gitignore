@@ -67,6 +67,7 @@ data/runtime_rituals.json
 data/transparency.json
 data/cuaderno_taller.json
 data/persona_drift.json
+data/identity_manifest.json
 data/state_audit.log
 data/bitacora.jsonl
 data/freno.json

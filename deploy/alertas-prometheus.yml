@@ -129,6 +129,25 @@ groups:
           resumen: "Un ritmo propio quedó esperando una aprobación que ya no se pide"
           accion: "`!ritmos` lo lista bajo «heredados sin activar»; `!ritmo aprobar <id>` lo pone a sonar."
 
+      # La identidad se queda atrás en silencio: el ritual corre a diario y casi
+      # todos los días no hace nada, así que un cron muerto o un proveedor que
+      # rechaza cada imagen no se ven por ausencia de ejecución. Se ven aquí.
+      # 4 días y no 1: el sekki cambia cada dos semanas, y el día del cambio la
+      # tarea puede llegar unas horas tarde sin que eso sea un incidente.
+      - alert: IdentidadCaducada
+        expr: yuki_identidad_al_dia == 0
+        for: 96h
+        labels:
+          severity: baja
+        annotations:
+          resumen: "Yuki sigue con la identidad de la micro-estación anterior"
+          accion: >
+            Cambió el sekki y el ritual de las 04:00 no llegó a rehacerla.
+            `python3 cli.py identidad` dice de qué estación es el manifiesto y
+            cuántos avatares existen; si fallaron, el motivo está en cada uno.
+            Revisar el cron `seasonal_self_characterization`, el freno y el
+            presupuesto de imagen.
+
   - name: yuki-signos-vitales
     rules:
       - alert: YukiCatatonica

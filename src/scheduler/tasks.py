@@ -293,6 +293,16 @@ class AutonomousTasks:
             self.agent.will_queue.add(impulse)
 
         self.agent.echo_ritual.record_echo(response)
+
+        # El micro-ajuste diario de su identidad: prosodia e iluminación según
+        # cómo ha amanecido. La documentación decía que ocurre aquí desde antes
+        # de que nadie lo llamara; ahora ocurre. Sin manifiesto previo no hace
+        # nada y lo dice, que es lo correcto: no hay identidad que ajustar.
+        motor = getattr(self.agent, "self_characterization", None)
+        if motor is not None:
+            ajustes = motor.daily_micro_adjust(self.agent.vital_state, season)
+            logger.info("Ajuste diario de identidad: %s", ajustes or "sin manifiesto todavía")
+
         # Reiniciar contadores del día
         self.agent.vital_state.accumulated_interactions_today = 0
         self.agent.vital_state.accumulated_creations_today = 0
@@ -331,6 +341,52 @@ class AutonomousTasks:
             self.agent.vital_state.save()
             logger.info("Del sueño nació un impulso: %s", semilla["tool_hint"])
         return sueno
+
+    async def seasonal_self_characterization(self):
+        """
+        04:00 — si ha cambiado la micro-estación, Yuki se vuelve a definir.
+
+        No pide permiso a nadie, y es deliberado: elegir con qué cara y con qué
+        voz se presenta es suyo, igual que adoptar un ritmo. Lo que la acota no
+        es el visto bueno del Productor sino los límites de siempre —el freno,
+        el presupuesto y la marca de origen, que ya se aplican dentro del camino
+        de imagen—.
+
+        Corre todos los días y casi todos no hace nada: el sekki cambia cada dos
+        semanas. Comprobarlo a diario en vez de calendarizar 24 fechas es lo que
+        hace que una instancia que estuvo apagada en el cambio se recaracterice
+        al volver, en vez de esperar quince días a la siguiente.
+        """
+        from ..core.seasons import get_current_micro_season
+
+        motor = getattr(self.agent, "self_characterization", None)
+        if motor is None:
+            logger.info("Sin motor de autocaracterización; no hay nada que hacer.")
+            return {"omitido": "sin motor"}
+
+        estacion = get_current_micro_season()
+        sekki = estacion.get("sekki", "")
+        if not motor.needs_seasonal_refresh(sekki):
+            logger.info("Identidad al día para %s; no se regenera.", sekki)
+            return {"omitido": "identidad vigente", "sekki": sekki}
+
+        # El freno de mano para la iniciativa: recaracterizarse es algo que
+        # emprende ella, no una respuesta a nadie, así que cae del lado que el
+        # freno detiene. Frenar no es enmudecer, y esto no es hablar.
+        bucle = getattr(self.agent, "agency_loop", None)
+        frenada = bucle.brake.blocked_reason("iniciativa") if bucle is not None else ""
+        if frenada:
+            logger.warning("Autocaracterización detenida: %s", frenada)
+            return {"omitido": f"detenida por el {frenada}", "sekki": sekki}
+
+        logger.info("🪞 [CRON 04:00] Cambió la estación a %s: Yuki se recaracteriza.", sekki)
+        manifiesto = await motor.synthesize_identity(
+            season_context=estacion, vital_state=self.agent.vital_state,
+        )
+        recuento = manifiesto.get("visual_identity", {}).get("avatar_summary", {})
+        logger.info("Identidad nueva para %s: %s avatar(es) con fichero de %s pedidos.",
+                    sekki, recuento.get("con_fichero_verificado"), recuento.get("total_pedidos"))
+        return manifiesto
 
     async def weekly_forgetting(self):
         """

@@ -246,6 +246,81 @@ def cmd_persona(as_json=False):
             print(f"  {veces}× {DIM}{marcador}{RESET}")
 
 
+def cmd_identity(regenerar=False, as_json=False):
+    """
+    Con qué cara y qué voz se presenta hoy, y si le toca volver a decidirlo.
+
+    Sin `--regenerar` no gasta nada: lee el manifiesto. Con él ejecuta el ritual
+    entero aquí y ahora, que es lo que el Productor necesita cuando quiere verlo
+    sin esperar al cambio de estación —pero el gasto es el mismo que el del
+    cron, así que se dice antes de empezar—.
+    """
+    import asyncio
+
+    from src.core.seasons import get_current_micro_season
+    from src.core.self_characterization import SelfCharacterization
+
+    estacion = get_current_micro_season()
+    sekki = estacion.get("sekki", "")
+
+    if regenerar:
+        # Con agente: el portal de medios es lo que convierte el ritual en
+        # imágenes de verdad. Sin él saldrían sólo las instrucciones, y eso hay
+        # que decirlo antes, no al ver el resultado.
+        from src.core.agent import YukiAgent
+
+        agente = YukiAgent()
+        motor = agente.self_characterization
+        manifiesto = asyncio.run(motor.synthesize_identity(
+            season_context=estacion, vital_state=agente.vital_state))
+    else:
+        motor = SelfCharacterization()
+        manifiesto = motor._manifest or {}
+
+    if as_json:
+        print(json.dumps(manifiesto or {"manifiesto": None, "sekki_actual": sekki},
+                         ensure_ascii=False, indent=2))
+        return manifiesto
+
+    print_banner()
+    print(f"{MAGENTA}{BOLD}🪞 Identidad de Yuki{RESET}\n")
+    if not manifiesto:
+        print(f"  {DIM}Sin manifiesto todavía. Lo genera ella sola al cambiar la "
+              f"micro-estación, o aquí con `--regenerar`.{RESET}")
+        print(f"  Estación actual: {sekki}")
+        return manifiesto
+
+    contexto = manifiesto.get("season_context", {})
+    vocal = manifiesto.get("vocal_identity", {})
+    visual = manifiesto.get("visual_identity", {})
+    recuento = visual.get("avatar_summary", {})
+    al_dia = contexto.get("sekki") == sekki
+
+    print(f"  Estación del manifiesto: {contexto.get('sekki') or '—'} "
+          f"({GREEN + 'al día' + RESET if al_dia else YELLOW + 'caducado, toca ' + sekki + RESET})")
+    print(f"  Voz: {vocal.get('selected_voice_id') or '—'}")
+    print(f"  Paleta: {sum(len(v) for v in (visual.get('color_palette') or {}).values())} color(es)")
+
+    # Lo que importa del recuento: un avatar simulado o fallido no es un avatar,
+    # y el manifiesto lo sabe. Enseñarlo aquí evita creer que hay cuatro.
+    reales = recuento.get("con_fichero_verificado", 0)
+    total = recuento.get("total_pedidos", len(visual.get("avatars", {})))
+    color = GREEN if reales == total and total else YELLOW
+    print(f"  Avatares con fichero real: {color}{reales}/{total}{RESET}")
+    for nombre, avatar in (visual.get("avatars") or {}).items():
+        estado = avatar.get("status", "?")
+        detalle = avatar.get("local_path") or avatar.get("error") or avatar.get("note") or ""
+        print(f"    · {nombre}: {estado} {DIM}{detalle}{RESET}")
+
+    diarios = manifiesto.get("daily_adjustments", {})
+    if diarios:
+        ajustes = diarios.get("adjustments", {})
+        print(f"\n  Ajuste de hoy ({diarios.get('date')}): "
+              f"prosodia {ajustes.get('active_prosody_mode')} · "
+              f"luz {ajustes.get('preferred_lighting')}")
+    return manifiesto
+
+
 def cmd_transparency(marcar=False, as_json=False):
     """Auditoría del Artículo 50: qué se ha declarado y qué material está marcado."""
     import yaml

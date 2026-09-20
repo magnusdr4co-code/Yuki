@@ -27,7 +27,7 @@ RAIZ = Path(__file__).resolve().parents[1]
 
 # Sólo lectura: ni red, ni proveedores, ni servidor, ni un céntimo.
 INOFENSIVOS = ["spend", "albedrio", "pulso", "estado", "bitacora", "freno",
-               "persona", "transparency", "virtualize"]
+               "persona", "transparency", "virtualize", "identidad"]
 
 
 def _correr(*argumentos, entorno=None):
@@ -71,7 +71,7 @@ def test_hay_los_comandos_que_documenta_el_mapa(declarados):
     """Un aviso si alguno desaparece sin querer al reorganizar."""
     imprescindibles = {"chat", "web", "backup", "pulso", "estado", "freno",
                        "bitacora", "albedrio", "sueno", "spend", "virtualize",
-                       "transparency", "persona"}
+                       "transparency", "persona", "identidad"}
 
     assert imprescindibles <= set(declarados), imprescindibles - set(declarados)
 

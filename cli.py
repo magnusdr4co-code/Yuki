@@ -18,7 +18,8 @@ from src.cli.gobierno import (  # noqa: E402
     cmd_backup, cmd_blackbox, cmd_brake, cmd_pulse, cmd_spend, cmd_state, cmd_virtualize,
 )
 from src.cli.mente import (  # noqa: E402
-    cmd_agency, cmd_cuaderno, cmd_persona, cmd_sleep, cmd_transparency,
+    cmd_agency, cmd_cuaderno, cmd_identity, cmd_persona, cmd_sleep,
+    cmd_transparency,
 )
 from src.cli.operacion import (  # noqa: E402
     cmd_benchmark, cmd_chat, cmd_cron_task, cmd_daemon, cmd_list_skills, cmd_skill,
@@ -113,6 +114,14 @@ def main():
     )
     persona.add_argument("--json", action="store_true", help="Emite JSON")
 
+    identidad = subparsers.add_parser(
+        "identidad",
+        help="Con qué cara y qué voz se presenta, y si le toca volver a decidirlo",
+    )
+    identidad.add_argument("--regenerar", action="store_true",
+                           help="Ejecuta el ritual ahora; gasta crédito de imagen")
+    identidad.add_argument("--json", action="store_true", help="Emite JSON")
+
     pulso = subparsers.add_parser(
         "pulso",
         help="Signos vitales: distingue que el proceso corra de que Yuki viva",
@@ -205,6 +214,8 @@ def main():
         cmd_cuaderno(obra=args.obra, as_json=args.json)
     elif args.command == "transparency":
         cmd_transparency(marcar=args.marcar, as_json=args.json)
+    elif args.command == "identidad":
+        cmd_identity(regenerar=args.regenerar, as_json=args.json)
     elif args.command == "persona":
         cmd_persona(as_json=args.json)
     elif args.command == "sueno":

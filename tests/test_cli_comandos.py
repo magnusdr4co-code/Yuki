@@ -34,6 +34,9 @@ COMANDOS = [
     (gobierno, "cmd_virtualize", {}),
     (mente, "cmd_agency", {}),
     (mente, "cmd_persona", {}),
+    # Sólo la lectura: `--regenerar` construye el agente y pide imágenes, que es
+    # justo lo que estas pruebas no hacen.
+    (mente, "cmd_identity", {}),
     (mente, "cmd_transparency", {}),
 ]
 

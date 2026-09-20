@@ -367,6 +367,35 @@ class VirtualInstance:
              "(eso es la Biblioteca). Se anota con `cuaderno_anotar` en el DM"),
         )
 
+        # Cómo se presenta. Se declara por lo que hay en el manifiesto, no por
+        # que el módulo exista: durante un año el código estuvo escrito sin que
+        # nadie lo llamara, y un gemelo que hubiera dicho REAL entonces habría
+        # estado anunciando cuatro avatares que no existían.
+        from .self_characterization import SelfCharacterization
+        from .seasons import get_current_micro_season
+
+        identidad = SelfCharacterization()
+        manifiesto = identidad._manifest or {}
+        sekki = get_current_micro_season().get("sekki", "")
+        if not manifiesto:
+            self._cap("mente.identidad", "Mente", INACTIVO,
+                      "Todavía no se ha caracterizado: elige voz, paleta y avatares ella "
+                      "sola cuando cambia la micro-estación (cron 04:00), sin aprobación")
+        else:
+            recuento = (manifiesto.get("visual_identity", {}).get("avatar_summary", {}) or {})
+            reales = recuento.get("con_fichero_verificado", 0)
+            pedidos = recuento.get("total_pedidos", 0)
+            suyo = manifiesto.get("season_context", {}).get("sekki", "")
+            voz = manifiesto.get("vocal_identity", {}).get("selected_voice_id", "sin elegir")
+            vigencia = "al día" if suyo == sekki else f"de {suyo or '?'}, toca rehacerlo en {sekki}"
+            self._cap(
+                "mente.identidad", "Mente", REAL if reales else SIMULADO,
+                (f"Voz «{voz}», {reales}/{pedidos} avatar(es) con fichero real, {vigencia}"
+                 if reales else
+                 f"Voz «{voz}» y paleta elegidas, pero ningún avatar llegó a generarse "
+                 f"({pedidos} pedidos); {vigencia}"),
+            )
+
         # El gemelo dice lo que la instancia puede saber de sí misma. Que sepa
         # distinguir «el proceso corre» de «Yuki hace cosas» es una capacidad,
         # no un adorno: sin ella, el fallo más silencioso queda invisible.

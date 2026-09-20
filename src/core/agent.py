@@ -23,6 +23,7 @@ from ..scheduler.cron_engine import CronEngine, CronParseError
 from ..scheduler.tasks import AutonomousTasks
 from ..memory.sleep_cycle import SleepCycle, SleepPolicy
 from .persona_anchor import PersonaAnchor, PersonaPolicy
+from .self_characterization import SelfCharacterization
 from .state_registry import StateRegistry
 from .prompt_builder import PromptBuilder
 from .vital_state import VitalState
@@ -179,6 +180,17 @@ class YukiAgent:
             policy=PersonaPolicy.from_config(self.config),
         )
 
+        # Autocaracterización: con qué cara, qué voz y qué paleta se presenta.
+        # La decide ella al cambiar la micro-estación, sin que nadie apruebe
+        # nada —como los ritmos—. Lo que la acota son los límites de siempre:
+        # el freno, el presupuesto y la marca de origen, que se aplican dentro
+        # del camino de imagen y no aquí.
+        self.self_characterization = SelfCharacterization(
+            soul_path=soul_md,
+            nous_portal=self.nous_portal,
+            memory_manager=self.memory_manager,
+        )
+
         self.evolution = EvolutionHarness(self)
 
         self.cron = CronEngine(timezone=tz)
@@ -275,6 +287,7 @@ class YukiAgent:
                 "spontaneous_monologue": self.tasks.spontaneous_monologue,
                 "rem_dream": self.tasks.rem_dream,
                 "weekly_forgetting": self.tasks.weekly_forgetting,
+                "seasonal_self_characterization": self.tasks.seasonal_self_characterization,
             }
 
             if action not in func_map:

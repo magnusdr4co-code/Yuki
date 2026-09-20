@@ -1,5 +1,10 @@
 """
 Despliegue Serverless en Modal para Yuki.
+
+Punto de entrada: no lo importa nadie del proyecto a propósito —lo arranca
+Modal desde fuera (`modal deploy src/serverless/modal_app.py`)—, así que aquí
+no hay código muerto aunque el resto del repo no lo nombre.
+
 Permite ejecutar a la Diva Digital sin costes fijos de servidor (Zero Idle Cost).
 Despierta instantáneamente ante webhooks de Telegram o Discord.
 """
