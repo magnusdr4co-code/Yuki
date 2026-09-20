@@ -39,6 +39,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 | Tema | Documento |
 |---|---|
 | Qué es Yuki y cómo se sostiene su identidad | [IDENTIDAD_SINTETICA.md](IDENTIDAD_SINTETICA.md) |
+| Cómo elige su cara, su voz y su paleta | [AUTOCARACTERIZACION.md](AUTOCARACTERIZACION.md) — y qué se hace de verdad con cada decisión |
 | Voz, estética y presencia | [SOUL_GUIDE.md](SOUL_GUIDE.md) · el canon está en [`SOUL.md`](../SOUL.md) |
 | Artículo 50: declararse y marcar lo que genera | [TRANSPARENCIA_AI_ACT.md](TRANSPARENCIA_AI_ACT.md) |
 | Qué dice la literatura de 2026 y qué se adoptó | [ESTADO_DEL_ARTE_2026.md](ESTADO_DEL_ARTE_2026.md) |

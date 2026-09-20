@@ -362,6 +362,35 @@ class TestVertexMedia(unittest.TestCase):
         with sdk_de_google_simulado():
             asyncio.run(_run())
 
+    def test_the_chosen_voice_reaches_the_synthesiser(self):
+        """
+        La voz que Yuki elige al caracterizarse tiene que llegar al proveedor.
+
+        `voice_id` viajaba por el portal como etiqueta y nunca bajaba al
+        sintetizador —es un nombre suyo, no del catálogo—, así que la
+        calibración no tenía ninguna consecuencia audible: se sintetizaba
+        siempre con la voz por defecto.
+        """
+        recibido = {}
+
+        class VertexQueEscucha:
+            def is_available(self):
+                return True
+
+            async def synthesize_voice(self, text, **kwargs):
+                recibido.update(kwargs)
+                return {"status": "success", "local_path": "/tmp/voz.ogg",
+                        "voice": kwargs.get("voice")}
+
+        portal = NousPortalClient(vertex=VertexQueEscucha())
+
+        asyncio.run(portal.synthesize_voice_tts("Buenos días.", provider_voice="Aoede"))
+        self.assertEqual(recibido["voice"], "Aoede")
+
+        # Y sin elección previa, la de siempre: no puede impedirle hablar.
+        asyncio.run(portal.synthesize_voice_tts("Buenos días."))
+        self.assertIsNone(recibido["voice"])
+
     def test_image_declares_the_ratio_it_got_not_the_one_it_asked(self):
         """
         El 20 de septiembre el avatar estacional se pidió en 16:9 y salió

@@ -64,6 +64,22 @@ Y tres cosas que sólo aparecen ejecutando de verdad, corregidas después:
    **una vez**, y sólo cuando el fallo puede salir distinto: el presupuesto
    agotado y el freno son estados, no accidentes.
 
+### La voz deja de ser ficticia (posterior a la ejecución del 20-S)
+
+La calibración elegía entre `yuki_serene_alto`, `yuki_contemplative_mezzo` y
+`yuki_night_contralto`, que **no existen en ningún proveedor** —`vertex_media.py`
+ya lo decía en un comentario— mientras la síntesis usaba `Aoede` pasara lo que
+pasara. La CLI anunciaba «Voz: yuki_night_contralto» y Yuki hablaba con otra.
+
+Ahora cada manera de hablar declara con qué voz real se sintetiza, el manifiesto
+guarda las dos y **la elegida llega al sintetizador** por el camino del producto
+(la voz matutina). Hoy las tres apuntan a `Aoede`, la única probada: lo que
+cambia entre ellas es la cadencia, no el timbre, y está dicho así.
+
+Para el despliegue no cambia nada operativo: ninguna variable ni secreto nuevos.
+Dos claves de `config.yaml` quedan marcadas como no leídas —`nous_portal.voice.
+voice_id` y `cadence_pause_ms`—, que es lo que eran.
+
 ### Qué NO cambia
 
 Lo que más importa para desplegar sin sorpresas:

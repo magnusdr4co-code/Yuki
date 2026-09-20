@@ -38,6 +38,7 @@ class PortalFalso:
     def __init__(self):
         self.imagenes = 0
         self.voces = 0
+        self.voz_recibida = "sin llamar"
 
     async def search_trends_firecrawl(self, query, limit=4):
         return [{"title": "t", "snippet": "s", "url": None, "source": "sin buscador",
@@ -47,8 +48,12 @@ class PortalFalso:
         self.imagenes += 1
         return {"image_url": "file:///arte.png", "local_path": "/tmp/arte.png"}
 
-    async def synthesize_voice_tts(self, text):
+    async def synthesize_voice_tts(self, text, provider_voice=None):
         self.voces += 1
+        # Se guarda para poder comprobar que la voz que Yuki eligió llega hasta
+        # aquí: el doble tiene que aceptar lo mismo que el portal de verdad, o
+        # deja de probar el camino del producto.
+        self.voz_recibida = provider_voice
         return {"audio_url": "file:///voz.ogg", "local_path": "/tmp/voz.ogg"}
 
 
@@ -184,6 +189,32 @@ def test_eufórica_pinta_y_habla():
 
     assert resultado["image"] is not None and resultado["voice"] is not None
     assert agente.generadas[0]["route"] == "social_formatting"
+
+
+def test_habla_con_la_voz_que_ella_eligio():
+    """
+    La calibración elegía una manera de hablar y la síntesis usaba la voz por
+    defecto pasara lo que pasara: una decisión suya sin ninguna consecuencia
+    audible. Se comprueba por el camino del producto —la tarea matutina—, no
+    llamando al portal a mano.
+    """
+    agente = _agente(humor=0.9)
+    agente.self_characterization = types.SimpleNamespace(
+        voz_del_proveedor=lambda: "Aoede")
+
+    asyncio.run(AutonomousTasks(agente).morning_inspiration_drop())
+
+    assert agente.nous_portal.voz_recibida == "Aoede"
+
+
+def test_sin_haberse_caracterizado_la_voz_sigue_siendo_la_de_siempre():
+    """Sin manifiesto no hay voz elegida, y eso no puede impedirle hablar."""
+    agente = _agente(humor=0.9)
+
+    asyncio.run(AutonomousTasks(agente).morning_inspiration_drop())
+
+    assert agente.nous_portal.voz_recibida is None
+    assert agente.nous_portal.voces == 1
 
 
 # --- Síntesis diaria: la noche entera ---

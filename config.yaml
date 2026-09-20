@@ -358,8 +358,8 @@ nous_portal:
         midi_only: "local.midi"
     voice:
       default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"   # no se lee: el modelo lo fija vertex_ai.media
-      voice_id: "yuki_serene_alto"
-      cadence_pause_ms: 350
+      voice_id: "yuki_serene_alto"   # no se lee: la manera de hablar la elige ella al caracterizarse, y la voz real es vertex_ai.media.voice
+      cadence_pause_ms: 350   # no se lee: la cadencia la deduce criterio_vocal del texto y de la hora
     web_search:
       provider: "firecrawl"
       max_results: 5

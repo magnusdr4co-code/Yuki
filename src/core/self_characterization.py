@@ -97,22 +97,39 @@ class SelfCharacterization:
         "té":                {"hex": "#A8956A", "role": "ritual_warmth"},
     }
 
-    # Voces candidatas con sus características para selección autónoma
+    # Maneras de hablar entre las que elige, y **qué voz del proveedor** usa cada
+    # una. La segunda mitad es lo que faltaba: estos tres nombres son suyos, no
+    # de ningún catálogo, y durante un tiempo la calibración anunciaba
+    # «yuki_night_contralto» mientras la síntesis usaba `Aoede` pasara lo que
+    # pasara. `vertex_media.py` ya avisaba en un comentario de que
+    # `yuki_serene_alto` era «el identificador ficticio de la documentación
+    # antigua», y aun así se seguía eligiendo entre ellos.
+    #
+    # Hoy las tres apuntan a `Aoede`, que es la única voz del catálogo de Gemini
+    # TTS que este proyecto ha probado de verdad: lo que cambia entre ellas no es
+    # el timbre, es la cadencia. Decirlo así es más honesto que fingir tres
+    # timbres. Añadir una voz nueva es comprobarla contra el proveedor y escribir
+    # aquí su nombre real; mientras no se compruebe, no se declara.
+    VOZ_DEL_PROVEEDOR_PROBADA = "Aoede"
+
     VOICE_CANDIDATES = {
         "yuki_serene_alto": {
             "description": "Alto sereno, registro medio-grave, resonancia cálida envolvente",
             "warmth": 0.85, "gravity": 0.70, "pace": 0.60,
-            "character": "voz que sostiene cada palabra como un cuenco de té caliente"
+            "character": "voz que sostiene cada palabra como un cuenco de té caliente",
+            "provider_voice": VOZ_DEL_PROVEEDOR_PROBADA,
         },
         "yuki_contemplative_mezzo": {
             "description": "Mezzo contemplativo, claridad lírica, pausas naturales",
             "warmth": 0.75, "gravity": 0.55, "pace": 0.50,
-            "character": "voz que piensa en voz alta con precisión y delicadeza"
+            "character": "voz que piensa en voz alta con precisión y delicadeza",
+            "provider_voice": VOZ_DEL_PROVEEDOR_PROBADA,
         },
         "yuki_night_contralto": {
             "description": "Contralto nocturno, profundo, íntimo, con sombras",
             "warmth": 0.65, "gravity": 0.90, "pace": 0.40,
-            "character": "voz de madrugada que se derrama lentamente como tinta"
+            "character": "voz de madrugada que se derrama lentamente como tinta",
+            "provider_voice": VOZ_DEL_PROVEEDOR_PROBADA,
         },
     }
 
@@ -577,10 +594,12 @@ class SelfCharacterization:
             scores[voice_id] = score
 
         selected_voice = max(scores, key=scores.get)
+        voz_del_proveedor = self.VOICE_CANDIDATES[selected_voice]["provider_voice"]
         selection_reasoning = (
             f"Elegí '{selected_voice}' porque mi temperamento ({', '.join(ext.temperament_keywords[:3])}) "
             f"requiere {self.VOICE_CANDIDATES[selected_voice]['character']}. "
-            f"Puntuación: {scores[selected_voice]:.2f} sobre las {len(scores)} candidatas evaluadas."
+            f"Puntuación: {scores[selected_voice]:.2f} sobre las {len(scores)} candidatas evaluadas. "
+            f"Se sintetiza con la voz «{voz_del_proveedor}» del proveedor."
         )
 
         # --- Firma de Cadencia ---
@@ -662,6 +681,10 @@ class SelfCharacterization:
 
         voice_profile = {
             "selected_voice_id": selected_voice,
+            # El nombre que recibe el sintetizador, al lado del que ella usa
+            # para pensarla: sin los dos, «Voz: yuki_night_contralto» se lee
+            # como la voz con la que habla, y no lo es.
+            "provider_voice": voz_del_proveedor,
             "selection_reasoning": selection_reasoning,
             "voice_characteristics": self.VOICE_CANDIDATES[selected_voice],
             "cadence_signature": cadence_signature,
@@ -889,6 +912,7 @@ class SelfCharacterization:
             },
             "vocal_identity": {
                 "selected_voice_id": voice_profile["selected_voice_id"],
+                "provider_voice": voice_profile["provider_voice"],
                 "selection_reasoning": voice_profile["selection_reasoning"],
                 "cadence_signature": voice_profile["cadence_signature"],
                 "prosody_profile": voice_profile["prosody_profile"],
@@ -1087,6 +1111,18 @@ class SelfCharacterization:
         if daily.get("active_prosody_mode"):
             vocal["active_mode"] = daily["active_prosody_mode"]
         return vocal
+
+    def voz_del_proveedor(self) -> Optional[str]:
+        """
+        La voz que hay que pasarle al sintetizador, o `None` si no ha elegido.
+
+        Es lo que convierte la calibración en algo más que un texto bonito en un
+        fichero: sin esto, elegía una manera de hablar y la síntesis seguía
+        usando la de por defecto pasara lo que pasara.
+        """
+        if not self._manifest:
+            return None
+        return self._manifest.get("vocal_identity", {}).get("provider_voice") or None
 
     def get_color_palette(self) -> Optional[Dict[str, Any]]:
         """Retorna la paleta cromática activa."""

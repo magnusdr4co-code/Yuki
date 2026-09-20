@@ -309,7 +309,8 @@ class NousPortalClient:
         cadence_pause_ms: int = 350,
         is_night_mode: bool = False,
         engine: str = "gemini_multimodal_audio", # "gemini_multimodal_audio", "nous_tts_v2"
-        mood_params: Optional[Dict[str, Any]] = None
+        mood_params: Optional[Dict[str, Any]] = None,
+        provider_voice: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Sintetiza una nota de voz en formato OGG Opus con marcado SSML y prosodia de frontera.
@@ -347,8 +348,13 @@ class NousPortalClient:
             # así que el criterio no llegaba a aplicarse nunca. Ahora esta capa
             # sólo aporta lo que sabe: la hora y la cadencia del proveedor.
             fase = "night" if is_night_mode else None
+            # `provider_voice` es la que Yuki eligió al caracterizarse. Sin ella
+            # manda la de `config.yaml`, como antes: `voice_id` nunca llegó a
+            # viajar hasta aquí —es un nombre suyo, no del catálogo— y por eso
+            # la calibración no tenía ninguna consecuencia audible.
             resultado = await self.vertex.synthesize_voice(
-                text, circadian_phase=fase, cadencia_ms=cadence_pause_ms)
+                text, circadian_phase=fase, cadencia_ms=cadence_pause_ms,
+                voice=provider_voice)
             if resultado["status"] == "success":
                 resultado["voice_id"] = resultado.get("voice", voice_id)
                 resultado["is_night_mode"] = is_night_mode

@@ -475,3 +475,34 @@ def test_la_proporcion_declarada_es_la_que_tiene_el_fichero(tmp_path):
     # Lo que no se puede medir no se inventa.
     assert _proporcion_del_png(str(roto)) is None
     assert _proporcion_del_png(str(tmp_path / "no_existe.png")) is None
+
+def test_la_voz_elegida_nombra_una_del_proveedor_y_no_una_inventada(tmp_path):
+    """
+    `yuki_night_contralto` es un nombre suyo, no del catálogo de Gemini TTS: la
+    calibración lo anunciaba como voz mientras la síntesis usaba `Aoede` pasara
+    lo que pasara. Ahora cada manera de hablar declara con qué voz real se
+    sintetiza, el manifiesto guarda las dos y `voz_del_proveedor()` es lo que se
+    le pasa al sintetizador.
+    """
+    motor = SelfCharacterization(nous_portal=PortalConGuion([_exito(tmp_path)]))
+
+    manifiesto = asyncio.run(motor.synthesize_identity(ESTACION, _vital()))
+    vocal = manifiesto["vocal_identity"]
+
+    assert vocal["provider_voice"], "el manifiesto no dice con qué voz se sintetiza"
+    assert vocal["provider_voice"] != vocal["selected_voice_id"], (
+        "la voz del proveedor no puede ser el nombre interno: eso es lo que se "
+        "estaba anunciando como voz sin serlo")
+    assert motor.voz_del_proveedor() == vocal["provider_voice"]
+    # Todas las candidatas declaran una, o elegir cualquiera de ellas volvería a
+    # dejar la síntesis sin voz que pasar.
+    assert all(c.get("provider_voice")
+               for c in SelfCharacterization.VOICE_CANDIDATES.values())
+
+    # Y el razonamiento lo dice en voz alta, que es lo que lee el Productor.
+    assert vocal["provider_voice"] in vocal["selection_reasoning"]
+
+
+def test_sin_manifiesto_no_hay_voz_que_imponer():
+    """Antes de caracterizarse no hay elección: manda la de `config.yaml`."""
+    assert SelfCharacterization().voz_del_proveedor() is None

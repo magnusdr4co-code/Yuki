@@ -133,14 +133,16 @@ class MediaCreatorTool:
         message_text: str,
         is_night_mode: bool = False,
         engine: str = "gemini_multimodal_audio",
-        mood_params: Optional[Dict[str, Any]] = None
+        mood_params: Optional[Dict[str, Any]] = None,
+        provider_voice: Optional[str] = None,
     ) -> Dict[str, Any]:
         """Genera una nota de voz SSML con motor de audio de frontera en ./output/voice/."""
         result = await self.portal.synthesize_voice_tts(
             text=message_text,
             is_night_mode=is_night_mode,
             engine=engine,
-            mood_params=mood_params
+            mood_params=mood_params,
+            provider_voice=provider_voice,
         )
         # `ssml_payload` sólo existe en la ruta de respaldo: Gemini TTS toma la
         # cadencia en lenguaje natural y no genera SSML. Leerlo con corchetes

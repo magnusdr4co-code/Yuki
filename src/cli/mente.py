@@ -298,7 +298,12 @@ def cmd_identity(regenerar=False, as_json=False):
 
     print(f"  Estación del manifiesto: {contexto.get('sekki') or '—'} "
           f"({GREEN + 'al día' + RESET if al_dia else YELLOW + 'caducado, toca ' + sekki + RESET})")
-    print(f"  Voz: {vocal.get('selected_voice_id') or '—'}")
+    # Las dos, siempre: enseñar sólo «yuki_night_contralto» se lee como la voz
+    # con la que habla, y es un nombre suyo. La del proveedor es la que suena.
+    print(f"  Voz: {vocal.get('selected_voice_id') or '—'}"
+          + (f" {DIM}(suena como «{vocal['provider_voice']}»){RESET}"
+             if vocal.get("provider_voice") else
+             f" {YELLOW}(sin voz del proveedor declarada){RESET}"))
     print(f"  Paleta: {sum(len(v) for v in (visual.get('color_palette') or {}).values())} color(es)")
 
     # Lo que importa del recuento: un avatar simulado o fallido no es un avatar,

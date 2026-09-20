@@ -103,7 +103,13 @@ class AutonomousTasks:
             logger.info(f"🎨 Arte matutino generado: {image_result['image_url']}")
 
         if mood > 0.7:
-            voice_result = await self.agent.nous_portal.synthesize_voice_tts(text=morning_text)
+            # Con la voz que ella eligió al caracterizarse, si ya lo hizo. Sin
+            # esto, la calibración decidía una manera de hablar que no llegaba
+            # a oírse nunca: la síntesis usaba la voz por defecto igual.
+            motor_identidad = getattr(self.agent, "self_characterization", None)
+            voz = motor_identidad.voz_del_proveedor() if motor_identidad else None
+            voice_result = await self.agent.nous_portal.synthesize_voice_tts(
+                text=morning_text, provider_voice=voz)
             logger.info(f"🎙️ Voz matutina generada: {voice_result['audio_url']}")
 
         # Difundir a adaptadores activos (si están configurados). El resultado
