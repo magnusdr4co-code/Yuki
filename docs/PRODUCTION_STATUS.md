@@ -80,6 +80,23 @@ Para el despliegue no cambia nada operativo: ninguna variable ni secreto nuevos.
 Dos claves de `config.yaml` quedan marcadas como no leídas —`nous_portal.voice.
 voice_id` y `cadence_pause_ms`—, que es lo que eran.
 
+### El Salón se viste con lo que ella decidió
+
+Hasta ahora el ritual elegía cara y colores y nadie los usaba. La página del
+Salón enseña ya el retrato `atelier` y tiñe sus acentos con la paleta del
+manifiesto. **Ruta nueva y abierta: `/identidad/avatar`**, que sirve un único
+fichero —el que el manifiesto declara vigente, comprobando que existe, que no es
+un marcador simulado y que está dentro del directorio de obra— y no acepta
+ningún nombre de fuera. Se abre a propósito: la página lo está, y una cara
+detrás de una credencial no es una cara. El resto de `/api` sigue igual.
+
+Sin manifiesto, la página es exactamente la de antes: una instancia recién
+desplegada no tiene cara, y eso no debe verse como un fallo.
+
+De camino, la cabecera del Salón decía «Honcho Dialectic: Sincronizado» escrito
+en duro. No hay servicio remoto ni lo ha habido —el gemelo ya lo declaraba así—,
+de modo que ahora dice «Perfil dialéctico: local».
+
 ### Qué NO cambia
 
 Lo que más importa para desplegar sin sorpresas:

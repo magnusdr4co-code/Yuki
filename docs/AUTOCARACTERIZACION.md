@@ -17,13 +17,37 @@ consume.
 
 | Decisión | Qué es | Quién la usa hoy |
 |---|---|---|
-| **Cuatro avatares** | `atelier`, `kage`, `seasonal`, `intimate`; prompts derivados del alma y de la micro-estación | **Nadie todavía.** Se generan, se marcan y quedan en `output/art/`. Ni el Salón ni Discord los muestran |
+| **Cuatro avatares** | `atelier`, `kage`, `seasonal`, `intimate`; prompts derivados del alma y de la micro-estación | El `atelier` es su cara en el Salón, servida por `/identidad/avatar`. Los otros tres, todavía nadie |
 | **Manera de hablar** | Cadencia, pausas, prosodia por fase, susurro coreano | La voz real del proveedor va a la síntesis (ver abajo). Los perfiles prosódicos, todavía no |
-| **Paleta y tipografía** | 15 colores derivados de sus contrastes sensoriales, tres familias tipográficas | **Nadie todavía.** El Salón no pinta con ella |
-| **Iconografía** | Símbolos permitidos y prohibidos | **Nadie todavía** |
+| **Paleta** | 15 colores derivados de sus contrastes sensoriales | Tiñe los acentos del Salón: fondo, oro, calidez y texto salen de ella |
+| **Tipografía e iconografía** | Tres familias tipográficas; símbolos permitidos y prohibidos | **Nadie todavía** |
 
-Que tres de las cinco filas digan «nadie todavía» no es un olvido: es lo que hay,
-y está escrito aquí para que nadie lo confunda con una capacidad en uso.
+Que sigan quedando filas en «nadie todavía» no es un olvido: es lo que hay, y
+está escrito aquí para que nadie lo confunda con una capacidad en uso.
+
+## Su cara en el Salón
+
+La página la viste `src/web/identidad_web.py`, que lee el manifiesto y pone dos
+cosas: el retrato del `atelier` en la cabecera y la paleta como variables CSS
+sobre los acentos que la hoja de estilo ya declara. **Sólo variables**: una
+identidad capaz de rehacer la página entera podría dejarla ilegible sin que
+nadie lo revisara.
+
+Tres reglas, y las tres porque enseñar su cara es una entrega como cualquier
+otra:
+
+- **Sin manifiesto, la página es la de siempre.** Una instancia recién
+  desplegada no se ha caracterizado, y eso no es un fallo que deba verse.
+- **Un avatar fallido o simulado no se enseña.** El marcador es un fichero de
+  texto; servirlo como su cara sería aparentar una capacidad.
+- **`/identidad/avatar` está abierta y no acepta ningún nombre.** Sirve el único
+  fichero que el manifiesto declara vigente, comprobando que existe, que no es
+  un marcador y que está dentro del directorio de obra. Su origen sintético va
+  en la página y en la cabecera `X-Generated-By-AI`.
+
+Que esté abierta es deliberado: la página del Salón lo está, y una cara detrás
+de una credencial no es una cara. Todo lo demás de `/api` sigue pidiendo
+`SALON_API_TOKEN`.
 
 ## Quién lo dispara
 
@@ -89,8 +113,10 @@ momento perdía la variante hasta el siguiente cambio de estación.
 1. **Los avatares no entran en ninguna copia.** El manifiesto sí, pero apunta a
    `output/art/`, y la copia sólo se lleva `output/Biblioteca`. Perder el disco
    deja el manifiesto señalando cuatro ficheros pagados que ya no están.
-2. **La paleta, la tipografía y la iconografía no las usa nadie.** Se deciden y
-   se guardan.
+2. **La tipografía y la iconografía no las usa nadie.** Se deciden y se guardan.
+   Y de los cuatro avatares sólo se enseña el `atelier`: `kage`, `seasonal` e
+   `intimate` esperan un sitio donde tengan sentido —la hora de sombra, la
+   estación, el DM—.
 3. **Los prompts de avatar llevan la biografía escrita a mano** —edad, origen,
    pelo— en vez de leerla de `SOUL.md`. Si el canon cambia allí, estos cuatro
    prompts no se enteran.

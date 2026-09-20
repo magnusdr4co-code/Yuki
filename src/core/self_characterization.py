@@ -1112,6 +1112,39 @@ class SelfCharacterization:
             vocal["active_mode"] = daily["active_prosody_mode"]
         return vocal
 
+    def retrato_publico(self, context: str = "atelier") -> Optional[str]:
+        """
+        La ruta del retrato que se puede enseñar, o `None` si no hay ninguno.
+
+        Tres condiciones, y las tres por el mismo motivo —enseñar su cara es una
+        entrega, y aquí se aplica la misma vara que a cualquier otra—:
+
+        **Tiene que existir.** Un avatar fallido o sin intentar lleva su motivo,
+        no una ruta; servir esa ruta sería un 404 disfrazado de retrato.
+
+        **No puede ser un marcador.** El sustituto simulado es un fichero de
+        texto: enseñarlo como su cara sería exactamente lo que este proyecto
+        llama aparentar una capacidad.
+
+        **Tiene que estar dentro de su directorio de obra.** El manifiesto es un
+        fichero editable; si alguna vez alguien escribe ahí `/etc/passwd`, esto
+        no lo sirve.
+        """
+        avatar = self.get_active_avatar(context)
+        if not avatar or avatar.get("status") != "success" or avatar.get("simulated"):
+            return None
+        ruta = avatar.get("local_path")
+        if not ruta:
+            return None
+        try:
+            destino = Path(ruta).resolve()
+            raiz = Path(str(salida())).resolve()
+        except OSError:
+            return None
+        if not destino.is_relative_to(raiz) or not destino.is_file():
+            return None
+        return str(destino)
+
     def voz_del_proveedor(self) -> Optional[str]:
         """
         La voz que hay que pasarle al sintetizador, o `None` si no ha elegido.

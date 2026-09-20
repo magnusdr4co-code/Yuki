@@ -27,7 +27,7 @@ from urllib.parse import urlparse, parse_qs, unquote
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "../..")))
 
 from src.core.agent import YukiAgent
-from . import metricas
+from . import identidad_web, metricas
 
 logger = logging.getLogger("Yuki.WebServer")
 
@@ -35,7 +35,11 @@ DEFAULT_PORT = 8080
 
 # Rutas que responden sin credencial: la sonda de la plataforma y la página.
 # Todo lo demás toca memoria, perfil dialéctico o gasto de modelo.
-RUTAS_ABIERTAS = ("/health", "/healthz", "/_ah/health", "/", "/index.html", "/salon")
+# `/identidad/avatar` entra aquí a propósito: la página del Salón está abierta y
+# una cara detrás de una credencial no es una cara. Sirve un único fichero —el
+# que el manifiesto declara vigente—, nunca un nombre que venga de fuera.
+RUTAS_ABIERTAS = ("/health", "/healthz", "/_ah/health", "/", "/index.html", "/salon",
+                  "/identidad/avatar")
 
 # Las categorías de obra que el Salón sirve. Es una lista cerrada a propósito:
 # `salida()` acepta cualquier nombre y un directorio de datos no es obra.
@@ -160,9 +164,14 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
             template_path = os.path.join(os.path.dirname(__file__), "templates", "salon.html")
             if os.path.exists(template_path):
                 with open(template_path, "r", encoding="utf-8") as f:
-                    self._send_html(f.read())
+                    self._send_html(identidad_web.vestir(f.read()))
             else:
                 self._send_html("<h1>Salón de Yuki no encontrado</h1>", status_code=404)
+
+        # 1.2. Su cara. Abierta como la página, y sólo ésa: es el retrato que
+        #      ella eligió para presentarse, no un directorio que servir.
+        elif path == "/identidad/avatar":
+            self._servir_retrato()
 
         # 1.5. Métricas para la sonda externa. Va detrás de la credencial como
         #      el resto de /api: el consumo, la deriva y los ritmos dicen
@@ -338,6 +347,42 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
             "trabajos": salida,
             "nota": "Estado leído del disco. Un paso sin fichero no cuenta como hecho.",
         }
+
+    def _servir_retrato(self) -> None:
+        """
+        Sirve el retrato que Yuki eligió, y nada más.
+
+        A diferencia de `/api/outputs`, esta ruta está abierta: es su cara, y una
+        página que la enseña detrás de una credencial no la enseña. Lo que la
+        acota es que **sólo** sirve el fichero que el manifiesto declara vigente
+        —con su comprobación de que existe, no es un marcador y está dentro del
+        directorio de obra—, así que no hay nombre que pedir ni ruta que
+        recorrer.
+        """
+        ruta = identidad_web.retrato()
+        if not ruta:
+            self._send_json(
+                {"error": "Todavía no tiene retrato que enseñar.",
+                 "detalle": "Lo decide ella al cambiar la micro-estación; "
+                            "`cli.py identidad` dice en qué estado está."},
+                status_code=404)
+            return
+        try:
+            datos = Path(ruta).read_bytes()
+        except OSError as exc:
+            logger.warning("No pude leer el retrato %s: %s", ruta, type(exc).__name__)
+            self._send_json({"error": "El retrato consta y no se puede leer."},
+                            status_code=404)
+            return
+        tipo = mimetypes.guess_type(ruta)[0] or "application/octet-stream"
+        self.send_response(200)
+        self.send_header("Content-Type", tipo)
+        self.send_header("Content-Length", str(len(datos)))
+        # Es material sintético y sale hacia una persona: se declara también en
+        # la cabecera, no sólo en el pie de la página.
+        self.send_header("X-Generated-By-AI", "true")
+        self.end_headers()
+        self.wfile.write(datos)
 
     def _servir_obra(self, resto: str) -> None:
         from ..core.rutas import salida

@@ -390,7 +390,8 @@ class VirtualInstance:
             vigencia = "al día" if suyo == sekki else f"de {suyo or '?'}, toca rehacerlo en {sekki}"
             self._cap(
                 "mente.identidad", "Mente", REAL if reales else SIMULADO,
-                (f"Voz «{voz}», {reales}/{pedidos} avatar(es) con fichero real, {vigencia}"
+                (f"Voz «{voz}», {reales}/{pedidos} avatar(es) con fichero real, {vigencia}; "
+                 f"su cara y su paleta visten el Salón"
                  if reales else
                  f"Voz «{voz}» y paleta elegidas, pero ningún avatar llegó a generarse "
                  f"({pedidos} pedidos); {vigencia}"),
