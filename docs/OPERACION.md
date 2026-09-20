@@ -280,9 +280,11 @@ exactamente lo contrario.
 
 ## 9. Alertas
 
-`deploy/alertas-prometheus.yml`: catorce reglas escritas en el repositorio y no en
-el panel de quien las mire, porque una alerta que vive sólo en la consola de un
-proveedor se pierde con la cuenta.
+`deploy/alertas-prometheus.yml`: las reglas viven en el repositorio y no en el
+panel de quien las mire, porque una alerta que vive sólo en la consola de un
+proveedor se pierde con la cuenta. (Aquí no va el número de reglas: el que había
+escrito se quedó corto en cuanto se añadió una, y un recuento a mano envejece sin
+que nadie se entere.)
 
 `tests/test_alertas.py` las comprueba contra lo que la sonda expone de verdad.
 Una alerta rota no falla: **calla**. Renombrar una métrica deja la regla que la
@@ -294,9 +296,11 @@ La única crítica y sin espera es `BitacoraManipulada`. Las demás son avisos c
 ventana: gasto anómalo respecto a la media de la semana, deriva de persona
 sostenida media hora, propuestas de ritmo sin responder en tres días, un día
 entero sin un solo acto propio con la tensión alta —que no es un fallo técnico
-sino la señal de que algo la está bloqueando— y la ausencia total de métricas,
-que con las familias emitidas siempre sólo puede significar que la sonda no
-responde.
+sino la señal de que algo la está bloqueando—, la identidad que se quedó cuatro
+días en la micro-estación anterior —el ritual de las 04:00 casi nunca actúa, así
+que su muerte no se ve por ausencia de ejecución sino porque ella no cambia de
+cara— y la ausencia total de métricas, que con las familias emitidas siempre sólo
+puede significar que la sonda no responde.
 
 ## 10. Qué mirar cuando algo va mal
 

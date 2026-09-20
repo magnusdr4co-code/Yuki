@@ -18,6 +18,107 @@ La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto in
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
 arranque los obtiene de Secret Manager y elimina el fichero temporal de runtime al acabar.
 
+## Pendiente de desplegar — rama `claude/sleepy-allen-fj49pj`
+
+> **Nada de esto está en producción todavía.** Lo que sigue lo escribe quien hizo
+> los cambios, desde el entorno de desarrollo: `make todo` en verde (linter,
+> 1000 pruebas, 12 simulacros de fallo, circuito de copia y humo), pero **nadie
+> lo ha desplegado ni verificado en la instancia**. Quien despliegue rellena
+> después el digest, el commit y lo comprobado, como en las secciones de arriba.
+
+Seis commits, de `783d965` a `ac38332`:
+
+| Commit | Qué |
+|---|---|
+| `783d965` | Parte `discord_bot.py` (1775 líneas), `llm_router.py` y `web/server.py` en módulos. **Sin cambio de conducta** |
+| `dccd3a1` | Parte el ciclo de sueño por fases y ata la constante `EPISODICO`, que nadie leía |
+| `fb6b013` | La prueba de los comandos `!ritmo` mira el despacho y no la palabra |
+| `bcaf864` | Un módulo que no llama nadie tiene que decirlo, con prueba de la propiedad |
+| `723aef6` | **Enchufa la autocaracterización**: cron 04:00, micro-ajuste en el eco, CLI, métricas y alerta |
+| `ac38332` | Cubre las dos ramas del ritual que se alcanzan con una instancia mal montada |
+
+### Qué NO cambia
+
+Lo que más importa para desplegar sin sorpresas:
+
+- **Ninguna variable de entorno nueva, ningún secreto nuevo.** `deploy/gce-startup.sh`,
+  `Dockerfile`, `cloudbuild.yaml`, `docker-compose.yml` y `requirements.txt` están
+  intactos en esta rama. Se despliega exactamente igual que el anterior.
+- **Ninguna dependencia nueva.** La `e2-small` no carga con nada más.
+- Los cuatro primeros commits son reorganización y pruebas: ningún cuerpo de
+  función cambia, y está comprobado comparando el árbol sintáctico de cada
+  método antes y después, no leyendo el diff.
+
+### Qué empieza a ocurrir en la instancia
+
+1. **Cron nuevo a las 04:00** (`seasonal_self_characterization`, en el contenedor
+   `yuki-daemon`). Comprueba a diario si cambió la micro-estación; casi todos los
+   días no hace nada. **El primer cambio de sekki tras desplegar es el 23 de
+   septiembre de 2026** (Shūbun, Equinoccio de Otoño): esa madrugada es cuando el
+   ritual se ejecuta de verdad por primera vez.
+2. **Fichero de estado nuevo:** `data/identity_manifest.json`, en el disco
+   persistente que ya se monta. Lo crea ella; no hay que provisionar nada. Entra
+   en la copia de seguridad y está declarado en el inventario de estado.
+3. **Obra nueva en `output/identity/`**: perfiles de voz e instrucciones de
+   avatar en JSON. Los avatares en sí los escribe el camino de imagen de siempre,
+   en `output/art/`, marcados según el Artículo 50.
+4. **Micro-ajuste diario** dentro del ritual del eco de las 06:30: retoca
+   prosodia e iluminación del manifiesto según cómo amaneció. Sin manifiesto
+   previo no hace nada y lo dice en el log.
+
+### Gasto que esto añade
+
+Hasta **cuatro imágenes por cambio de micro-estación** —una cada dos semanas—,
+unos **0,16 USD** al precio de referencia. Se reservan antes de llamar al
+proveedor contra el límite diario de imágenes (40 por defecto), como cualquier
+otro medio. Si el presupuesto está agotado o el freno puesto, no gasta: anota el
+motivo en el manifiesto y no inventa avatares.
+
+### Observabilidad: hay que recargar las reglas
+
+`deploy/alertas-prometheus.yml` trae una alerta nueva, **`IdentidadCaducada`**, y
+`/metrics` expone dos familias nuevas: `yuki_identidad_al_dia` (-1 nunca se ha
+caracterizado · 0 caducada · 1 al día) y `yuki_identidad_avatares_reales`. Si las
+reglas están cargadas en un Prometheus, **recargarlo tras desplegar**; si no lo
+están, la alerta no existe y conviene saberlo en vez de suponer que vigila.
+
+La alerta salta a los cuatro días de retraso, no al día siguiente: el sekki
+cambia cada dos semanas y la tarea puede llegar unas horas tarde sin que eso sea
+un incidente.
+
+### Comprobación después de desplegar
+
+Además de la lista general del final de este documento:
+
+```bash
+python3 cli.py identidad          # antes del 23-S: «Sin manifiesto todavía»
+docker logs yuki-daemon | grep -i "CRON 04:00\|autocaracteriz"
+curl -s localhost:8080/metrics | grep yuki_identidad    # debe dar -1 al principio
+```
+
+Tras el 23 de septiembre, `cli.py identidad` tiene que decir de qué estación es
+el manifiesto y **cuántos avatares tienen fichero real**. Si salieron 0 de 4, el
+motivo concreto está en cada avatar del manifiesto (presupuesto, freno, error del
+proveedor): eso es información, no un fallo del despliegue.
+
+Para no esperar al 23: `python3 cli.py identidad --regenerar` ejecuta el ritual
+ahora y **gasta esas cuatro imágenes**.
+
+### Si hay que volver atrás
+
+Basta con volver al digest anterior: nada de lo nuevo escribe fuera de
+`data/identity_manifest.json` y `output/identity/`, y ningún otro módulo lee ese
+manifiesto todavía, así que dejarlo en el disco no rompe la versión vieja. Si se
+quiere el disco limpio, se borra el fichero y el directorio.
+
+Si algo falla en Discord o en la cadena de pasarelas tras desplegar, la causa
+más probable es el reparto de ficheros del primer commit: `discord_bot.py` quedó
+como la puerta del gateway y lo demás vive en `discord_comandos.py`,
+`discord_produccion.py` y `discord_salon.py`; `llm_router.py` conserva el
+recorrido y las pasarelas están en `llm_proveedores.py`, con `llm_entorno.py`
+debajo. Todo lo que se importaba por los nombres de siempre se sigue importando
+igual.
+
 ## Actualización del 9 de septiembre
 
 - Incorporada por avance directo la rama remota
