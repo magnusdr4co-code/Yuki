@@ -1,6 +1,6 @@
 # Estado de producción — Yuki
 
-**Verificado:** 2026-09-11 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)
+**Verificado:** 2026-09-20 (Europe/Madrid) · limitadores en [`VIRTUALIZACION_Y_MEJORAS.md`](VIRTUALIZACION_Y_MEJORAS.md)
 
 **Proyecto:** `yuki-prod`  
 **Instancia:** `yuki-agent` · Compute Engine `e2-small` · `europe-southwest1-a`
@@ -10,21 +10,19 @@
 | Campo | Valor |
 |---|---|
 | Repositorio | `europe-southwest1-docker.pkg.dev/yuki-prod/yuki/yuki-agent` |
-| Digest desplegado | `sha256:b0bf0a95e79b14a7eb97da053ff63ded57f96907e8304946bcda8c430dac9c16` |
-| Commit de código | `1f5d90e` — herencia correcta de `VERTEX_PROJECT_ID` desde el entorno |
-| Build de Cloud Build | `e0108418-6373-47df-8e8b-7664466f4550` |
+| Digest desplegado | `sha256:6458356af0b0ea570e47c7fdd175c7f53334de5dea922d221587174421a1bc45` |
+| Commit de código | `d24288d` — merge de PR #5 (`claude/sleepy-allen-fj49pj`) |
+| Build de Cloud Build | `796ee9b0-bba7-4ace-940f-3c60251c5bc7` |
 
 La VM descarga `:latest` al arrancar, pero esta tabla identifica el artefacto inmutable
 que se comprobó dentro de ambos contenedores. No se toman secretos del repositorio: el
 arranque los obtiene de Secret Manager y elimina el fichero temporal de runtime al acabar.
 
-## Pendiente de desplegar — rama `claude/sleepy-allen-fj49pj`
+## Actualización del 20 de septiembre — Despliegue de PR #5 (`claude/sleepy-allen-fj49pj`)
 
-> **Nada de esto está en producción todavía.** Lo que sigue lo escribe quien hizo
-> los cambios, desde el entorno de desarrollo: `make todo` en verde (linter,
-> 1000 pruebas, 12 simulacros de fallo, circuito de copia y humo), pero **nadie
-> lo ha desplegado ni verificado en la instancia**. Quien despliegue rellena
-> después el digest, el commit y lo comprobado, como en las secciones de arriba.
+Desplegado y verificado en la instancia `yuki-agent` el 20 de septiembre de 2026.
+PR #5 mergeado en `main` (`d24288d`). Imagen construida con éxito en Cloud Build
+`796ee9b0-bba7-4ace-940f-3c60251c5bc7` y descargada por el startup script de GCE.
 
 Seis commits, de `783d965` a `ac38332`:
 
@@ -103,6 +101,20 @@ proveedor): eso es información, no un fallo del despliegue.
 
 Para no esperar al 23: `python3 cli.py identidad --regenerar` ejecuta el ritual
 ahora y **gasta esas cuatro imágenes**.
+
+### Verificación de la actualización en producción (20-S)
+
+- **Digest verificado:** `sha256:6458356af0b0ea570e47c7fdd175c7f53334de5dea922d221587174421a1bc45` en ambos contenedores (`yuki-daemon` y `yuki-salon`).
+- **Salón web:** `yuki-salon` en estado `healthy`, endpoint `GET /health` responde `{"status": "ok", "service": "yuki-salon", "agent_loaded": false}`.
+- **Presencia Discord:** `yuki-daemon` conectado al Gateway de Discord como `Yuki#3584` en los dos servidores autorizados (`Temple` y `Dev Server`) con todos los canales habilitados y emparejamiento Hermes con Dextrure.
+- **Crons activos:** 9 rutinas autónomas + 2 ritmos propios activos (`propio_escritura_nocturna_kage` y `propio_contemplacion_crepusculo`), incluyendo la nueva rutina de autocaracterización estacional `seasonal_self_characterization` programada para las 04:00 Europe/Madrid.
+- **Identidad y métricas:**
+  - `python cli.py identidad`: responde «Sin manifiesto todavía. Lo genera ella sola al cambiar la micro-estación (Hakuro)», coherente con el estado inicial previo a Shūbun.
+  - `/metrics`: expone `yuki_identidad_al_dia -1` y `yuki_identidad_avatares_reales 0`.
+- **Capacidades efectivas:** `cli.py virtualize` reporta 28 capacidades reales, 1 simulada, 4 inactivas y 3 limitadores abiertos (0 bloqueantes).
+- **Pruebas locales antes del build:** 931 pruebas aprobadas, 12 omitidas, 0 fallos.
+
+---
 
 ### Si hay que volver atrás
 
