@@ -37,6 +37,33 @@ Seis commits, de `783d965` a `ac38332`:
 | `723aef6` | **Enchufa la autocaracterización**: cron 04:00, micro-ajuste en el eco, CLI, métricas y alerta |
 | `ac38332` | Cubre las dos ramas del ritual que se alcanzan con una instancia mal montada |
 
+### Primera ejecución real — 20 de septiembre, 13:57 UTC
+
+`docker exec yuki-daemon python cli.py identidad --regenerar` sobre la instancia,
+con Vertex de verdad: **3 de 4 avatares con fichero**, 25,21 s, modelo
+`gemini-2.5-flash-image`. `kage` falló con «Gemini Image no devolvió datos de
+imagen» —un 200 sin parte de imagen, en menos de un segundo, con el mismo prompt
+que funcionó en las otras tres—.
+
+Lo que esa ejecución demuestra, que era justo lo que no se podía saber con
+dobles: el fallo quedó anotado con su motivo concreto, **no se inventó un
+avatar**, y `Reserva devuelta: imagenes -1` confirma que lo que no se generó no
+se cobró. El manifiesto, la voz elegida y la paleta se escribieron igual.
+
+Y tres cosas que sólo aparecen ejecutando de verdad, corregidas después:
+
+1. **El remate del log decía «Avatares: 4 variantes»** con tres ficheros en
+   disco. El resumen de arriba lo decía bien y el cierre no, que es la peor
+   combinación: la línea que queda es la última.
+2. **La proporción era un deseo, no un dato.** El avatar estacional se pide en
+   16:9 y salió cuadrado: `aspect_ratio` sólo viajaba a la rama de Imagen, no a
+   la de Gemini, y aun así se anotaba la pedida en el resultado **y en la
+   receta**. Ahora se pide al modelo cuando el SDK instalado sabe pedirla, y lo
+   que se declara es lo que mide el fichero.
+3. **Un fallo del momento perdía la variante dos semanas.** Ahora se reintenta
+   **una vez**, y sólo cuando el fallo puede salir distinto: el presupuesto
+   agotado y el freno son estados, no accidentes.
+
 ### Qué NO cambia
 
 Lo que más importa para desplegar sin sorpresas:
@@ -69,7 +96,8 @@ Lo que más importa para desplegar sin sorpresas:
 ### Gasto que esto añade
 
 Hasta **cuatro imágenes por cambio de micro-estación** —una cada dos semanas—,
-unos **0,16 USD** al precio de referencia. Se reservan antes de llamar al
+unos **0,16 USD** al precio de referencia, y hasta ocho (~0,32 USD) en el peor
+caso, si las cuatro fallan y se reintentan una vez. Se reservan antes de llamar al
 proveedor contra el límite diario de imágenes (40 por defecto), como cualquier
 otro medio. Si el presupuesto está agotado o el freno puesto, no gasta: anota el
 motivo en el manifiesto y no inventa avatares.

@@ -384,3 +384,94 @@ def test_sin_portal_lo_que_queda_es_la_instruccion_y_se_llama_asi(tmp_path):
     assert all(Path(a["instruction_path"]).is_file() for a in avatares.values())
     # Y el aviso va dentro del propio fichero, no sólo en el manifiesto.
     assert "no un avatar generado" in avatares["atelier"]["note"]
+
+def _png(ancho: int, alto: int) -> bytes:
+    """Una cabecera PNG de verdad: firma + IHDR con ancho y alto."""
+    return (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR"
+            + ancho.to_bytes(4, "big") + alto.to_bytes(4, "big"))
+
+
+def test_un_fallo_del_momento_se_reintenta_una_vez_y_solo_una(tmp_path):
+    """
+    El 20 de septiembre, en la primera ejecución real contra Vertex, tres
+    avatares salieron y `kage` murió con «Gemini Image no devolvió datos de
+    imagen» —un 200 sin parte de imagen, con el mismo prompt que funcionó en las
+    otras tres—. Sin reintento, esa variante se pierde hasta el siguiente cambio
+    de estación.
+
+    Una vez y no más: un acto propio que falla no se reintenta en bucle.
+    """
+    vacio = {"status": "error", "simulated": False,
+             "error": "Gemini Image no devolvió datos de imagen."}
+    portal = PortalConGuion([vacio, _exito(tmp_path, "kage.png")])
+    motor = SelfCharacterization(nous_portal=portal)
+
+    manifiesto = asyncio.run(motor.synthesize_identity(ESTACION, _vital()))
+
+    # El primero falló y el reintento salió: cuatro avatares reales, cinco
+    # llamadas (una de más, la del reintento).
+    assert manifiesto["visual_identity"]["avatar_summary"]["con_fichero_verificado"] == 4
+    assert portal.llamadas == 5
+
+    # Y con un fallo que se repite, exactamente dos intentos por variante: ni
+    # uno más, o una avería del proveedor se convierte en una factura.
+    terco = PortalConGuion([vacio])
+    asyncio.run(SelfCharacterization(nous_portal=terco).synthesize_identity(ESTACION, _vital()))
+    assert terco.llamadas == 8
+
+
+def test_el_presupuesto_y_el_freno_no_se_reintentan(tmp_path):
+    """
+    Son estados, no accidentes: repetirlos no cambia la respuesta y vuelve a
+    mover la reserva. Sólo se reintenta lo que puede salir distinto.
+    """
+    for motivo in ({"budget_exceeded": True, "error": "presupuesto agotado"},
+                   {"braked": True, "error": "detenido por el freno de mano"}):
+        portal = PortalConGuion([dict({"status": "error", "simulated": False}, **motivo)])
+        asyncio.run(SelfCharacterization(nous_portal=portal)
+                    .synthesize_identity(ESTACION, _vital()))
+        assert portal.llamadas == 1, f"reintentó con {motivo}"
+
+
+def test_el_remate_del_ritual_cuenta_los_que_existen(tmp_path, caplog):
+    """
+    El cierre decía «Avatares: 4 variantes» con tres ficheros en disco y el
+    cuarto fallado. El resumen de arriba lo decía bien y el remate no, que es la
+    peor combinación: la línea que queda en el log es la última.
+    """
+    import logging
+
+    fallo = {"status": "error", "simulated": False, "error": "503 del proveedor"}
+    # Tres ficheros y una variante que falla en los dos intentos.
+    portal = PortalConGuion([_exito(tmp_path, "a.png")] * 3 + [fallo, fallo])
+    motor = SelfCharacterization(nous_portal=portal)
+
+    with caplog.at_level(logging.INFO, logger="Yuki.SelfCharacterization"):
+        asyncio.run(motor.synthesize_identity(ESTACION, _vital()))
+
+    remate = [m for m in caplog.messages if "COMPLETADA" in m]
+    assert remate, "el ritual no dejó constancia de haber terminado"
+    assert "3 de 4 con fichero" in remate[-1]
+
+
+def test_la_proporcion_declarada_es_la_que_tiene_el_fichero(tmp_path):
+    """
+    El avatar estacional se pide en 16:9 y Gemini devuelve un cuadrado: la
+    proporción viajaba sólo en la rama de Imagen, así que la receta y el
+    manifiesto anotaban 16:9 sobre un fichero 1:1. Una obra no se puede rehacer
+    desde una receta que miente sobre su encuadre.
+    """
+    from src.tools.vertex_media import _proporcion_del_png
+
+    cuadrado = tmp_path / "cuadrado.png"
+    cuadrado.write_bytes(_png(1024, 1024))
+    panoramico = tmp_path / "ancho.png"
+    panoramico.write_bytes(_png(1920, 1080))
+    roto = tmp_path / "no_es_png.png"
+    roto.write_bytes(b"esto no es un PNG")
+
+    assert _proporcion_del_png(str(cuadrado)) == "1:1"
+    assert _proporcion_del_png(str(panoramico)) == "16:9"
+    # Lo que no se puede medir no se inventa.
+    assert _proporcion_del_png(str(roto)) is None
+    assert _proporcion_del_png(str(tmp_path / "no_existe.png")) is None

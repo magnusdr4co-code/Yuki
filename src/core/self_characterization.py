@@ -446,12 +446,7 @@ class SelfCharacterization:
             # La ruta la decide el portal (`resultado["local_path"]`): calcularla
             # aquí era un resto de un diseño anterior y podía hacer creer que el
             # fichero se escribe donde no se escribe.
-            resultado = await self.nous_portal.generate_image_frontier(
-                prompt=spec["prompt"],
-                provider="gemini_image",
-                aspect_ratio=spec["aspect_ratio"],
-                lighting_style=spec["lighting"],
-            )
+            resultado = await self._pedir_avatar(spec)
             results[variant_name] = self._avatar_desde(resultado, comun)
 
             # El presupuesto agotado y el freno no cambian entre una variante y
@@ -477,6 +472,37 @@ class SelfCharacterization:
             ", ".join(f"{n}:{a.get('status')}" for n, a in results.items()),
         )
         return results
+
+    async def _pedir_avatar(self, spec: Dict[str, Any]) -> Dict[str, Any]:
+        """
+        Pide una variante, y reintenta **una vez** si el fallo es del momento.
+
+        El 20 de septiembre, en la primera ejecución real, tres de las cuatro
+        salieron y `kage` murió con «Gemini Image no devolvió datos de imagen»:
+        un 200 sin parte de imagen, en menos de un segundo, con el mismo prompt
+        que funcionó en las otras tres. Sin reintento, esa variante se pierde
+        hasta el siguiente cambio de estación —dos semanas con un avatar menos—.
+
+        Una vez y no más: un acto propio que falla no se reintenta en bucle. Y
+        sólo cuando el fallo puede cambiar al repetirlo: el presupuesto agotado
+        y el freno son estados, no accidentes, y repetirlos sólo gastaría la
+        reserva otra vez. La reserva del intento fallido ya se devolvió.
+        """
+        for intento in (1, 2):
+            resultado = await self.nous_portal.generate_image_frontier(
+                prompt=spec["prompt"],
+                provider="gemini_image",
+                aspect_ratio=spec["aspect_ratio"],
+                lighting_style=spec["lighting"],
+            )
+            if resultado.get("status") != "error":
+                return resultado
+            if resultado.get("budget_exceeded") or resultado.get("braked"):
+                return resultado
+            if intento == 1:
+                logger.warning("Avatar fallido (%s); se reintenta una vez.",
+                               resultado.get("error"))
+        return resultado
 
     def _guardar_instruccion(self, variant_name: str, comun: Dict[str, Any]) -> Dict[str, Any]:
         """La instrucción de prompt en disco, declarada como lo que es: no una imagen."""
@@ -907,11 +933,17 @@ class SelfCharacterization:
             )
 
         elapsed = time.time() - started_at
+        # `len(avatars)` cuenta las pedidas, no las que existen: el 20 de
+        # septiembre el ritual cerró diciendo «4 variantes» con tres ficheros en
+        # disco y el cuarto fallado. El resumen de arriba lo decía bien y éste
+        # no, que es la peor combinación: la línea que se lee es la última.
+        recuento = manifest["visual_identity"]["avatar_summary"]
         logger.info(
             "🪞 ═══ AUTOCARACTERIZACIÓN COMPLETADA (%.2fs) ═══\n"
-            "  Avatares: %d variantes | Voz: %s | Colores: %d | Símbolos: %d",
+            "  Avatares: %d de %d con fichero | Voz: %s | Colores: %d | Símbolos: %d",
             elapsed,
-            len(avatars),
+            recuento["con_fichero_verificado"],
+            recuento["total_pedidos"],
             voice_profile["selected_voice_id"],
             sum(len(v) for v in space_design["color_palette"].values()),
             len(space_design["iconography"]["primary_symbols"])

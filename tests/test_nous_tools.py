@@ -362,6 +362,37 @@ class TestVertexMedia(unittest.TestCase):
         with sdk_de_google_simulado():
             asyncio.run(_run())
 
+    def test_image_declares_the_ratio_it_got_not_the_one_it_asked(self):
+        """
+        El 20 de septiembre el avatar estacional se pidió en 16:9 y salió
+        cuadrado: la proporción sólo viajaba en la rama de Imagen, y aun así se
+        anotaba la pedida en el resultado y en la receta. Ahora se mide el
+        fichero, porque una receta que miente sobre el encuadre no sirve para
+        rehacer la obra.
+        """
+        from src.tools import receta
+
+        cabecera_1_1 = (b"\x89PNG\r\n\x1a\n" + b"\x00\x00\x00\rIHDR"
+                        + (1024).to_bytes(4, "big") + (1024).to_bytes(4, "big"))
+
+        async def _run():
+            cliente = ClienteGenaiFalso(imagenes=[ImagenFalsa(cabecera_1_1)])
+            motor = VertexMediaClient(
+                project_id="yuki-diva", client=cliente,
+                image_model="imagen-3.0-generate-002", art_dir=self.tmp,
+            )
+            result = await motor.generate_image("acero y escarcha", aspect_ratio="16:9")
+
+            self.assertEqual(result["status"], "success")
+            self.assertEqual(result["aspect_ratio"], "1:1")
+            self.assertEqual(result["aspect_ratio_pedido"], "16:9")
+            self.assertEqual(
+                receta.leer(result["local_path"])["parametros"]["aspect_ratio"], "1:1")
+            os.remove(result["local_path"])
+
+        with sdk_de_google_simulado():
+            asyncio.run(_run())
+
     def test_image_failure_never_becomes_a_success(self):
         async def _run():
             motor = VertexMediaClient(

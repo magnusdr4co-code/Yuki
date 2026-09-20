@@ -22,6 +22,7 @@ devuelve `status: "error"` con el motivo, para que la habilidad aborte y lo
 explique. Nunca una URL de un fichero que no existe.
 """
 
+import math
 import os
 import time
 import base64
@@ -79,6 +80,31 @@ def _resultado_error(motivo: str, **extra: Any) -> Dict[str, Any]:
     """
     logger.error(motivo)
     return {"status": "error", "error": motivo, "simulated": False, **extra}
+
+
+def _proporcion_del_png(ruta: str) -> Optional[str]:
+    """
+    La proporción que **tiene** el fichero, leída de su cabecera.
+
+    Sin dependencias: la cabecera IHDR de un PNG lleva ancho y alto en los bytes
+    16 a 24. Existe porque declarar la proporción pedida era declarar un deseo:
+    el avatar estacional se pedía en 16:9, Gemini devolvía un cuadrado y tanto la
+    receta como el manifiesto lo anotaban como 16:9. Una obra que no se puede
+    rehacer desde su receta es una receta que miente.
+    """
+    try:
+        with open(ruta, "rb") as fichero:
+            cabecera = fichero.read(24)
+        if len(cabecera) < 24 or cabecera[:8] != b"\x89PNG\r\n\x1a\n":
+            return None
+        ancho = int.from_bytes(cabecera[16:20], "big")
+        alto = int.from_bytes(cabecera[20:24], "big")
+    except OSError:
+        return None
+    if not ancho or not alto:
+        return None
+    divisor = math.gcd(ancho, alto)
+    return f"{ancho // divisor}:{alto // divisor}"
 
 
 class VertexMediaClient:
@@ -286,10 +312,19 @@ class VertexMediaClient:
 
             cliente = self._genai_client(self.location)
             if model.startswith("gemini-") or model.startswith("nano-banana"):
+                # La proporción viajaba sólo en la rama de Imagen: por aquí se
+                # pedía «16:9» y Gemini devolvía un cuadrado, que luego el
+                # manifiesto y la receta anotaban como 16:9. Se pide cuando el
+                # SDK instalado sabe pedirla —`ImageConfig` es reciente y la
+                # instancia puede llevar una versión anterior—, y en todo caso
+                # lo que se declara después es lo que mide el fichero.
+                ajustes: Dict[str, Any] = {"response_modalities": ["IMAGE"]}
+                if hasattr(types, "ImageConfig"):
+                    ajustes["image_config"] = types.ImageConfig(aspect_ratio=aspect_ratio)
                 respuesta = cliente.models.generate_content(
                     model=model,
                     contents=prompt,
-                    config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
+                    config=types.GenerateContentConfig(**ajustes),
                 )
                 for candidato in getattr(respuesta, "candidates", None) or []:
                     contenido = getattr(candidato, "content", None)
@@ -333,9 +368,15 @@ class VertexMediaClient:
         with open(destino, "wb") as f:
             f.write(datos)
 
+        medida = _proporcion_del_png(destino)
+        if medida and medida != aspect_ratio:
+            logger.info("El modelo devolvió %s donde se pidió %s.", medida, aspect_ratio)
         logger.info(f"🎨 Imagen real generada con {model}: {destino}")
         marca = self.marker.mark(destino, model=model, prompt=prompt, kind="visual")
-        receta.escribir(destino, motor=model, prompt=prompt, aspect_ratio=aspect_ratio)
+        # La receta existe para poder rehacer la obra: anotar la proporción
+        # pedida en vez de la que tiene el fichero la volvería irrepetible.
+        receta.escribir(destino, motor=model, prompt=prompt,
+                        aspect_ratio=medida or aspect_ratio)
         return {
             "marking": marca,
             "status": "success",
@@ -344,7 +385,10 @@ class VertexMediaClient:
             "model": model,
             "prompt_used": prompt,
             "local_path": destino,
-            "aspect_ratio": aspect_ratio,
+            # La medida manda sobre la petición: si no se pudo leer el fichero
+            # se dice que se desconoce, nunca se da por buena la pedida.
+            "aspect_ratio": medida or "desconocida",
+            "aspect_ratio_pedido": aspect_ratio,
             "bytes": len(datos),
             "estimated_cost_usd": PRECIO_IMAGEN,
             "created_at": time.time(),
