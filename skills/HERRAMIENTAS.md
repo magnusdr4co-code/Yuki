@@ -2,7 +2,7 @@
 
 *Fuente única de verdad sobre **qué herramienta existe, cómo se invoca y qué hacer cuando falla**. Toda habilidad de `skills/` declara su contrato contra este catálogo.*
 
-> Deriva de las decisiones D-1 a D-6 de [`docs/INFRASTRUCTURE_IMPLEMENTATION.md`](../docs/INFRASTRUCTURE_IMPLEMENTATION.md).
+> Deriva de las decisiones D-1 a D-6 de [`docs/historico/INFRASTRUCTURE_IMPLEMENTATION.md`](../docs/historico/INFRASTRUCTURE_IMPLEMENTATION.md).
 > **Regla previa a todo:** si una herramienta no aparece en esta tabla, **no existe**. No inventes endpoints ni modelos, no sustituyas en silencio una herramienta por otra y no devuelvas resultados simulados como si fueran reales.
 
 ---
@@ -26,7 +26,7 @@
 | `local.memory` | `src/memory/fts5_memory.py` | Local (SQLite FTS5) | Memoria: leer y escribir | — |
 | `local.library` | `src/tools/creation_library.py` | Local, DM emparejado | Inventariar, archivar texto, leer y cambiar estado por tipo/estado; índice y hashes en `output/Biblioteca/` | Fallo explícito, sin simulación |
 | `local.ffmpeg` | `ffmpeg` en el contenedor | Local | Transcodificar audio a OGG Opus | — |
-| `adapter.telegram` | `src/adapters/telegram_bot.py` | Local (*long polling*) | Publicar y responder | — |
+| `adapter.telegram` | `src/adapters/telegram_bot.py` | Local (API HTTP, sólo salida) | Publicar: texto, imagen y voz, con marca y freno. **La entrada —polling— no está implementada**, así que no responde | — |
 | `adapter.discord` | `src/adapters/discord_bot.py` | Local (Gateway WS) | Publicar y responder | — |
 | `adapter.instagram` | Instagram Graph API | Directa | Publicar (fase 3) | — |
 

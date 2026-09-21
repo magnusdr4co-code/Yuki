@@ -25,8 +25,21 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 
+# Se vigilaban veintiocho de los cuarenta y siete documentos del repositorio.
+# Fuera quedaban justo los que gobiernan a quien trabaja aquí: `AGENTS.md`
+# —las instrucciones operativas—, `SOUL.md` —el canon de identidad— y las
+# quince habilidades con su catálogo, que `AGENTS.md` declara «fuente única de
+# verdad». Envejecían sin que nada lo dijera, y ya había un enlace roto dentro:
+# `skills/HERRAMIENTAS.md` apuntaba a un documento que se movió a `historico/`.
 DOCUMENTOS = (sorted(RAIZ.glob("docs/*.md")) + sorted(RAIZ.glob("docs/historico/*.md"))
-              + [RAIZ / "README.md", RAIZ / "CLAUDE.md"])
+              + sorted(RAIZ.glob("skills/**/*.md"))
+              + [RAIZ / "README.md", RAIZ / "CLAUDE.md",
+                 RAIZ / "AGENTS.md", RAIZ / "SOUL.md", RAIZ / "MEMORY.md"])
+
+# Los que no viven en `docs/` tienen su propio sitio y no aparecen en el índice
+# de la documentación técnica: las habilidades se listan solas en `skills/`.
+FUERA_DEL_INDICE = {"README.md", "CLAUDE.md", "AGENTS.md", "SOUL.md", "MEMORY.md",
+                    "HERRAMIENTAS.md", "SKILL.md"}
 
 # Lo que se cita como pendiente, planificado o histórico no cuenta como promesa.
 # Marcar así un criterio de diseño que nunca se cumplió es más honesto que
@@ -165,7 +178,7 @@ def test_todo_documento_esta_en_algun_indice(texto_por_documento):
 
     huerfanos = []
     for documento in texto_por_documento:
-        if documento.name in ("README.md", "CLAUDE.md"):
+        if documento.name in FUERA_DEL_INDICE:
             continue
         donde = indice_historico if documento.parent.name == "historico" else indice
         if documento.name not in donde:

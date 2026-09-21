@@ -459,3 +459,40 @@ def test_cada_cron_declarado_tiene_su_metodo(monkeypatch):
 
     assert not (declarados - metodos), f"cron sin método: {sorted(declarados - metodos)}"
     assert not (metodos - declarados), f"método autónomo sin cron: {sorted(metodos - declarados)}"
+
+
+def test_toda_tarea_habilitada_acaba_registrada_en_el_planificador():
+    """
+    La clave que se despacha es `action`, y nadie la vigilaba.
+
+    La prueba de arriba compara `name`, que no es lo que `_register_cron_jobs`
+    usa para elegir el método. En las tres primeras tareas ni siquiera
+    coinciden. Cambiar `action: rem_dream` por `rem_dreamm` dejaba la fase REM
+    del sueño fuera del planificador con un `logger.warning` por toda señal, y
+    las mil pruebas, el simulacro, el humo y el gemelo virtual seguían en
+    verde: una invariante del proyecto apagada sin que nada lo dijera.
+
+    Se comprueba por donde se nota —el planificador ya construido— y no por la
+    lista, que es justo lo que permitió el hueco.
+    """
+    import yaml
+
+    from src.core.agent import YukiAgent
+
+    with open(os.path.join(os.path.dirname(__file__), "..", "config.yaml"),
+              encoding="utf-8") as fichero:
+        config = yaml.safe_load(fichero)
+
+    habilitadas = {j["name"] for j in config["scheduler"]["cron_jobs"]
+                   if j.get("enabled", True)}
+    agente = YukiAgent()
+
+    faltan = sorted(habilitadas - set(agente.cron.jobs))
+    assert not faltan, (
+        f"tareas habilitadas que el planificador no registró: {faltan}. "
+        "Casi siempre es una errata en `action`, que se omite en silencio.")
+
+    # Y al revés: toda acción declarada tiene que existir en el despacho.
+    acciones = {j["action"] for j in config["scheduler"]["cron_jobs"]}
+    desconocidas = sorted(acciones - set(agente.acciones_del_cron()))
+    assert not desconocidas, f"acciones que nadie sabe ejecutar: {desconocidas}"

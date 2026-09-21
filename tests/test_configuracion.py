@@ -54,23 +54,75 @@ def codigo():
 
 
 @pytest.fixture(scope="module")
-def lineas_marcadas():
-    texto = (RAIZ / "config.yaml").read_text(encoding="utf-8")
-    return {linea.split(":")[0].strip(): linea
-            for linea in texto.splitlines() if MARCA in linea}
+def modulos():
+    """El texto de cada módulo por separado, para poder exigir proximidad."""
+    fuentes = {str(p.relative_to(RAIZ)): p.read_text(encoding="utf-8")
+               for p in (RAIZ / "src").rglob("*.py")}
+    fuentes["cli.py"] = (RAIZ / "cli.py").read_text(encoding="utf-8")
+    return fuentes
 
 
-def test_toda_clave_o_se_lee_o_dice_que_no(configuracion, codigo, lineas_marcadas):
+def _lineas_por_ruta():
+    """
+    Cada línea de `config.yaml` con su ruta completa, siguiendo la sangría.
+
+    Hacía falta porque indexar por el nombre de la hoja confunde claves
+    distintas que se llaman igual: hay diez `enabled` en el fichero, y una
+    marca puesta en `adapters.telegram.enabled` hacía saltar el contrapeso que
+    vigila `budget.enabled`. El mismo fallo de fondo que el guardián de arriba.
+    """
+    lineas, pila = {}, []
+    for linea in (RAIZ / "config.yaml").read_text(encoding="utf-8").splitlines():
+        if not linea.strip() or linea.strip().startswith("#"):
+            continue
+        sangria = len(linea) - len(linea.lstrip())
+        clave = linea.strip().split(":", 1)[0].strip()
+        if clave.startswith("-"):
+            continue
+        while pila and pila[-1][0] >= sangria:
+            pila.pop()
+        ruta = ".".join([c for _, c in pila] + [clave])
+        lineas[ruta] = linea
+        pila.append((sangria, clave))
+    return lineas
+
+
+@pytest.fixture(scope="module")
+def rutas_marcadas():
+    """Las rutas completas cuya línea avisa de que nadie las lee."""
+    return {ruta: linea for ruta, linea in _lineas_por_ruta().items() if MARCA in linea}
+
+
+@pytest.fixture(scope="module")
+def lineas_marcadas(rutas_marcadas):
+    return {ruta.split(".")[-1]: linea for ruta, linea in rutas_marcadas.items()}
+
+
+def test_toda_clave_o_se_lee_o_dice_que_no(configuracion, modulos, lineas_marcadas):
     """
     Un dial que no gira engaña a quien lo ajusta, y lo hace en silencio: no
     falla, simplemente no pasa nada, y el operador concluye que el número no
     servía de mucho.
+
+    Se exige **proximidad**: el nombre de la clave tiene que aparecer en un
+    módulo que además lea su sección de primer nivel. Antes bastaba con que el
+    literal saliera en cualquier punto de `src/`, y con nombres genéricos eso
+    se cumple siempre: `"enabled"` aparece en diecisiete ficheros, así que
+    cualquier `loquesea.enabled` nacía dado por vivo. Una sección inventada
+    entera con claves `enabled`, `name` y `timeout` pasaba el guardián salvo
+    por `timeout`. Así se habían colado `adapters.telegram.enabled`,
+    `memory.decay.enabled`, los tres pesos de `bm25_weights`, las cuatro rutas
+    de `workspace_output_paths` y `agent.name`/`agent.version`.
     """
     mudas = []
+    marcadas_por_ruta = {ruta for ruta, linea in _lineas_por_ruta().items() if MARCA in linea}
     for ruta, clave in _hojas(configuracion):
-        if re.search(rf'["\']{re.escape(clave)}["\']', codigo):
+        if ruta in marcadas_por_ruta:
             continue
-        if clave in lineas_marcadas:
+        seccion = ruta.split(".")[0]
+        lectores = [texto for texto in modulos.values()
+                    if re.search(rf'["\']{re.escape(seccion)}["\']', texto)]
+        if any(re.search(rf'["\']{re.escape(clave)}["\']', texto) for texto in lectores):
             continue
         mudas.append(ruta)
 
@@ -102,11 +154,11 @@ def test_las_secciones_que_si_gobiernan_algo_siguen_vivas(configuracion, codigo)
     """
     vivas = ["agency.spontaneity", "agency.boredom_cap", "agency.spontaneous_threshold",
              "budget.enabled", "transparency.enabled", "persona.enabled",
-             "memory.database_path", "pulse.max_edad_horas"]
+             "memory.database_path", "pulse.max_edad_horas",
+             # Y la que faltaba: la reserva de voz existía y no podía negar.
+             "budget.daily_limits.voz_caracteres"]
 
-    texto = (RAIZ / "config.yaml").read_text(encoding="utf-8")
+    lineas = _lineas_por_ruta()
     for ruta in vivas:
-        hoja = ruta.split(".")[-1]
-        for linea in texto.splitlines():
-            if linea.strip().startswith(f"{hoja}:"):
-                assert MARCA not in linea, f"{ruta} está marcada como muerta y no lo está"
+        assert ruta in lineas, f"{ruta} ha desaparecido de config.yaml"
+        assert MARCA not in lineas[ruta], f"{ruta} está marcada como muerta y no lo está"

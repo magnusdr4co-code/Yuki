@@ -270,27 +270,42 @@ class YukiAgent:
         self._reload_runtime_clients()
         return result
 
+    def acciones_del_cron(self) -> Dict[str, Any]:
+        """
+        Qué nombre de `action` ejecuta qué método. Es lo que despacha de verdad.
+
+        Vivía dentro del bucle de registro, donde ninguna prueba podía verlo, y
+        por eso el guardián de `tests/test_tasks.py` comparaba la clave `name`
+        —que no es la que se despacha— contra los métodos de `AutonomousTasks`.
+        En las tres primeras tareas `name` y `action` ni siquiera coinciden, así
+        que una errata en `action` dejaba la tarea fuera del planificador con
+        sólo un aviso en el registro, y la suite entera seguía en verde.
+        """
+        return {
+            "reflect_on_trends": self.tasks.nocturnal_trend_reflection,
+            "publish_morning_art": self.tasks.morning_inspiration_drop,
+            "synthesize_daily_memory": self.tasks.daily_memory_synthesis,
+            "echo_ritual": self.tasks.echo_ritual,
+            "agency_loop_tick": self.tasks.agency_loop_tick,
+            "spontaneous_monologue": self.tasks.spontaneous_monologue,
+            "rem_dream": self.tasks.rem_dream,
+            "weekly_forgetting": self.tasks.weekly_forgetting,
+            "seasonal_self_characterization": self.tasks.seasonal_self_characterization,
+        }
+
     def _register_cron_jobs(self):
         jobs = self.config.get("scheduler", {}).get("cron_jobs", [])
+        func_map = self.acciones_del_cron()
         for job in jobs:
             name = job.get("name")
             cron_expr = job.get("cron")
             action = job.get("action")
             enabled = job.get("enabled", True)
 
-            func_map = {
-                "reflect_on_trends": self.tasks.nocturnal_trend_reflection,
-                "publish_morning_art": self.tasks.morning_inspiration_drop,
-                "synthesize_daily_memory": self.tasks.daily_memory_synthesis,
-                "echo_ritual": self.tasks.echo_ritual,
-                "agency_loop_tick": self.tasks.agency_loop_tick,
-                "spontaneous_monologue": self.tasks.spontaneous_monologue,
-                "rem_dream": self.tasks.rem_dream,
-                "weekly_forgetting": self.tasks.weekly_forgetting,
-                "seasonal_self_characterization": self.tasks.seasonal_self_characterization,
-            }
-
             if action not in func_map:
+                # Se avisa y se sigue: una tarea mal escrita no puede impedir
+                # que Yuki despierte. Quien vigila que esto no ocurra es
+                # `tests/test_tasks.py`, antes de llegar a producción.
                 logger.warning(f"Acción cron desconocida '{action}' en la tarea '{name}'; se omite.")
                 continue
 
