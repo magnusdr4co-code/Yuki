@@ -9,10 +9,11 @@ import sys
 
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), "..")))
 
+from src.core.rutas import base_de_datos
 from src.memory.fts5_memory import FTS5MemoryEngine
 
 def run_performance_test(num_records: int = 5000):
-    test_db = "data/perf_test.db"
+    test_db = str(base_de_datos().parent / "perf_test.db")
     if os.path.exists(test_db):
         os.remove(test_db)
 
@@ -59,7 +60,7 @@ def run_performance_test(num_records: int = 5000):
     print("\n📊 Resultados de Rendimiento en Consulta:")
     print(f"  • Latencia media de búsqueda: {avg_lat:.2f} ms")
     print(f"  • Latencia P95:                {p95_lat:.2f} ms")
-    print(f"  • Cumplimiento SLA (<113ms):   {'✅ CUMPLIDO' if p95_lat < 113.0 else '❌ NO CUMPLIDO'}")
+    print(f"  • Presupuesto de latencia p95 < 113 ms: {'✅ dentro' if p95_lat < 113.0 else '❌ fuera'}")
 
     if os.path.exists(test_db):
         os.remove(test_db)

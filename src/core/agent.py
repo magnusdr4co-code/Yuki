@@ -499,7 +499,7 @@ class YukiAgent:
     ) -> str:
         """
         Ciclo de respuesta de 'Mente Rápida':
-        1. Recuperación selectiva en SQLite FTS5 (<113ms)
+        1. Recuperación selectiva en SQLite FTS5 (objetivo p95 < 113 ms)
         2. Extracción de contexto dialéctico Honcho
         3. Ensamblado y generación
         4. Actualización no bloqueante de memoria

@@ -30,5 +30,5 @@ def print_banner() -> None:
        ⛩️  YUKI (雪) — DIVA DIGITAL AUTÓNOMA (HERMES AGENT)  ⛩️
 ======================================================================{RESET}
 {DIM}Estación: {season['sekki']} ({season['micro_season_ko']}){RESET}
-{DIM}Personalidad Evolutiva (Honcho) | Medios (Nous Portal) | Memoria FTS5 (<113ms){RESET}
+{DIM}Personalidad Evolutiva (Honcho) | Medios (Nous Portal) | Memoria FTS5 (objetivo <113 ms){RESET}
 """)

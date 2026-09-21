@@ -1,6 +1,8 @@
 """
 Fast Memory Engine (SQLite + FTS5) para Yuki.
-Permite búsqueda textual y semántica ultrarrápida (<113ms) eliminando el context rot de OpenClaw.
+Búsqueda textual selectiva. El objetivo declarado es p95 < 113 ms sobre el
+corpus de la instancia: es un presupuesto de latencia, no una medición —lo
+comprueba `scripts/benchmark_fts5.py`—.
 """
 
 import sqlite3

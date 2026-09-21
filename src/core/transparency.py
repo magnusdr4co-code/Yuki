@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .rutas import salida
+from .. import __version__ as VERSION
 from . import estado_json
 
 logger = logging.getLogger("Yuki.Transparencia")
@@ -219,7 +220,7 @@ class MediaMarker:
         """Manifiesto con la forma de C2PA 2.4, declarado explícitamente sin firmar."""
         return {
             "claim_generator": "yuki-hermes-agent",
-            "claim_generator_info": [{"name": "Yuki (Hermes Agent)", "version": "2.6.0"}],
+            "claim_generator_info": [{"name": "Yuki (Hermes Agent)", "version": VERSION}],
             "title": Path(path).name,
             "format": Path(path).suffix.lstrip("."),
             "assertions": [

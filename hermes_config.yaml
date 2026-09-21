@@ -4,7 +4,7 @@
 # ==========================================
 
 hermes:
-  version: "2.5"
+  version: "2.5"   # no se lee: la versión del proyecto vive en src/__init__.py
   default_workspace: "./"
   active_agent: "yuki"
 

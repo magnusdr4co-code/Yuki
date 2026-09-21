@@ -29,7 +29,7 @@ class MemoryManager:
         limit: int = 4
     ) -> Dict[str, Any]:
         """
-        Recupera de forma selectiva y ultrarrápida (<113ms) los recuerdos más relevantes
+        Recupera de forma selectiva los recuerdos más relevantes (objetivo p95 < 113 ms)
         sin saturar la ventana de contexto (evita Context Rot).
         """
         memories = self.engine.search(query=query, user_id=user_id, limit=limit)
