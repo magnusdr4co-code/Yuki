@@ -1,6 +1,6 @@
 # Índice de la documentación
 
-Veinte documentos, cuatro mil líneas, y hasta ahora ningún mapa. `CLAUDE.md`
+Veintiséis documentos, y hasta ahora ningún mapa. `CLAUDE.md`
 decía «empieza por OPERACION.md» y ahí se acababa la orientación: el resto había
 que descubrirlo abriendo ficheros hasta dar con el que respondía.
 

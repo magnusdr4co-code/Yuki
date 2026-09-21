@@ -108,5 +108,9 @@ sequenceDiagram
 ## 4. Estrategia de Despliegue y Eficiencia
 
 Yuki está concebida para operar en dos modalidades según los requisitos de infraestructura:
+> **Lo que corre hoy** es Compute Engine (`yuki-agent`, `e2-small`), según
+> [`DESPLIEGUE.md`](DESPLIEGUE.md). Las dos opciones de abajo se estudiaron y
+> no se adoptaron.
+
 1. **VPS Económico ($5/mes):** Utilizando el contenedor `Dockerfile` optimizado con Docker Compose. Consumo medio de RAM inferior a 180MB.
 2. **Serverless (Modal / Daytona):** Configurado con `@modal.web_endpoint` y volúmenes persistentes. El contenedor duerme con coste cero ($0.00/h) y despierta en menos de 400ms al recibir un webhook.

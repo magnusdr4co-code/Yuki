@@ -1,6 +1,13 @@
 # 🚀 Guía de Despliegue: VPS ($5/mes), Docker y Serverless (Modal)
 
-Este manual cubre todas las opciones de despliegue en producción para **Yuki**, garantizando un consumo mínimo de recursos y alta disponibilidad.
+> **Alternativas estudiadas, no adoptadas.** La instancia real corre en
+> Compute Engine (`yuki-agent`, `e2-small`, `europe-southwest1`) y su runbook
+> vigente es [`DESPLIEGUE.md`](DESPLIEGUE.md). Este documento se conserva
+> porque el registro de lo que se valoró vale, pero **seguirlo al pie de la
+> letra no reproduce lo que está desplegado**. El índice lo decía; quien abre
+> el fichero directamente no pasa por el índice.
+
+Este manual cubre las opciones de despliegue que se estudiaron para **Yuki**, buscando consumo mínimo de recursos y alta disponibilidad.
 
 > Para el plan de infraestructura en producción (OpenRouter como proveedor multimodal y nuclear, Google Cloud como hogar del contenedor Hermes, y el inventario mínimo de cuentas), consulta [`INFRASTRUCTURE_IMPLEMENTATION.md`](historico/INFRASTRUCTURE_IMPLEMENTATION.md).
 

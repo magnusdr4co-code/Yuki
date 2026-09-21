@@ -10,7 +10,7 @@ Este manual documenta la integración de modelos de **Inteligencia Artificial de
 
 | Motor | Backend / Proveedor | Características Principales | Uso en Yuki |
 | :--- | :--- | :--- | :--- |
-| **Gemini Image** | `google/imagen-3-generate-002` | Fotorrealismo extremo, texturas orgánicas y composición balanceada | Portadas de sencillos y conceptos visuales principales |
+| **Gemini Image** | el que declare `vertex_ai.media.image_model` | Fotorrealismo extremo, texturas orgánicas y composición balanceada | Portadas de sencillos y conceptos visuales principales |
 | **Seedream** | `bytedance/seedream-v2.5-hd` | Estilismo conceptual, líneas expresivas y Kintsugi refinado | Ilustraciones de poesía Waka y publicaciones de redes |
 | **Flux Pro Ultra**| `fal-ai/flux-pro/v1.1-ultra` | Iluminación cinematográfica 8K y renderizado de materiales | Banners de eventos y arte promocional en alta resolución |
 

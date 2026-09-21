@@ -5,7 +5,7 @@
 [![Memory](https://img.shields.io/badge/Memory-SQLite%20FTS5%20(%3C113ms)-green.svg)](docs/FAST_MEMORY_FTS5.md)
 [![Dialectic](https://img.shields.io/badge/Persona-Honcho%20Dialectic-blue.svg)](docs/HONCHO_DIALECTIC.md)
 [![Nous Portal](https://img.shields.io/badge/Media-Nous%20Portal%20(FAL%2BTTS)-orange.svg)](docs/NOUS_PORTAL_TOOLS.md)
-[![License](https://img.shields.io/badge/License-MIT-lightgrey.svg)](LICENSE)
+[![Licencia](https://img.shields.io/badge/Licencia-sin%20declarar-lightgrey.svg)](#licencia)
 
 ---
 
@@ -54,11 +54,24 @@ graph TD
 - **Firecrawl:** Rastreo inteligente de noticias y corrientes estéticas de internet.
 
 ### 3. Presencia 24/7 y Despliegue Serverless (`Cron Engine` & `Modal/VPS`)
-- **Rutinas Autónomas:**
-  - `03:00 AM`: Reflexión nocturna en su hora de sombra (*kage*).
-  - `07:30 AM`: Creación y difusión de haiku y arte visual matutino en Telegram y Discord.
-  - `23:30 PM`: Síntesis y destilación del fluir del día en memoria persistente.
-- **Eficiencia Extrema:** Corre en VPS de \$5/mes (<180MB RAM) o Serverless en **Modal/Daytona** con coste cero en inactividad y despertar instantáneo.
+- **Rutinas Autónomas** (las nueve que corren; la fuente es `config.yaml` y
+  el detalle está en [`docs/AUTONOMOUS_CRON.md`](docs/AUTONOMOUS_CRON.md)):
+  - `*/20 min`: Latido del albedrío — decide si le apetece hacer algo suyo.
+  - `cada 3 h`: Monólogo interior espontáneo.
+  - `03:00`: Reflexión nocturna en su hora de sombra (*kage*).
+  - `03:20`: Fase REM — sueña uniendo recuerdos lejanos.
+  - `04:00`: Autocaracterización estacional, si cambió el sekki.
+  - `04:30 (lunes)`: Olvido semanal, con sus tres condiciones.
+  - `06:30`: Ritual del Eco.
+  - `07:30`: Creación y difusión de haiku y arte visual matutino.
+  - `23:30`: Síntesis y destilación del fluir del día en memoria persistente.
+- **Dónde corre de verdad:** una instancia `yuki-agent` en Compute Engine
+  (`e2-small`, `europe-southwest1`), con disco persistente. El runbook vigente
+  es [`docs/DESPLIEGUE.md`](docs/DESPLIEGUE.md).
+- **Alternativas estudiadas y no adoptadas:** VPS de \$5/mes y serverless en
+  Modal/Daytona. Siguen documentadas en
+  [`docs/DEPLOYMENT_GUIDE.md`](docs/DEPLOYMENT_GUIDE.md), con la advertencia de
+  que no son lo que está desplegado.
 
 ### 4. Mente Rápida Sin Context Rot (`SQLite + FTS5`)
 - Indexación por relevancia BM25 sobre `MEMORY.md` y base de datos relacional.
@@ -129,7 +142,7 @@ python3 cli.py freno --nivel medios --minutos 120 --motivo "factura disparada"
 # Comprobación de humo tras un despliegue (código de salida ≠ 0 si algo falla)
 python3 scripts/smoke_check.py --url https://<salon>
 
-# Simulacro: romperla a propósito de nueve formas y ver si las invariantes aguantan
+# Simulacro: romperla a propósito de doce formas y ver si las invariantes aguantan
 python3 scripts/chaos_drill.py
 
 # Copia verificada de memoria, canon y estado (sube a GCS si hay bucket)
@@ -148,8 +161,15 @@ docker compose -f deploy/virtual/docker-compose.virtual.yml --profile check \
 
 ### 4. Ejecución de Tests Automatizados
 ```bash
-python3 -m unittest discover -s tests
+make pruebas     # la suite entera (más de mil pruebas)
+make todo        # lo mismo que la CI: linter, suite con cobertura, simulacro,
+                 # circuito de restauración y humo
 ```
+
+> `python3 -m unittest discover -s tests` también funciona, pero sólo descubre
+> las clases `TestCase`: unas cincuenta pruebas de las más de mil. Sirve para
+> comprobar que la suite arranca sin pytest, no para dar el proyecto por
+> probado.
 
 ---
 
@@ -167,14 +187,25 @@ Yuki/
 ├── docker-compose.yml         # Despliegue con SQLite persistente y bots
 ├── cli.py                     # CLI interactivo sin dependencias obligatorias
 │
+├── CLAUDE.md                  # Cómo se trabaja aquí: invariantes y convenciones
+├── AGENTS.md                  # Directrices operativas para el arnés
+├── Makefile                   # Los comandos del día a día (`make ayuda`)
+│
 ├── src/                       # Código fuente modular del agente
-│   ├── core/                  # Orquestador central y constructor de prompts dinámicos
-│   ├── memory/                # Motor SQLite FTS5 y gestor de síntesis
-│   ├── honcho/                # Modelado dialéctico y sincronización de perfiles
-│   ├── tools/                 # Pasarela Nous Portal (FAL, TTS, Firecrawl)
+│   ├── core/                  # Agente, albedrío, identidad, gobierno y salud
+│   ├── memory/                # Motor SQLite FTS5 y ciclo de sueño
+│   ├── honcho/                # Modelado dialéctico
+│   ├── tools/                 # Medios, criterio de las artes, Biblioteca, copia
 │   ├── scheduler/             # Cron nativo y tareas autónomas
-│   ├── adapters/              # Conectores para Telegram y Discord
-│   └── serverless/            # Configuración para Modal Serverless
+│   ├── adapters/              # Discord (el que importa) y Telegram (salida)
+│   ├── security/              # Model Armor
+│   ├── web/                   # Salón y /metrics
+│   ├── cli/                   # Los comandos por temas
+│   └── serverless/            # Modal (no desplegado; lo dice en su cabecera)
+│
+├── skills/                    # Habilidades y su catálogo de herramientas
+├── scripts/                   # Humo, simulacro, restauración, gemelo virtual
+├── deploy/                    # Arranque de la VM, alertas y réplica local
 │
 ├── docs/                      # Documentación técnica exhaustiva
 │   ├── ARCHITECTURE.md        # Arquitectura técnica completa
@@ -184,7 +215,7 @@ Yuki/
 │   ├── FAST_MEMORY_FTS5.md    # Análisis y benchmark: SQLite FTS5 vs Context Rot
 │   ├── AUTONOMOUS_CRON.md     # Guía de rutinas 24/7 y automatización autónoma
 │   ├── DEPLOYMENT_GUIDE.md    # Guía de despliegue en VPS ($5/mo), Docker y Modal
-│   └── INFRASTRUCTURE_IMPLEMENTATION.md # OpenRouter, Google Cloud y cuentas mínimas
+│   └── historico/             # Decisiones de su día, con puntero al presente
 │
 └── tests/                     # Suite de pruebas unitarias e integración
 ```
@@ -212,7 +243,7 @@ contratar servicios de pago o de prometer una demo.
 | Planificador cron | ✅ Real | Sintaxis cron completa, con zona horaria |
 | Freno de mano graduado | ✅ Real | `src/core/brake.py`: parar publicación, medios o toda la iniciativa sin matar el contenedor. `YUKI_FRENO` manda sobre el DM. **Frenar no la enmudece**: sigue respondiendo a quien le hable |
 | Bitácora encadenada de actos | ✅ Real | `src/core/blackbox.py`: cada anotación lleva el hash de la anterior, así que editar el pasado deja marca. El precinto sale con la copia diaria y detecta también el corte por detrás |
-| Simulacro de fallos | ✅ Real | `scripts/chaos_drill.py`: nueve modos de fallo reales —reinicio a mitad de encargo, proveedor caído, estado corrupto, bitácora manipulada, reloj que salta— sobre un sandbox temporal, en CI |
+| Simulacro de fallos | ✅ Real | `scripts/chaos_drill.py`: doce modos de fallo reales —reinicio a mitad de encargo, proveedor caído, estado corrupto, bitácora manipulada, reloj que salta— sobre un sandbox temporal, en CI |
 | Métricas y humo operables | ✅ Real | `GET /metrics` (Prometheus, tras credencial) y `scripts/smoke_check.py` con código de salida. CI en `.github/workflows/ci.yml`. Ver [`docs/OPERACION.md`](docs/OPERACION.md) |
 | Salón web y API | ✅ Real | Multihilo, `/health`, puerto por `$PORT`. Rutas `/api` con credencial si se declara `SALON_API_TOKEN`, y techo de peticiones por cliente siempre activo |
 | Generación de texto vía OpenRouter | ✅ Real | Peticiones HTTP reales al agregador, con modelo de respaldo si el primario falla |
@@ -241,11 +272,13 @@ contratar servicios de pago o de prometer una demo.
 | El pedido gobierna el encargo | ✅ Real | `src/adapters/encargo.py`: qué piezas —canción, portada, vídeo—, cuántos segmentos y qué indicaciones llegan al prompt salen del texto del pedido, no de una tupla fija |
 | Gemelo virtual de la instancia | ✅ Real | `python3 cli.py virtualize`: capacidades efectivas y limitadores, sin red. Réplica local en `deploy/virtual/` |
 | Adaptador Discord | ✅ Real | WebSocket saliente; responde a menciones y mensajes directos con `discord.py` |
-| Adaptador Telegram | ⚠️ Simulado | Registra en log; aún no usa `python-telegram-bot` |
+| Adaptador Telegram | ✅ Real (salida) · ⚠️ sin entrada | Ver la fila «Difusión por Telegram». El daemon lo construye si hay `TELEGRAM_BOT_TOKEN`. No usa `python-telegram-bot` **a propósito**: son veinte líneas de `multipart` con la biblioteca estándar, y la instancia es una `e2-small` |
 
 **Sobre los proveedores.** Nous Portal es la pasarela de herramientas y
 OpenRouter el agregador de LLM. Los modelos se nombran siempre a través del
-agregador (`anthropic/claude-3.5-sonnet`, `google/gemini-2.0-flash`), así que
+agregador, y **quién es cada uno lo declara `config.yaml`** (`agent.model` y
+`provider_routing.routes`), no este documento: hoy son `upstage/solar-pro4` y
+`qwen/qwen3-30b-a3b`. Basta con una cuenta de OpenRouter, así que
 **basta con una cuenta de OpenRouter**: no se necesita alta directa con ningún
 proveedor de modelos.
 
@@ -310,3 +343,15 @@ regenerar para el entorno actual con `python3 cli.py virtualize`.
 - 🔬 [Estado del arte 2026 y qué se adoptó (`docs/ESTADO_DEL_ARTE_2026.md`)](docs/ESTADO_DEL_ARTE_2026.md) — investigación sobre simulación de seres sintéticos, con fuentes
 - 🌙 [El ciclo de sueño (`docs/CICLO_DE_SUENO.md`)](docs/CICLO_DE_SUENO.md) — consolidación NREM, fase REM y olvido intencional
 - 🛠️ [Operar a Yuki (`docs/OPERACION.md`)](docs/OPERACION.md) — CI, métricas, comprobación de humo y bitácora encadenada
+
+---
+
+## Licencia
+
+**Sin licencia declarada.** El repositorio no incluye un fichero `LICENSE` ni
+declara `license` en `pyproject.toml`; la insignia decía «MIT» y enlazaba a un
+fichero que no está. Sin licencia explícita, el código queda bajo copyright por
+defecto: nadie tiene permiso para usarlo, copiarlo ni modificarlo.
+
+Es una decisión de quien tiene el repositorio, no algo que se pueda arreglar
+escribiéndolo aquí. Mientras no se tome, esto dice lo que hay.

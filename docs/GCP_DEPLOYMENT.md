@@ -6,8 +6,9 @@ Guía completa: qué cuentas crear, qué secretos guardar y cómo desplegar.
 > `hermes_config.yaml` y `config.yaml` es: **Nous Portal** como pasarela de
 > herramientas (`gateway: nous_portal`) y **OpenRouter** como agregador de LLM
 > (`default_aggregator: openrouter`). Los modelos concretos se nombran siempre
-> a través del agregador (`openrouter/anthropic/claude-3.5-sonnet`,
-> `openrouter/google/gemini-2.0-flash`), de modo que **no hace falta contratar
+> a través del agregador, y **quién es cada uno lo declara `config.yaml`**
+> (`agent.model` y `provider_routing.routes`), nunca este documento: citarlos
+> aquí ya dejó desfasada la descripción una vez. De modo que **no hace falta contratar
 > cuenta directa con ningún proveedor de modelos**: basta con OpenRouter.
 >
 > El código sigue esa cadena en `src/core/llm_router.py`: Nous Portal primero,
@@ -339,8 +340,8 @@ gcloud run services update yuki-salon --region="$REGION" \
 > presupone conocimiento de este repositorio.
 
 
-`config.yaml` (sección `vertex_ai`) trae `google/gemini-3.7-flash` con
-`google/gemini-3.6-flash` de respaldo. **Confirma los identificadores antes de
+Los modelos de Vertex los declara `config.yaml` en su sección `vertex_ai`
+(`primary_model` y `fallback_model`). **Confirma los identificadores antes de
 fijarlos**, porque la familia Gemini se mueve rápido:
 
 ```bash

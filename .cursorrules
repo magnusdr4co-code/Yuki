@@ -5,15 +5,17 @@
 # 1. Arquitectura y Lenguaje
 - Todo el código backend debe escribirse en Python 3.10+ con tipado estático estricto (`typing`: Dict, List, Optional, Any, Union).
 - Utilizar `asyncio` y programación asíncrona para todas las operaciones de I/O, red, bases de datos y adaptadores sociales.
-- Mantener compatibilidad absoluta con la biblioteca estándar de Python cuando sea posible (ej. CLI con `argparse` y `unittest` para pruebas rápidas).
+- Mantener compatibilidad absoluta con la biblioteca estándar de Python cuando sea posible (ej. CLI con `argparse`).
+- Las pruebas se ejecutan con `make pruebas` (pytest). `python -m unittest` sólo descubre las clases `TestCase`: unas cincuenta de las más de mil.
 
 # 2. Workspace y Rutas
 - Hermes opera directamente en la raíz del repositorio.
-- Todas las salidas multimedia DEBEN guardarse en las carpetas locales del workspace:
-  - Música y stems: `./output/music/`
-  - Imágenes y portadas: `./output/art/`
-  - Audios y notas de voz: `./output/voice/`
-  - Publicaciones y borradores: `./output/posts/`
+- **Las rutas se piden a `src/core/rutas.py`**, nunca se escriben a mano:
+  `base_de_datos()`, `datos("x.json")`, `salida("art")`. Se resuelven al
+  llamar, no en el argumento por defecto.
+- Por defecto eso deja la obra en `./output/<tipo>/` (music, art, voice, posts),
+  pero el destino lo decide `YUKI_OUTPUT_DIR`: escribir la ruta a mano rompe la
+  reubicación sin dar ningún error.
 - NUNCA usar rutas de otros arneses (ej. `~/.openclaw/workspace/`).
 
 # 3. Habilidades Estándar (agentskills.io)
@@ -26,3 +28,10 @@
 
 # 5. Voz y Personalidad
 - Mantener la fidelidad a `SOUL.md` en todos los generadores y prompts dinámicos.
+
+# 6. Honestidad (manda sobre todo lo anterior)
+- Si algo no se pudo hacer, se dice qué falló y por qué, con el error concreto.
+- Un resultado simulado se marca `simulated`, y quien lo reciba tiene que poder
+  distinguirlo sin leer el código.
+- Nada se da por entregado sin adjunto, ni por generado sin fichero verificado.
+- Las ocho invariantes que no se negocian están en `CLAUDE.md`.
