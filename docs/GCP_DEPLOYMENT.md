@@ -163,6 +163,9 @@ create_secret yuki-openrouter-api-key  "sk-or-..."
 create_secret yuki-honcho-api-key      "..."
 create_secret yuki-telegram-bot-token  "..."
 create_secret yuki-discord-bot-token   "..."
+# ID numérico del usuario Discord que puede operar por DM como Productor.
+# No uses el nombre visible ni lo escribas en el repositorio.
+create_secret yuki-discord-paired-producer-id "<ID_DE_USUARIO_DISCORD_DEL_PRODUCTOR>"
 
 # Opcional: acceso directo a un proveedor, saltándose el agregador.
 # La arquitectura no lo requiere; OpenRouter ya da acceso a estos modelos.
