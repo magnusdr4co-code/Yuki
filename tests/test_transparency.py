@@ -244,3 +244,43 @@ def test_la_entrega_marca_lo_que_llegue_sin_marca(tmp_path, monkeypatch):
 
     assert MediaMarker().is_marked(str(ruta)), "se marca antes de salir"
     assert "generado por IA" in enviados[0], "y se dice también a quien lo lee"
+
+
+def test_la_auditoria_ve_un_formato_que_no_estaba_en_ninguna_lista(tmp_path, monkeypatch):
+    """
+    La auditoría filtraba por extensión antes de preguntar por la marca.
+
+    Miraba ocho formatos y descartaba el resto en silencio, así que decía
+    «ninguno pendiente» sobre un directorio con obra sin marcar dentro. Y no
+    era teórico: `discord_salon.py` entrega la partitura `.mid` a un canal, y
+    `HERRAMIENTAS.md` §8 obliga a archivar en `output/posts/` los `.md` de lo
+    publicado. Ninguno de los dos existía para el auditor.
+
+    Es el mismo fallo que `.gitignore` ya había corregido pasando de enumerar
+    extensiones a comprobar la propiedad, y se comprueba igual: con un formato
+    que nadie ha visto nunca.
+    """
+    from src.core.transparency import MediaMarker, audit_directory
+
+    salida = tmp_path / "output"
+    (salida / "music").mkdir(parents=True)
+    (salida / "posts").mkdir()
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(salida))
+    monkeypatch.setenv("YUKI_TRANSPARENCY_PATH", str(tmp_path / "transparency.json"))
+
+    partitura = salida / "music" / "obra.mid"
+    partitura.write_bytes(b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xe0")
+    (salida / "posts" / "lanzamiento.md").write_text("texto de Yuki", encoding="utf-8")
+    (salida / "music" / "toma.formato-que-aun-no-existe").write_text("x", encoding="utf-8")
+
+    informe = audit_directory()
+    nombres = {Path(r).name for r in informe["sin_marcar"]}
+    assert {"obra.mid", "lanzamiento.md", "toma.formato-que-aun-no-existe"} <= nombres, (
+        f"la auditoría no ve obra sin marcar: {informe}")
+
+    # Y al marcarla pasa al otro lado, sin que la extensión importe.
+    MediaMarker().mark(str(partitura), model="local.midi", prompt="tema", kind="sonora")
+    informe = audit_directory()
+    assert str(partitura) in informe["marcados"]
+    # El manifiesto lateral que acaba de escribirse no se audita a sí mismo.
+    assert not any(r.endswith(".c2pa.json") for r in informe["marcados"] + informe["sin_marcar"])

@@ -350,3 +350,46 @@ def test_un_formato_nuevo_en_la_salida_ya_viene_ignorado():
         decision = subprocess.run(["git", "check-ignore", "--no-index", "-q", marcador],
                                   cwd=raiz, timeout=60)
         assert decision.returncode != 0, f"'{marcador}' tiene que seguir versionado"
+
+
+def test_todo_estado_durable_esta_fuera_del_repositorio_y_de_la_imagen():
+    """
+    Lo que `.gitignore` ya había aprendido para `output/`, aplicado a `data/`.
+
+    Los dieciséis estados durables estaban enumerados fichero a fichero en
+    `.gitignore` y `.dockerignore`, y faltaba uno: `discord_pairing.json`. Su
+    propia ficha en el inventario dice `holds_personal_data=True` y
+    «ALTA: habilita Biblioteca, terminal y producción multimedia». En un
+    repositorio público eso está a un `git add -A`, y en la imagen a un
+    `COPY . .`.
+
+    Se comprueba la propiedad contra el inventario, que es la fuente de verdad
+    de qué estado existe: si mañana se declara una pieza nueva, esto la exige
+    ignorada sin que nadie tenga que acordarse de tocar dos ficheros.
+    """
+    import subprocess
+
+    from src.core.state_registry import build_registry
+
+    _requiere_checkout_git()
+    raiz = Path(__file__).resolve().parents[1]
+
+    sin_ignorar = []
+    for pieza in build_registry():
+        nombre = Path(pieza.path).name
+        if nombre in ("Biblioteca",):   # vive en output/, con su propia regla
+            continue
+        candidato = f"data/{nombre}"
+        decision = subprocess.run(["git", "check-ignore", "--no-index", "-q", candidato],
+                                  cwd=raiz, timeout=60)
+        if decision.returncode != 0:
+            sin_ignorar.append(f"{pieza.id} ({candidato})")
+
+    assert not sin_ignorar, (
+        f"estado durable que entraría al repositorio: {sin_ignorar}")
+
+    # Y en la imagen. `.dockerignore` no lo sabe comprobar `git`, así que se
+    # lee la regla: lo que vale es que cubra todo `data/`, no una lista.
+    docker = (raiz / ".dockerignore").read_text(encoding="utf-8")
+    assert "data/**" in docker, (
+        ".dockerignore vuelve a enumerar ficheros de data/: una pieza nueva se cuela sola")

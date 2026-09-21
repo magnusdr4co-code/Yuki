@@ -19,27 +19,14 @@ service-account*.json
 .github
 
 # Estado en runtime: la imagen debe arrancar limpia, no con la memoria
-# de la máquina de quien construyó
-data/*.db
-data/*.db-shm
-data/*.db-wal
-data/vital_state.json
-data/honcho_profile.json
-# Trabajos multimedia en curso: son del disco de la instancia, no de la imagen
-data/media_jobs/
-data/spend_ledger.json
-data/agency_ledger.json
-data/runtime_rituals.json
-data/transparency.json
-data/cuaderno_taller.json
-data/persona_drift.json
-data/identity_manifest.json
-data/state_audit.log
-data/bitacora.jsonl
-data/freno.json
-data/*.lock
-data/backups/
-data/runtime_overrides.json
+# de la máquina de quien construyó.
+#
+# Igual que en `.gitignore`: la regla es la propiedad, no la lista. La lista
+# que había aquí olvidaba `discord_pairing.json` —el emparejamiento del
+# Productor—, así que `COPY . .` horneaba en la imagen qué identidad de
+# Discord tiene acceso a la terminal y a la producción multimedia.
+data/**
+!data/**/.gitkeep
 media_cache/
 
 # Artefactos generados por Yuki. La regla es la propiedad, no la lista de

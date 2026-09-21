@@ -223,6 +223,8 @@ budget:
     video_segundos: 120
     imagenes: 40
     musica_pistas: 12
+    # La voz se reservaba sin techo: la comprobación existía y no podía negar.
+    voz_caracteres: 60000
   # Techo global en dólares. Deja vacío para gobernar sólo por unidades; la
   # estimación no incluye música, que no tiene precio de referencia registrado.
   usd_per_day: null

@@ -104,6 +104,14 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         cliente = self.client_address[0] if self.client_address else "desconocido"
         ahora = time.monotonic()
         with SalonHTTPHandler._historial_lock:
+            # El historial sólo se podaba al volver el mismo cliente, así que
+            # un IP que pasa una vez dejaba su entrada para siempre: en una
+            # `e2-small` eso crece sin cota. Se poda todo lo caducado.
+            caducados = [ip for ip, marcas in SalonHTTPHandler._historial_peticiones.items()
+                         if not marcas or ahora - marcas[-1] >= VENTANA_LIMITE_SEGUNDOS]
+            for ip in caducados:
+                SalonHTTPHandler._historial_peticiones.pop(ip, None)
+
             recientes = [t for t in SalonHTTPHandler._historial_peticiones.get(cliente, [])
                          if ahora - t < VENTANA_LIMITE_SEGUNDOS]
             if len(recientes) >= LIMITE_PETICIONES:
@@ -113,12 +121,41 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
             SalonHTTPHandler._historial_peticiones[cliente] = recientes
         return True
 
+    def _rechazado_por_el_techo(self, path: str) -> bool:
+        """
+        Aplica el techo a toda ruta que no sea la página ni la sonda.
+
+        Lo aplicaba sólo `/api/chat`, mientras el README y el gemelo virtual
+        prometían «techo por cliente siempre activo». Sin `SALON_API_TOKEN`
+        —el comportamiento por defecto— eso dejaba `/api/memories` sirviendo
+        contenido de recuerdos sin credencial y sin cota: treinta peticiones
+        seguidas devolvían treinta doscientos. La sonda y la página quedan
+        fuera porque una plataforma gestionada las consulta cada pocos
+        segundos y un 429 ahí la haría reiniciar el contenedor.
+        """
+        if path in RUTAS_ABIERTAS:
+            return False
+        if self._dentro_del_limite():
+            return False
+        self._send_json(
+            {"error": f"Demasiadas peticiones: máximo {LIMITE_PETICIONES} cada "
+                      f"{VENTANA_LIMITE_SEGUNDOS // 60} minutos desde un mismo cliente."},
+            status_code=429,
+        )
+        return True
+
     def _send_json(self, data: dict, status_code: int = 200):
         body = json.dumps(data, ensure_ascii=False).encode("utf-8")
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
-        self.send_header("Access-Control-Allow-Origin", "*")
+        # El comodín iba en toda respuesta, también en las de detrás de la
+        # credencial: cualquier página abierta en el navegador del Productor
+        # podía leer la memoria si el token viajaba en la URL. La página del
+        # Salón es del mismo origen y no necesita CORS, así que el comodín
+        # sólo se concede cuando la API está declaradamente abierta.
+        if not token_configurado():
+            self.send_header("Access-Control-Allow-Origin", "*")
         self.end_headers()
         self.wfile.write(body)
 
@@ -143,6 +180,9 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
 
         if not self._autorizado(path):
             self._send_json({"error": "Credencial requerida para esta ruta."}, status_code=401)
+            return
+
+        if self._rechazado_por_el_techo(path):
             return
 
         # 0. Sonda de vida: barata y sin construir el agente, para que la
@@ -365,6 +405,14 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
         if not destino.is_relative_to(raiz) or not destino.is_file():
             self._send_json({"error": "Esa obra no existe."}, status_code=404)
             return
+        # La segunda puerta, igual que en la entrega por Discord: ésta es otra
+        # salida hacia una persona, y la cabecera de abajo se pierde en cuanto
+        # el fichero se guarda. Si la obra no llevaba marca, se le pone aquí.
+        from ..core.transparency import MediaMarker
+        marcador = MediaMarker()
+        if not marcador.is_marked(str(destino)):
+            marcador.mark(str(destino), model="", prompt="", kind="entrega")
+
         datos = destino.read_bytes()
         self.send_response(200)
         self.send_header("Content-Type", mimetypes.guess_type(destino.name)[0]
@@ -387,14 +435,10 @@ class SalonHTTPHandler(BaseHTTPRequestHandler):
             self._send_json({"error": "Credencial requerida para esta ruta."}, status_code=401)
             return
 
+        if self._rechazado_por_el_techo(path):
+            return
+
         if path == "/api/chat":
-            if not self._dentro_del_limite():
-                self._send_json(
-                    {"error": f"Demasiadas peticiones: máximo {LIMITE_PETICIONES} cada "
-                              f"{VENTANA_LIMITE_SEGUNDOS // 60} minutos desde un mismo cliente."},
-                    status_code=429,
-                )
-                return
             try:
                 content_length = int(self.headers.get("Content-Length", 0))
             except (TypeError, ValueError):

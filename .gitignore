@@ -54,26 +54,18 @@ output/**
 
 # Estado en runtime: la memoria y el estado vital de Yuki son propios de cada
 # despliegue, no del repositorio. Un clon limpio arranca con valores por defecto.
-data/*.db
-data/*.db-shm
-data/*.db-wal
-data/vital_state.json
-data/honcho_profile.json
-# Trabajos multimedia en curso: viven en el disco de la instancia.
-data/media_jobs/
-data/spend_ledger.json
-data/agency_ledger.json
-data/runtime_rituals.json
-data/transparency.json
-data/cuaderno_taller.json
-data/persona_drift.json
-data/identity_manifest.json
-data/state_audit.log
-data/bitacora.jsonl
-data/freno.json
-data/*.lock
-data/backups/
-data/runtime_overrides.json
+#
+# La regla es la **propiedad** —en `data/` no se versiona nada— y no la lista de
+# ficheros que había aquí. Enumerar ya falló: los dieciséis estados durables
+# estaban escritos uno a uno y faltaba `discord_pairing.json`, que es dato
+# personal (qué identidad de Discord está emparejada) y la puerta que concede
+# Biblioteca, terminal y producción multimedia. Estuvo a un `git add -A` de
+# entrar en un repositorio público. Es el mismo aprendizaje que ya se aplicó a
+# `output/`, traído aquí antes de que se cuele el siguiente.
+data/**
+# Los directorios se reincluyen para que git pueda descender y ver el .gitkeep.
+!data/**/
+!data/**/.gitkeep
 media_cache/
 
 # OS / Editor
