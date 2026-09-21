@@ -1,0 +1,43 @@
+{
+  "claim_generator": "yuki-hermes-agent",
+  "claim_generator_info": [
+    {
+      "name": "Yuki (Hermes Agent)",
+      "version": "2.6.0"
+    }
+  ],
+  "title": "yuki_identity_export_1787762950.zip",
+  "format": "zip",
+  "assertions": [
+    {
+      "label": "c2pa.actions",
+      "data": {
+        "actions": [
+          {
+            "action": "c2pa.created",
+            "digitalSourceType": "http://cv.iptc.org/newscodes/digitalsourcetype/trainedAlgorithmicMedia",
+            "when": "2026-09-21T14:51:03+00:00"
+          }
+        ]
+      }
+    },
+    {
+      "label": "stds.schema-org.CreativeWork",
+      "data": {
+        "@context": "https://schema.org",
+        "@type": "CreativeWork",
+        "creator": [
+          {
+            "@type": "SoftwareApplication",
+            "name": "Yuki (雪) — artista digital autónoma"
+          }
+        ],
+        "isBasedOn": "retroactivo",
+        "abstract": "",
+        "genre": "archivo"
+      }
+    }
+  ],
+  "signed": false,
+  "note": "Declaración de origen sintético conforme al Artículo 50 del Reglamento europeo de IA. Manifiesto sin firmar: es una declaración verificable, no una prueba criptográfica C2PA."
+}

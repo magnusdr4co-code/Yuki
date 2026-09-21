@@ -15,6 +15,7 @@ nadie usa.
 """
 
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -305,9 +306,16 @@ def test_el_repositorio_no_lleva_obra_generada():
         "output/yuki_identity_export_1787762950.zip",
     }
 
+    # El manifiesto del Artículo 50 de una obra permitida viaja con ella: no es
+    # obra generada, es su declaración de origen. Sin esto, la auditoría —que
+    # ya mira todos los formatos, no sólo ocho extensiones— deja la comprobación
+    # de humo en rojo en cada clon limpio, y un rojo permanente enseña a
+    # ignorar el rojo.
+    manifiestos = {f"{obra}.c2pa.json" for obra in HEREDADOS}
+
     colados = [f for f in seguidos
                if Path(f).name not in permitidos and "/Biblioteca/" not in f
-               and f not in HEREDADOS]
+               and f not in HEREDADOS and f not in manifiestos]
 
     assert not colados, f"obra generada versionada en el repositorio: {colados}"
 
@@ -393,3 +401,29 @@ def test_todo_estado_durable_esta_fuera_del_repositorio_y_de_la_imagen():
     docker = (raiz / ".dockerignore").read_text(encoding="utf-8")
     assert "data/**" in docker, (
         ".dockerignore vuelve a enumerar ficheros de data/: una pieza nueva se cuela sola")
+
+
+def test_el_aislamiento_vale_para_los_dos_ejecutores():
+    """
+    `conftest.py` es de pytest, y la CI ejecuta también `unittest`.
+
+    Por ese camino las *fixtures* no se aplican, así que la suite escribía
+    estado de verdad en el `data/` del repositorio: una pasada dejaba ahí la
+    base, el perfil dialéctico, el estado vital y cuatro libros más, y la
+    segunda pasada fallaba porque el perfil ya traía el ajuste que la prueba
+    iba a hacer. En integración continua no se notaba: cada trabajo arranca de
+    un checkout limpio.
+
+    Ahora la redirección vive en `tests/__init__.py`, que se importa por los
+    dos caminos. Esto comprueba que las dos listas no se separen.
+    """
+    import tests
+
+    redirigidas_en_conftest = set(re.findall(
+        r'monkeypatch\.setenv\(\s*"([A-Z][A-Z0-9_]+)"',
+        (Path(__file__).resolve().parents[1] / "tests" / "conftest.py").read_text(encoding="utf-8")))
+
+    faltan = sorted(redirigidas_en_conftest - set(tests._REUBICACIONES))
+    assert not faltan, (
+        f"`conftest.py` redirige estas variables y `tests/__init__.py` no: {faltan}. "
+        "Con `python -m unittest` quedarían apuntando al estado de la instancia.")

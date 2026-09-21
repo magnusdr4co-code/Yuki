@@ -3,20 +3,29 @@ Tests unitarios para el motor de memoria SQLite FTS5.
 """
 
 import os
+import shutil
+import tempfile
 import unittest
 from src.memory.fts5_memory import FTS5MemoryEngine
 
-TEST_DB = "data/test_memory.db"
 
 class TestFTS5Memory(unittest.TestCase):
+    """
+    La base de prueba vivía en `data/test_memory.db`, dentro del repositorio, y
+    el `tearDown` borraba sólo el `.db`: los `-wal` y `-shm` sobrevivían a cada
+    pasada. Es la misma lección que `CLAUDE.md` deja escrita —«`with
+    sqlite3.connect(...)` no cierra la conexión»— en su forma más pequeña, y
+    dejaba basura en el directorio de estado de la instancia.
+    """
+
     def setUp(self):
-        if os.path.exists(TEST_DB):
-            os.remove(TEST_DB)
-        self.engine = FTS5MemoryEngine(db_path=TEST_DB)
+        self._carpeta = tempfile.mkdtemp(prefix="yuki-fts5-")
+        self.db_path = os.path.join(self._carpeta, "test_memory.db")
+        self.engine = FTS5MemoryEngine(db_path=self.db_path)
 
     def tearDown(self):
-        if os.path.exists(TEST_DB):
-            os.remove(TEST_DB)
+        # La carpeta entera: así se van también los `-wal` y `-shm`.
+        shutil.rmtree(self._carpeta, ignore_errors=True)
 
     def test_add_and_search_memory(self):
         mem_id = self.engine.add_memory(

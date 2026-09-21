@@ -51,6 +51,15 @@ output/**
 # El canon de Biblioteca sí es texto del proyecto, no obra generada.
 !output/Biblioteca/INDEX.md
 !output/Biblioteca/CANON.md
+# Y los manifiestos del Artículo 50 de las cuatro obras que ya estaban
+# versionadas antes de la regla (ver HEREDADOS en tests/test_aislamiento.py).
+# Si la obra viaja con el repositorio, su declaración de origen viaja con ella:
+# lo contrario deja la comprobación de humo en rojo en cada clon limpio, y un
+# rojo permanente enseña a ignorar el rojo.
+!output/music/cerezos_de_acero_1787764737.json.c2pa.json
+!output/music/cerezos_de_acero_1787764737.mid.c2pa.json
+!output/music/memoria_de_metal_y_sal_1787761122.json.c2pa.json
+!output/yuki_identity_export_1787762950.zip.c2pa.json
 
 # Estado en runtime: la memoria y el estado vital de Yuki son propios de cada
 # despliegue, no del repositorio. Un clon limpio arranca con valores por defecto.

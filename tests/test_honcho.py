@@ -13,6 +13,7 @@ aparentar lo contrario, y las tres estaban activas:
   mentira igual de bien que una garantía.
 """
 
+import contextlib
 import os
 import sys
 import unittest
@@ -22,6 +23,30 @@ sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from src.honcho.dialectic import HonchoDialecticClient  # noqa: E402
 from src.honcho.profile_sync import HonchoProfileSync  # noqa: E402
+
+
+@contextlib.contextmanager
+def _base_en(carpeta):
+    """
+    Apunta `DATABASE_PATH` a una carpeta y **restaura el valor anterior**.
+
+    Antes se hacía `os.environ.pop("DATABASE_PATH", None)` en el `finally`, que
+    no restaura: borra. Bajo pytest no se notaba porque `conftest.py` vuelve a
+    ponerla en cada prueba, pero con `python -m unittest` —que la CI ejecuta y
+    el README documentó— la variable quedaba fuera para todo lo que corriera
+    después, y las pruebas siguientes escribían el perfil dialéctico y la
+    memoria en el `data/` del repositorio. La segunda pasada fallaba, porque el
+    perfil ya traía el ajuste que la prueba iba a hacer.
+    """
+    anterior = os.environ.get("DATABASE_PATH")
+    os.environ["DATABASE_PATH"] = str(Path(carpeta) / "yuki.db")
+    try:
+        yield
+    finally:
+        if anterior is None:
+            os.environ.pop("DATABASE_PATH", None)
+        else:
+            os.environ["DATABASE_PATH"] = anterior
 
 
 class TestHonchoDialectic(unittest.TestCase):
@@ -75,14 +100,10 @@ class TestHonchoDialectic(unittest.TestCase):
         """
         import tempfile
 
-        with tempfile.TemporaryDirectory() as carpeta:
-            os.environ["DATABASE_PATH"] = str(Path(carpeta) / "yuki.db")
+        with tempfile.TemporaryDirectory() as carpeta, _base_en(carpeta):
             Path(carpeta, "honcho_profile.json").write_text("{roto", encoding="utf-8")
-            try:
-                client = HonchoDialecticClient(app_id="test-diva")
-                self.assertIn("aesthetic_preferences", client._local_profile)
-            finally:
-                os.environ.pop("DATABASE_PATH", None)
+            client = HonchoDialecticClient(app_id="test-diva")
+            self.assertIn("aesthetic_preferences", client._local_profile)
 
     def test_dos_clientes_no_comparten_las_mismas_listas(self):
         """
@@ -91,16 +112,12 @@ class TestHonchoDialectic(unittest.TestCase):
         """
         import tempfile
 
-        with tempfile.TemporaryDirectory() as carpeta:
-            os.environ["DATABASE_PATH"] = str(Path(carpeta) / "yuki.db")
-            try:
-                uno = HonchoDialecticClient()
-                otro = HonchoDialecticClient()
-                uno._local_profile["aesthetic_preferences"]["visual_palette"].append("prestado")
-                self.assertNotIn(
-                    "prestado", otro._local_profile["aesthetic_preferences"]["visual_palette"])
-            finally:
-                os.environ.pop("DATABASE_PATH", None)
+        with tempfile.TemporaryDirectory() as carpeta, _base_en(carpeta):
+            uno = HonchoDialecticClient()
+            otro = HonchoDialecticClient()
+            uno._local_profile["aesthetic_preferences"]["visual_palette"].append("prestado")
+            self.assertNotIn(
+                "prestado", otro._local_profile["aesthetic_preferences"]["visual_palette"])
 
     def test_el_perfil_se_guarda_por_el_camino_atomico_del_proyecto(self):
         """
@@ -116,8 +133,7 @@ class TestHonchoDialectic(unittest.TestCase):
 
         from src.core import estado_json
 
-        with tempfile.TemporaryDirectory() as carpeta:
-            os.environ["DATABASE_PATH"] = str(Path(carpeta) / "yuki.db")
+        with tempfile.TemporaryDirectory() as carpeta, _base_en(carpeta):
             original = estado_json.escribir
             pasos = []
             estado_json.escribir = lambda ruta, datos: pasos.append(ruta) or original(ruta, datos)
@@ -131,7 +147,6 @@ class TestHonchoDialectic(unittest.TestCase):
                 self.assertEqual([ruta.name for ruta in pasos], ["honcho_profile.json"])
             finally:
                 estado_json.escribir = original
-                os.environ.pop("DATABASE_PATH", None)
 
 
 if __name__ == "__main__":
