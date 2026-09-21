@@ -469,6 +469,27 @@ def cmd_daemon():
             tasks.append(asyncio.create_task(discord_adapter.start()))
             print(f"{DIM}Conector Discord real activado; solo menciones dentro del guild autorizado.{RESET}")
 
+        # Telegram estaba implementado, probado y documentado como «salida
+        # real»… y no lo construía nadie. `agent.telegram_adapter` nacía en
+        # `None` y el único sitio que lo asignaba era el propio constructor del
+        # adaptador, que no se llamaba en ningún fichero de producción. La
+        # tarea de las 07:30 tomaba siempre la rama «sin adaptador de Telegram»
+        # mientras el gemelo virtual declaraba la capacidad como real —y ese
+        # bloque entra en el prompt de Yuki en cada turno, así que ella se lo
+        # habría dicho al Productor—.
+        #
+        # No arranca ningún bucle: la entrada (polling) sigue sin existir y se
+        # declara así. Construirlo es lo que enchufa la salida.
+        if os.getenv("TELEGRAM_BOT_TOKEN"):
+            from src.adapters.telegram_bot import TelegramAdapter
+            telegram = TelegramAdapter(agent)
+            motivo = telegram.por_que_no()
+            if motivo:
+                print(f"{DIM}Telegram declarado y no operativo: {motivo}.{RESET}")
+            else:
+                print(f"{DIM}Salida por Telegram activa (difusión con marca y freno; "
+                      f"la entrada no está implementada).{RESET}")
+
         registered = ", ".join(
             f"{name}={job['cron_expr']}" for name, job in agent.cron.jobs.items()
         )
