@@ -148,6 +148,12 @@ jobs:
       - name: La imagen construye
         run: docker build -t yuki-agent:ci .
 
+      - name: Preparar entorno inocuo para Compose
+        # Las composiciones declaran un env_file porque en despliegue real lo
+        # rellena el operador. CI sólo necesita validar la estructura: copia
+        # el ejemplo, que no contiene credenciales, y no fabrica secretos.
+        run: cp .env.example .env
+
       - name: Las dos composiciones son válidas
         run: |
           docker compose -f docker-compose.yml config > /dev/null

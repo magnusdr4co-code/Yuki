@@ -51,29 +51,30 @@ output/**
 # El canon de Biblioteca sí es texto del proyecto, no obra generada.
 !output/Biblioteca/INDEX.md
 !output/Biblioteca/CANON.md
+# Y los manifiestos del Artículo 50 de las cuatro obras que ya estaban
+# versionadas antes de la regla (ver HEREDADOS en tests/test_aislamiento.py).
+# Si la obra viaja con el repositorio, su declaración de origen viaja con ella:
+# lo contrario deja la comprobación de humo en rojo en cada clon limpio, y un
+# rojo permanente enseña a ignorar el rojo.
+!output/music/cerezos_de_acero_1787764737.json.c2pa.json
+!output/music/cerezos_de_acero_1787764737.mid.c2pa.json
+!output/music/memoria_de_metal_y_sal_1787761122.json.c2pa.json
+!output/yuki_identity_export_1787762950.zip.c2pa.json
 
 # Estado en runtime: la memoria y el estado vital de Yuki son propios de cada
 # despliegue, no del repositorio. Un clon limpio arranca con valores por defecto.
-data/*.db
-data/*.db-shm
-data/*.db-wal
-data/vital_state.json
-data/honcho_profile.json
-# Trabajos multimedia en curso: viven en el disco de la instancia.
-data/media_jobs/
-data/spend_ledger.json
-data/agency_ledger.json
-data/runtime_rituals.json
-data/transparency.json
-data/cuaderno_taller.json
-data/persona_drift.json
-data/identity_manifest.json
-data/state_audit.log
-data/bitacora.jsonl
-data/freno.json
-data/*.lock
-data/backups/
-data/runtime_overrides.json
+#
+# La regla es la **propiedad** —en `data/` no se versiona nada— y no la lista de
+# ficheros que había aquí. Enumerar ya falló: los dieciséis estados durables
+# estaban escritos uno a uno y faltaba `discord_pairing.json`, que es dato
+# personal (qué identidad de Discord está emparejada) y la puerta que concede
+# Biblioteca, terminal y producción multimedia. Estuvo a un `git add -A` de
+# entrar en un repositorio público. Es el mismo aprendizaje que ya se aplicó a
+# `output/`, traído aquí antes de que se cuele el siguiente.
+data/**
+# Los directorios se reincluyen para que git pueda descender y ver el .gitkeep.
+!data/**/
+!data/**/.gitkeep
 media_cache/
 
 # OS / Editor

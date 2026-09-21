@@ -62,10 +62,20 @@ PRECIO_TOKENS_SALIDA_POR_MILLON = 3.75
 
 # Límites por defecto, deliberadamente conservadores: 120 s de vídeo son ~12 USD
 # al día, tres encargos y medio. Se ajustan en `config.yaml`.
+#
+# La voz faltaba, y su ausencia no se notaba: `vertex_media` reservaba
+# `voz_caracteres` con toda formalidad y `check()` autoriza cuando no hay
+# límite declarado, así que la reserva no podía negar nunca. Medio millón de
+# caracteres pasaban igual que cien. Como la voz tampoco tiene precio de
+# referencia, el techo en dólares tampoco la atrapaba: era, en la práctica,
+# lo mismo que el texto —se anota y nunca se bloquea— mientras el README
+# prometía justo lo contrario. 60.000 caracteres son unas cincuenta notas de
+# voz largas en un día: holgado para trabajar, estrecho para un bucle.
 LIMITES_POR_DEFECTO: Dict[str, float] = {
     VIDEO_SEGUNDOS: 120,
     IMAGENES: 40,
     MUSICA_PISTAS: 12,
+    VOZ_CARACTERES: 60_000,
 }
 
 # Días de historial que se conservan. El disco de la instancia es pequeño y el

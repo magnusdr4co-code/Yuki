@@ -83,6 +83,7 @@ falta no puede tumbar la VM—.
 |---|---|
 | `yuki-openrouter-api-key` | `OPENROUTER_API_KEY` |
 | `yuki-discord-bot-token` | `DISCORD_BOT_TOKEN` |
+| `yuki-discord-paired-producer-id` | `DISCORD_PAIRED_PRODUCER_ID` |
 | `yuki-salon-api-token` | `SALON_API_TOKEN` |
 | `yuki-backup-gcs-bucket` | `BACKUP_GCS_BUCKET` |
 | `yuki-telegram-bot-token` | `TELEGRAM_BOT_TOKEN` |
@@ -91,6 +92,10 @@ falta no puede tumbar la VM—.
 
 ```bash
 PROJECT=yuki-prod
+# Identidad Discord autorizada para DMs Hermes. No la pongas en el repo:
+# usa el ID de usuario de Discord, no el nombre visible.
+printf '%s' "<ID_DE_USUARIO_DISCORD_DEL_PRODUCTOR>" | \
+  gcloud secrets create yuki-discord-paired-producer-id --project="$PROJECT" --data-file=-
 # Uno nuevo (ejemplo con el token del Salón):
 printf '%s' "$(openssl rand -hex 32)" | \
   gcloud secrets create yuki-salon-api-token --project="$PROJECT" --data-file=-

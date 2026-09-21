@@ -69,6 +69,22 @@ Permite a **Yuki** ejecutar un ritual de autodefinición completa. En lugar de r
 - **Micro-ajustes**: Diarios, durante el Ritual del Eco (06:30), ajustando prosodia e iluminación según el mood.
 - **Manual**: El productor puede invocar `/autocaracterizarse` en cualquier momento.
 
+## Herramientas
+
+Contrato de esta habilidad contra [`../HERRAMIENTAS.md`](../HERRAMIENTAS.md).
+Faltaba: era la única de las quince sin declararlo, y precisamente la que había
+prometido durante meses un ritual que no llamaba nadie.
+
+| Paso | Herramienta | *Tier* / modelo | Coste | Dónde persiste | Si falla |
+|---|---|---|---|---|---|
+| Leer el alma y extraer los tokens de identidad | ninguna: `SOUL.md` se lee del disco | — | 0 | — | Aborta: sin alma no hay ritual, y no se inventa una |
+| Decidir voz, paleta, tipografía y texturas | `portal.chat` | `tier_1_creative` | tokens | `data/identity_manifest.json` | Se conserva la identidad anterior y el manifiesto anota el motivo |
+| Los cuatro avatares | `vertex.image` (respaldo `portal.image`) | ver §3 | 1 imagen cada uno, **reservada antes de pedirla** | `output/identity/` | No se anota avatar: se anota el fallo con su motivo, y el recuento dice cuántos llegaron a existir |
+| Marcado de origen | `src/core/transparency.py` | — | 0 | manifiesto lateral junto a cada fichero | Nunca impide entregar; el resultado dice qué capa se consiguió |
+
+**Sin Vertex configurado** lo que sale son marcadores declarados `simulated`.
+No son retratos y no se presentan como tales.
+
 ## Output
 
 ```

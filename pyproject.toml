@@ -2,9 +2,14 @@
 requires = ["setuptools>=61.0"]
 build-backend = "setuptools.build_meta"
 
+# La versión vive en `src/__init__.py` y sólo ahí: eran cinco números
+# distintos, y el que viajaba en cada manifiesto C2PA no era ninguno de ellos.
+[tool.setuptools.dynamic]
+version = {attr = "src.__version__"}
+
 [project]
 name = "yuki-digital-diva"
-version = "2.4.0"
+dynamic = ["version"]
 description = "Yuki - Diva Digital Autónoma basada en el arnés Hermes Agent con memoria SQLite FTS5, Honcho y Nous Portal"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -54,17 +59,22 @@ omit = [
 
 [tool.coverage.report]
 # El umbral es el que hay hoy, no una aspiración: sirve para que la cobertura no
-# baje sin que nadie lo note, no para presumir de un número. Sube a 80 porque
-# hoy hay 80.6: dejarlo en 78 permitiría perder en silencio lo que costó ganar.
+# baje sin que nadie lo note, no para presumir de un número. Sube a 83 porque
+# hoy hay 83.x: dejarlo en 80 permitiría perder en silencio tres puntos que ya
+# están ganados, que es exactamente lo que esta regla existe para impedir.
 #
 # Sólo cuenta `src/`. Los guiones de `scripts/` tienen sus propias pruebas, pero
 # la mitad se ejecutan como subproceso en la CI —romper a Yuki a propósito,
 # restaurar una copia— y contarlos aquí daría un número que no significa nada.
-fail_under = 80
+fail_under = 83
 show_missing = true
 
 [tool.pytest.ini_options]
-asyncio_mode = "auto"
+# `asyncio_mode` es una opción de pytest-asyncio, que `requirements-dev.txt` no
+# instala: la CI arrancaba con un `PytestConfigWarning: Unknown config option`
+# en cada ejecución. Hoy es inocuo —no hay un solo `async def test_`, las
+# corrutinas se ejecutan con `asyncio.run`— pero la primera prueba asíncrona
+# que alguien escriba se saltaría sin fallar. Se retira hasta que haga falta.
 testpaths = ["tests"]
 # El runtime puede montar `/app` como solo lectura; la caché de pytest es
 # efímera y debe vivir fuera del repositorio de producción.

@@ -52,7 +52,46 @@ def test_la_operacion_que_desbordaria_se_rechaza_entera(libro):
 
 
 def test_unidad_sin_limite_declarado_no_bloquea(libro):
-    assert libro.check(VOZ_CARACTERES, 100_000).allowed
+    """
+    La regla sigue igual; el ejemplo ya no puede ser la voz.
+
+    `musica_segundos` se anota para dejar constancia del volumen, no para
+    acotarlo: la pista ya se reservó por su cuenta. Ésa sí es una unidad sin
+    techo a propósito.
+    """
+    from src.core.spend_budget import MUSICA_SEGUNDOS
+
+    assert libro.check(MUSICA_SEGUNDOS, 100_000).allowed
+
+
+def test_la_voz_tiene_techo_y_puede_negarse(tmp_path):
+    """
+    La comprobación de la voz existía y no podía negar nunca.
+
+    `vertex_media` reserva `voz_caracteres` con toda formalidad, pero la unidad
+    no tenía límite ni por defecto ni en `config.yaml`, y `check()` autoriza
+    cuando no hay límite que aplicar. Tampoco la atrapaba el techo en dólares:
+    la voz no tiene precio de referencia registrado, así que suma cero. En la
+    práctica se comportaba igual que el texto —se anota y nunca se bloquea—
+    mientras el README prometía justo lo contrario.
+
+    Se comprueba contra la configuración del proyecto, que es lo que corre.
+    """
+    import yaml
+
+    from src.core.spend_budget import LIMITES_POR_DEFECTO
+
+    assert VOZ_CARACTERES in LIMITES_POR_DEFECTO, "la voz vuelve a no tener techo"
+
+    with open(os.path.join(os.path.dirname(__file__), "..", "config.yaml"),
+              encoding="utf-8") as fichero:
+        config = yaml.safe_load(fichero)
+
+    libro = SpendLedger.from_config(config, path=str(tmp_path / "l.json"))
+    techo = libro.limits[VOZ_CARACTERES]
+
+    assert libro.check(VOZ_CARACTERES, techo - 1).allowed
+    assert not libro.check(VOZ_CARACTERES, techo + 1).allowed
 
 
 def test_presupuesto_deshabilitado_autoriza_todo(tmp_path):

@@ -43,8 +43,17 @@ __all__ = [
     "IMAGINARIO_POR_DEFECTO",
 ]
 
-# ID por defecto de Dextrure (Juanlu)
-DEFAULT_PAIRED_PRODUCER_ID = "235796491988369408"
+# Quién es el Productor lo dice `DISCORD_PAIRED_PRODUCER_ID`, y sólo esa
+# variable. Aquí había un identificador de Discord real, con el nombre de la
+# persona al lado, en un repositorio público: dato personal en el fuente, y un
+# valor por defecto que concedía Biblioteca, terminal y producción multimedia
+# sin que nadie lo hubiera declarado —con la variable que lo sustituye ni
+# siquiera presente en `.env.example`, así que era el valor que corría—.
+#
+# Sin la variable no hay Productor: el DM se rechaza y el arranque lo dice. Una
+# lista vacía es la única respuesta honesta a «no me has dicho de quién fiarte»,
+# y es mejor que Yuki no conteste un DM a que conteste al equivocado.
+DEFAULT_PAIRED_PRODUCER_ID = ""
 
 
 def _parse_id_set(raw_env: str) -> Set[str]:
@@ -72,9 +81,14 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
         self.allowed_guild_ids = _parse_id_set(os.getenv("DISCORD_ALLOWED_GUILD_ID", ""))
         self.allowed_channel_ids = _parse_id_set(os.getenv("DISCORD_ALLOWED_CHANNEL_ID", ""))
 
-        # ID del Productor emparejado (Dextrure por defecto)
+        # Quién puede hablarle por DM como Productor. Sin declararlo, nadie.
         paired_env = os.getenv("DISCORD_PAIRED_PRODUCER_ID", "").strip()
-        self.paired_producer_ids = _parse_id_set(paired_env) if paired_env else {DEFAULT_PAIRED_PRODUCER_ID}
+        self.paired_producer_ids = _parse_id_set(paired_env)
+        if not self.paired_producer_ids:
+            logger.warning(
+                "DISCORD_PAIRED_PRODUCER_ID no está declarada: ningún DM será tratado "
+                "como del Productor. Declárala con el ID de Discord de quien produce."
+            )
         self.pairing_path = _resolve_pairing_path()
         self._workflow_tasks: Set[object] = set()
         self._producer_lock = asyncio.Lock()
@@ -153,7 +167,7 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
                     logger.warning("Discord DM ignorada: autor %s no es el Productor emparejado.", author_id)
                     return
 
-                # Gate de pairing: Dextrure debe haber enviado !pair previamente
+                # Gate de pairing: el Productor debe haber enviado !pair previamente
                 if not self._is_paired(author_id):
                     content_pre = (message.content or "").strip()
                     low = content_pre.lower()
@@ -161,7 +175,7 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
                         ok = self._set_paired(author_id)
                         if ok:
                             await message.channel.send(
-                                "✅ **Emparejamiento Hermes confirmado** — Dextrure, ya tienes capacidades Hermes por DM. Prueba `!status` o háblame directamente.",
+                                "✅ **Emparejamiento Hermes confirmado** — ya tienes capacidades Hermes por DM. Prueba `!status` o háblame directamente.",
                                 allowed_mentions=discord.AllowedMentions.none()
                             )
                         else:
@@ -170,14 +184,14 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
                                 allowed_mentions=discord.AllowedMentions.none()
                             )
                         return
-                    logger.info("DM de Dextrure recibida pero aún no emparejado; se requiere !pair")
+                    logger.info("DM del Productor recibida pero aún no emparejado; se requiere !pair")
                     await message.channel.send(
-                        "🔒 Hola Dextrure — para activar capacidades Hermes por DM, envía `!pair` para confirmar el emparejamiento. Luego podrás usar `!status`, `!cron ...` y conversación con rol `producer`.",
+                        "🔒 Hola — para activar capacidades Hermes por DM, envía `!pair` para confirmar el emparejamiento. Luego podrás usar `!status`, `!cron ...` y conversación con rol `producer`.",
                         allowed_mentions=discord.AllowedMentions.none()
                     )
                     return
 
-                logger.info("⚡ DM de Productor emparejado (%s / Dextrure) recibida.", message.author.display_name)
+                logger.info("⚡ DM de Productor emparejado (%s) recibida.", message.author.display_name)
                 content = (message.content or "").strip()
                 if not content:
                     return

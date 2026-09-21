@@ -57,6 +57,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional
 
 from .rutas import salida
+from .. import __version__ as VERSION
 from . import estado_json
 
 logger = logging.getLogger("Yuki.Transparencia")
@@ -70,8 +71,25 @@ DIGITAL_SOURCE_TYPE_IA = "http://cv.iptc.org/newscodes/digitalsourcetype/trained
 CLAVE_METADATO = "AIGenerated"
 CLAVE_FUENTE = "DigitalSourceType"
 
+# Extensiones en las que la marca puede ir *dentro* del fichero. Fuera de esta
+# lista `mark()` sigue funcionando: escribe el manifiesto lateral, que es la
+# capa que vale para cualquier formato. La lista gobierna la incrustación, y
+# nunca —ya no— a quién se audita.
 EXTENSIONES_MARCABLES = {".png", ".jpg", ".jpeg", ".mp3", ".mp4", ".ogg", ".wav", ".m4a"}
 EXTENSIONES_FFMPEG = {".mp3", ".mp4", ".ogg", ".m4a", ".wav"}
+
+# Lo que hay en `output/` y no es obra de Yuki: el propio manifiesto lateral,
+# los marcadores de directorio y el canon de Biblioteca, que es texto del
+# proyecto (la misma excepción que hace `.gitignore`).
+#
+# Y los `.simulado.txt`, que son el caso contrario al que esta auditoría
+# persigue: no son un medio esperando una marca, son la declaración de que no
+# hubo medio. Contarlos dejaba la conformidad en rojo permanente, y un rojo
+# permanente enseña a ignorar el rojo, que con el Artículo 50 es lo peor que
+# puede pasar.
+NO_ES_OBRA = {".gitkeep"}
+SUFIJOS_DE_LA_MARCA = (".c2pa.json", ".simulado.txt")
+CANON_DE_BIBLIOTECA = {"INDEX.md", "CANON.md"}
 
 TIEMPO_LIMITE_FFMPEG = 60
 
@@ -202,7 +220,7 @@ class MediaMarker:
         """Manifiesto con la forma de C2PA 2.4, declarado explícitamente sin firmar."""
         return {
             "claim_generator": "yuki-hermes-agent",
-            "claim_generator_info": [{"name": "Yuki (Hermes Agent)", "version": "2.6.0"}],
+            "claim_generator_info": [{"name": "Yuki (Hermes Agent)", "version": VERSION}],
             "title": Path(path).name,
             "format": Path(path).suffix.lstrip("."),
             "assertions": [
@@ -343,6 +361,26 @@ class MediaMarker:
         return CLAVE_METADATO.encode("latin-1") in cabeza
 
 
+def _es_obra(ruta: Path) -> bool:
+    """
+    Si un fichero de `output/` es material que hay que declarar.
+
+    Se comprueba la **propiedad** —está en el directorio de obra y no es un
+    artefacto del propio marcado— en vez de una lista de extensiones. Con la
+    lista, la auditoría miraba ocho formatos y descartaba en silencio todo lo
+    demás: un `.mid` que el Salón de Discord entrega de verdad, y los `.md` de
+    `output/posts/` que `HERRAMIENTAS.md` §8 obliga a archivar, eran invisibles.
+    La auditoría decía «ninguno pendiente» sobre un directorio lleno de obra
+    sin marcar. Es el mismo fallo que `.gitignore` ya había corregido pasando
+    de enumerar extensiones a comprobar la propiedad.
+    """
+    if not ruta.is_file():
+        return False
+    if ruta.name in NO_ES_OBRA or ruta.name in CANON_DE_BIBLIOTECA:
+        return False
+    return not any(ruta.name.endswith(sufijo) for sufijo in SUFIJOS_DE_LA_MARCA)
+
+
 def audit_directory(root: Optional[str] = None) -> Dict[str, Any]:
     """
     Qué hay generado y qué no está marcado.
@@ -360,7 +398,7 @@ def audit_directory(root: Optional[str] = None) -> Dict[str, Any]:
     if base.is_dir():
         marcador = MediaMarker()
         for ruta in sorted(base.rglob("*")):
-            if not ruta.is_file() or ruta.suffix.lower() not in EXTENSIONES_MARCABLES:
+            if not _es_obra(ruta):
                 continue
             (marcados if marcador.is_marked(str(ruta)) else sin_marcar).append(str(ruta))
     return {"raiz": str(base), "marcados": marcados, "sin_marcar": sin_marcar,

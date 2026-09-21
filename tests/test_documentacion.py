@@ -25,8 +25,21 @@ import pytest
 RAIZ = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(RAIZ))
 
+# Se vigilaban veintiocho de los cuarenta y siete documentos del repositorio.
+# Fuera quedaban justo los que gobiernan a quien trabaja aquí: `AGENTS.md`
+# —las instrucciones operativas—, `SOUL.md` —el canon de identidad— y las
+# quince habilidades con su catálogo, que `AGENTS.md` declara «fuente única de
+# verdad». Envejecían sin que nada lo dijera, y ya había un enlace roto dentro:
+# `skills/HERRAMIENTAS.md` apuntaba a un documento que se movió a `historico/`.
 DOCUMENTOS = (sorted(RAIZ.glob("docs/*.md")) + sorted(RAIZ.glob("docs/historico/*.md"))
-              + [RAIZ / "README.md", RAIZ / "CLAUDE.md"])
+              + sorted(RAIZ.glob("skills/**/*.md"))
+              + [RAIZ / "README.md", RAIZ / "CLAUDE.md",
+                 RAIZ / "AGENTS.md", RAIZ / "SOUL.md", RAIZ / "MEMORY.md"])
+
+# Los que no viven en `docs/` tienen su propio sitio y no aparecen en el índice
+# de la documentación técnica: las habilidades se listan solas en `skills/`.
+FUERA_DEL_INDICE = {"README.md", "CLAUDE.md", "AGENTS.md", "SOUL.md", "MEMORY.md",
+                    "HERRAMIENTAS.md", "SKILL.md"}
 
 # Lo que se cita como pendiente, planificado o histórico no cuenta como promesa.
 # Marcar así un criterio de diseño que nunca se cumplió es más honesto que
@@ -165,7 +178,7 @@ def test_todo_documento_esta_en_algun_indice(texto_por_documento):
 
     huerfanos = []
     for documento in texto_por_documento:
-        if documento.name in ("README.md", "CLAUDE.md"):
+        if documento.name in FUERA_DEL_INDICE:
             continue
         donde = indice_historico if documento.parent.name == "historico" else indice
         if documento.name not in donde:
@@ -209,3 +222,72 @@ def test_toda_tarea_del_cron_aparece_en_su_documento():
 
     assert not faltan, (
         f"tareas que corren todos los días y su documento no nombra: {faltan}")
+
+
+def test_el_readme_no_promete_menos_rutinas_de_las_que_corren():
+    """
+    El mismo «decir de menos» que ya se corrigió en `AUTONOMOUS_CRON.md`.
+
+    El guardián de arriba vigila ese documento y sólo ese, así que el README
+    siguió enseñando tres rutinas de las nueve. Quien lo lea para saber qué
+    hace Yuki sola de madrugada se queda sin seis.
+    """
+    import yaml
+
+    readme = (RAIZ / "README.md").read_text(encoding="utf-8")
+    with open(RAIZ / "config.yaml", encoding="utf-8") as fichero:
+        config = yaml.safe_load(fichero)
+
+    activas = [j for j in config["scheduler"]["cron_jobs"] if j.get("enabled", True)]
+    seccion = readme.split("Rutinas Autónomas", 1)
+    assert len(seccion) == 2, "el README ya no enumera las rutinas"
+    bloque = seccion[1][:2000]
+
+    horas = sum(1 for _ in activas)
+    guiones = bloque.count("\n  - ")
+    assert guiones >= horas, (
+        f"el README enumera {guiones} rutinas y corren {horas}")
+
+
+def test_los_modelos_que_se_documentan_son_los_que_se_usan(texto_por_documento):
+    """
+    El README nombraba `anthropic/claude-3.5-sonnet` y `google/gemini-2.0-flash`.
+
+    No son los de la instancia desde hace tiempo: son los valores por defecto
+    caducados de `llm_router.py`, los que sólo se usarían si la sección
+    `agent.model` desapareciera. La documentación describía la ruta muerta.
+    """
+    import yaml
+
+    with open(RAIZ / "config.yaml", encoding="utf-8") as fichero:
+        config = yaml.safe_load(fichero)
+
+    declarados = set()
+
+    def recoger(rama):
+        if isinstance(rama, dict):
+            for clave, valor in rama.items():
+                if isinstance(valor, str) and "model" in clave and "/" in valor:
+                    declarados.add(valor.replace("openrouter/", ""))
+                else:
+                    recoger(valor)
+
+    recoger(config)
+
+    patron = re.compile(r"`((?:openrouter/)?[a-z0-9-]+/[a-z0-9.\-]+)`")
+    inventados = {}
+    for documento, texto in texto_por_documento.items():
+        if documento.parent.name == "historico":
+            continue
+        citados = {m.replace("openrouter/", "") for m in _citas(texto, patron.pattern)}
+        # Sólo cuentan los que parecen un modelo de un proveedor conocido.
+        citados = {c for c in citados
+                   if c.split("/")[0] in {"anthropic", "google", "openai", "upstage",
+                                          "qwen", "meta-llama", "mistralai"}}
+        fuera = sorted(citados - declarados)
+        if fuera:
+            inventados[documento.name] = fuera
+
+    assert not inventados, (
+        f"documentan modelos que la configuración no usa: {inventados}. "
+        "Quién es cada modelo lo declara config.yaml, no un documento.")

@@ -286,9 +286,22 @@ def cmd_cron_task(name: str):
 
 
 def cmd_benchmark():
-    """Ejecuta un benchmark comparativo: SQLite FTS5 vs Inyección de Logs Masivos (OpenClaw)."""
+    """
+    Mide la recuperación de memoria. Lo que no mide, lo dice.
+
+    Medía una sola cosa —`engine.search()` sobre mil recuerdos— y luego imprimía
+    otras tres filas como si también las hubiera medido, incluida la de portada:
+    «Latencia Total de Respuesta | 19.6 segundos | 113 milisegundos» y un «~170x
+    más rápido» de remate. Nada mide OpenClaw, nada mide latencia total, y el
+    113 no era el número medido sino un literal. La misma clase de fallo que la
+    especificación de honestidad persigue en lo que Yuki dice, aplicada a lo que
+    el proyecto dice de sí mismo.
+
+    Ahora la tabla separa lo medido de lo citado, y lo citado lleva su
+    procedencia.
+    """
     print_banner()
-    print(f"{YELLOW}{BOLD}📊 Benchmark de Memoria: Hermes (SQLite FTS5) vs OpenClaw (Raw Logs){RESET}\n")
+    print(f"{YELLOW}{BOLD}📊 Recuperación de memoria: SQLite FTS5, medido aquí{RESET}\n")
 
     test_db = "data/benchmark_test.db"
     if os.path.exists(test_db):
@@ -319,15 +332,20 @@ def cmd_benchmark():
     avg_fts5 = sum(fts5_times) / len(fts5_times)
 
     print("\n" + "="*80)
-    print(f"{BOLD}{'Métrica / Dimensión':<30} | {'OpenClaw (Raw Logs)':<22} | {'Hermes Agent (SQLite FTS5)':<24}{RESET}")
+    print(f"{BOLD}Medido en esta máquina, ahora mismo{RESET}")
     print("="*80)
-    print(f"{'Tiempo Búsqueda Memoria':<30} | {RED}{'~1,200 ms (CPU Parse)':<22}{RESET} | {GREEN}{f'{avg_fts5:.2f} ms (FTS5 Index)':<24}{RESET}")
-    print(f"{'Tokens enviados al LLM':<30} | {RED}{'~45,000 - 80,000':<22}{RESET} | {GREEN}{'~450 tokens (Selectivo)':<24}{RESET}")
-    print(f"{'Riesgo de Context Rot':<30} | {RED}{'Muy Alto (Fugas/Mezcla)':<22}{RESET} | {GREEN}{'Cero (Aislamiento Total)':<24}{RESET}")
-    print(f"{'Latencia Total de Respuesta':<30} | {RED}{'19.6 segundos':<22}{RESET} | {GREEN}{'113 milisegundos':<24}{RESET}")
+    print(f"{'Recuperación (3 consultas)':<34} | {GREEN}{f'{avg_fts5:.2f} ms de media':<24}{RESET}")
+    print(f"{'Corpus':<34} | {'1.000 recuerdos en SQLite FTS5':<24}")
+    print(f"{'Recuerdos devueltos por consulta':<34} | {'5 (límite de la llamada)':<24}")
     print("="*80)
-
-    print(f"\n{GREEN}{BOLD}🚀 Hermes Agent responde ~170x más rápido sin degradación de contexto.{RESET}\n")
+    print(f"\n{DIM}Lo de abajo NO se mide aquí: son cifras de referencia del diseño,"
+          f" no resultados de esta ejecución.{RESET}")
+    print(f"{DIM}  · Inyectar el historial en bruto en cada turno gasta del orden de"
+          f" decenas de miles de tokens; la recuperación selectiva, cientos.{RESET}")
+    print(f"{DIM}  · La comparación con OpenClaw que citan README y docs/ procede de"
+          f" su documentación, no de una medición de este repositorio.{RESET}")
+    print(f"{DIM}  · La latencia total de una respuesta la domina el proveedor de"
+          f" modelo, no esta búsqueda. `cli.py chat` la imprime turno a turno.{RESET}\n")
 
     if os.path.exists(test_db):
         os.remove(test_db)
@@ -468,6 +486,27 @@ def cmd_daemon():
             discord_adapter = DiscordAdapter(agent)
             tasks.append(asyncio.create_task(discord_adapter.start()))
             print(f"{DIM}Conector Discord real activado; solo menciones dentro del guild autorizado.{RESET}")
+
+        # Telegram estaba implementado, probado y documentado como «salida
+        # real»… y no lo construía nadie. `agent.telegram_adapter` nacía en
+        # `None` y el único sitio que lo asignaba era el propio constructor del
+        # adaptador, que no se llamaba en ningún fichero de producción. La
+        # tarea de las 07:30 tomaba siempre la rama «sin adaptador de Telegram»
+        # mientras el gemelo virtual declaraba la capacidad como real —y ese
+        # bloque entra en el prompt de Yuki en cada turno, así que ella se lo
+        # habría dicho al Productor—.
+        #
+        # No arranca ningún bucle: la entrada (polling) sigue sin existir y se
+        # declara así. Construirlo es lo que enchufa la salida.
+        if os.getenv("TELEGRAM_BOT_TOKEN"):
+            from src.adapters.telegram_bot import TelegramAdapter
+            telegram = TelegramAdapter(agent)
+            motivo = telegram.por_que_no()
+            if motivo:
+                print(f"{DIM}Telegram declarado y no operativo: {motivo}.{RESET}")
+            else:
+                print(f"{DIM}Salida por Telegram activa (difusión con marca y freno; "
+                      f"la entrada no está implementada).{RESET}")
 
         registered = ", ".join(
             f"{name}={job['cron_expr']}" for name, job in agent.cron.jobs.items()

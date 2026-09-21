@@ -78,3 +78,81 @@ def test_un_modulo_que_nadie_importa_lo_dice_en_su_cabecera():
         "todavía no lo arranca nadie (`Nadie lo llama todavía:`). Un módulo que "
         "sólo existe se confunde con una capacidad que funciona."
     )
+
+
+def _modulos_que_solo_importan_las_pruebas() -> dict:
+    """Lo que `src/` no importa, aunque la suite sí."""
+    modulos = {f.stem: f for f in RAIZ.glob("src/**/*.py") if f.name != "__init__.py"}
+    produccion = (list(RAIZ.glob("src/**/*.py")) + list(RAIZ.glob("scripts/*.py"))
+                  + [RAIZ / "cli.py"])
+    llamados = set()
+    for fichero in produccion:
+        for nombre in _nombres_importados(fichero) & set(modulos):
+            if modulos[nombre] != fichero:
+                llamados.add(nombre)
+    return {n: r for n, r in modulos.items() if n not in llamados}
+
+
+def test_un_modulo_que_solo_importan_las_pruebas_tambien_lo_dice():
+    """
+    El hueco del guardián de arriba: contaba `tests/` como importador.
+
+    Así que un módulo con su suite completa y ningún llamador en producción
+    pasaba por vivo. Es exactamente la forma en que `telegram_bot.py` —salida
+    real, implementada, probada y documentada como «✅ Real»— llevaba desde su
+    escritura sin que nadie lo construyera: la tarea de las 07:30 tomaba
+    siempre la rama «sin adaptador de Telegram» mientras el gemelo virtual
+    declaraba la capacidad como real. Una prueba no es un llamador: es una
+    prueba.
+    """
+    huerfanos = _modulos_que_solo_importan_las_pruebas()
+
+    sin_declarar = {}
+    for nombre, ruta in huerfanos.items():
+        docstring = ast.get_docstring(ast.parse(ruta.read_text(encoding="utf-8"))) or ""
+        if not any(marca in docstring for marca in DECLARACIONES):
+            sin_declarar[nombre] = str(ruta.relative_to(RAIZ))
+
+    assert not sin_declarar, (
+        f"módulos que sólo existen para sus propias pruebas: {sin_declarar}. "
+        "O los llama alguien de producción, o lo dicen en su docstring.")
+
+
+def test_todo_adaptador_declarado_lo_construye_alguien_de_produccion():
+    """
+    Un adaptador que nadie instancia es una capacidad que no existe.
+
+    Y aquí duele el doble, porque `VirtualInstance.bloque_de_capacidades()`
+    entra en el prompt de Yuki en cada turno: una presencia declarada «real»
+    que nadie ha cableado no es sólo un error de inventario, es una frase falsa
+    puesta en su boca.
+    """
+    adaptadores = {}
+    for fichero in sorted(RAIZ.glob("src/adapters/*.py")):
+        arbol = ast.parse(fichero.read_text(encoding="utf-8"))
+        for nodo in ast.walk(arbol):
+            if isinstance(nodo, ast.ClassDef) and nodo.name.endswith("Adapter"):
+                adaptadores[nodo.name] = fichero
+
+    assert adaptadores, "no se encontró ningún adaptador: revisa la detección"
+
+    sin_construir = []
+    for clase, definido_en in adaptadores.items():
+        construido = False
+        for fichero in list(RAIZ.glob("src/**/*.py")) + [RAIZ / "cli.py"]:
+            if fichero == definido_en:
+                continue
+            arbol = ast.parse(fichero.read_text(encoding="utf-8"))
+            for nodo in ast.walk(arbol):
+                if (isinstance(nodo, ast.Call) and isinstance(nodo.func, ast.Name)
+                        and nodo.func.id == clase):
+                    construido = True
+                    break
+            if construido:
+                break
+        if not construido:
+            sin_construir.append(clase)
+
+    assert not sin_construir, (
+        f"adaptadores que nadie construye en producción: {sin_construir}. "
+        "Mientras tanto el gemelo virtual puede estar declarándolos reales.")

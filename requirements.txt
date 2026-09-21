@@ -1,13 +1,15 @@
-# Core & Runtime
-python-dotenv>=1.0.1
-pyyaml>=6.0.2
-pydantic>=2.7.0
-aiohttp>=3.9.5
-httpx>=0.27.0
-APScheduler>=3.10.4
+# Dependencias de ejecución. **Sólo lo que alguien importa.**
+#
+# Llevaba diez paquetes que no aparecen en un solo `import` del proyecto
+# —python-telegram-bot, pydantic, aiohttp, httpx, APScheduler, sqlite-utils,
+# click, rich, tabulate, python-dotenv— más pytest y pytest-asyncio, que metían
+# el marco de pruebas en la imagen de producción. El `Dockerfile` instala este
+# fichero entero en una `e2-small` con 2 GB para todo, y `CLAUDE.md` pone
+# «no añadir dependencias pesadas al camino de arranque» entre lo que no se
+# hace. Las de desarrollo viven en `requirements-dev.txt`.
 
-# Fast Memory & SQLite FTS5
-sqlite-utils>=3.36
+# Core & Runtime
+pyyaml>=6.0.2
 
 # LLM & Hermes Integration
 # OpenRouter (agregador declarado en hermes_config.yaml) habla el protocolo
@@ -26,16 +28,10 @@ google-auth>=2.30.0
 google-genai>=1.9.0
 google-cloud-texttospeech>=2.16.0
 
-# Social Adapters
-python-telegram-bot>=21.3
+# Adaptador de Discord: el gateway real, y el único que necesita SDK.
+# Telegram usa la biblioteca estándar a propósito (ver src/adapters/telegram_bot.py).
 discord.py>=2.3.2
 
-# Serverless (opcional para Modal)
+# Serverless (opcional para Modal). El módulo lo declara en su cabecera: no lo
+# arranca nadie desde el repositorio.
 modal>=0.62.0
-
-# Testing & Tools
-pytest>=8.2.0
-pytest-asyncio>=0.23.7
-click>=8.1.7
-rich>=13.7.1
-tabulate>=0.9.0

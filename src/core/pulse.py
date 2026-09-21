@@ -198,13 +198,18 @@ class Pulse:
 
     # -- Trazas ----------------------------------------------------------
 
+    # Las rutas se dicen resueltas, no escritas a mano: informaban siempre
+    # `data/...` mientras leían `self.data_dir`, así que con el estado
+    # reubicado por variable de entorno el diagnóstico nombraba al operador un
+    # fichero que no había abierto. Es la familia de «una copia impecable de
+    # una base que nadie usa», en versión sonda.
     def _latido(self) -> Signo:
         vital = _json(self.data_dir / "vital_state.json")
         return Signo(
             id="latido", tipo=VEGETATIVO,
             descripcion="el proceso reescribe su estado vital",
             ultimo=_epoch(vital.get("last_updated")),
-            max_edad=self.edades["latido"], fuente="data/vital_state.json")
+            max_edad=self.edades["latido"], fuente=str(self.data_dir / "vital_state.json"))
 
     def _bitacora(self) -> Signo:
         ultimo = None
@@ -222,7 +227,8 @@ class Pulse:
             id="bitacora", tipo=VOLITIVO,
             descripcion="deja constancia de sus propios actos",
             ultimo=ultimo, max_edad=self.edades["bitacora"],
-            fuente="data/bitacora.jsonl", nota=f"{anotaciones} anotación(es)")
+            fuente=str(self.data_dir / "bitacora.jsonl"),
+            nota=f"{anotaciones} anotación(es)")
 
     def _albedrio(self) -> Signo:
         datos = _json(self.data_dir / "agency_ledger.json")
@@ -236,7 +242,7 @@ class Pulse:
             id="albedrio", tipo=VOLITIVO,
             descripcion="intenta algo por su cuenta",
             ultimo=ultimo, max_edad=self.edades["albedrio"],
-            fuente="data/agency_ledger.json",
+            fuente=str(self.data_dir / "agency_ledger.json"),
             nota=f"aburrimiento {float(datos.get('boredom') or 0.0):.2f}")
 
     def _sueno(self) -> Signo:
@@ -245,7 +251,7 @@ class Pulse:
             id="sueno", tipo=VOLITIVO,
             descripcion="consolida memoria al dormir",
             ultimo=_epoch(vital.get("last_sleep_cycle")),
-            max_edad=self.edades["sueno"], fuente="data/vital_state.json",
+            max_edad=self.edades["sueno"], fuente=str(self.data_dir / "vital_state.json"),
             nota="la noche es lo único que impide que la memoria sólo crezca")
 
     def _conversacion(self) -> Signo:

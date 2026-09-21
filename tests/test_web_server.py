@@ -228,3 +228,52 @@ def test_las_metricas_no_estan_abiertas(monkeypatch):
 
     assert not _handler("/metrics")._autorizado("/metrics")
     assert _handler("/health")._autorizado("/health")
+
+
+def test_el_techo_se_aplica_por_la_puerta_y_no_solo_en_el_metodo(monkeypatch):
+    """
+    El camino del producto, no la clase suelta.
+
+    La prueba de arriba llamaba a `_dentro_del_limite()` a mano, así que pasaba
+    en verde mientras `do_GET` no lo invocaba nunca: sin `SALON_API_TOKEN` —el
+    comportamiento por defecto— treinta peticiones seguidas a `/api/memories`
+    devolvían treinta doscientos, sirviendo contenido de recuerdos sin
+    credencial y sin cota, mientras el README y el gemelo virtual prometían
+    «techo por cliente siempre activo».
+
+    Y la sonda tiene que quedar fuera: un 429 en `/health` haría que una
+    plataforma gestionada reiniciara el contenedor.
+    """
+    import urllib.error
+
+    from src.web.server import LIMITE_PETICIONES, SalonHTTPHandler
+
+    monkeypatch.delenv("SALON_API_TOKEN", raising=False)
+    SalonHTTPHandler._historial_peticiones.clear()
+
+    httpd = ThreadingHTTPServer(("127.0.0.1", 0), SalonHTTPHandler)
+    httpd.daemon_threads = True
+    puerto = httpd.server_address[1]
+    hilo = threading.Thread(target=httpd.serve_forever, daemon=True)
+    hilo.start()
+    try:
+        def pedir(ruta):
+            try:
+                with urllib.request.urlopen(
+                        f"http://127.0.0.1:{puerto}{ruta}", timeout=10) as respuesta:
+                    return respuesta.status
+            except urllib.error.HTTPError as error:
+                return error.code
+
+        codigos = [pedir("/api/memories?q=a") for _ in range(LIMITE_PETICIONES + 3)]
+        assert 429 in codigos, (
+            "`/api/memories` no tiene techo: sin credencial, cualquiera puede "
+            f"vaciar la memoria a peticiones. Códigos: {sorted(set(codigos))}")
+        assert codigos.count(200) <= LIMITE_PETICIONES
+
+        # La sonda sigue contestando aunque el cliente ya esté castigado.
+        assert pedir("/health") == 200
+    finally:
+        httpd.shutdown()
+        httpd.server_close()
+        SalonHTTPHandler._historial_peticiones.clear()

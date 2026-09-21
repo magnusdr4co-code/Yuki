@@ -15,6 +15,7 @@ nadie usa.
 """
 
 import os
+import re
 import shutil
 import sys
 from pathlib import Path
@@ -305,9 +306,16 @@ def test_el_repositorio_no_lleva_obra_generada():
         "output/yuki_identity_export_1787762950.zip",
     }
 
+    # El manifiesto del Artículo 50 de una obra permitida viaja con ella: no es
+    # obra generada, es su declaración de origen. Sin esto, la auditoría —que
+    # ya mira todos los formatos, no sólo ocho extensiones— deja la comprobación
+    # de humo en rojo en cada clon limpio, y un rojo permanente enseña a
+    # ignorar el rojo.
+    manifiestos = {f"{obra}.c2pa.json" for obra in HEREDADOS}
+
     colados = [f for f in seguidos
                if Path(f).name not in permitidos and "/Biblioteca/" not in f
-               and f not in HEREDADOS]
+               and f not in HEREDADOS and f not in manifiestos]
 
     assert not colados, f"obra generada versionada en el repositorio: {colados}"
 
@@ -350,3 +358,72 @@ def test_un_formato_nuevo_en_la_salida_ya_viene_ignorado():
         decision = subprocess.run(["git", "check-ignore", "--no-index", "-q", marcador],
                                   cwd=raiz, timeout=60)
         assert decision.returncode != 0, f"'{marcador}' tiene que seguir versionado"
+
+
+def test_todo_estado_durable_esta_fuera_del_repositorio_y_de_la_imagen():
+    """
+    Lo que `.gitignore` ya había aprendido para `output/`, aplicado a `data/`.
+
+    Los dieciséis estados durables estaban enumerados fichero a fichero en
+    `.gitignore` y `.dockerignore`, y faltaba uno: `discord_pairing.json`. Su
+    propia ficha en el inventario dice `holds_personal_data=True` y
+    «ALTA: habilita Biblioteca, terminal y producción multimedia». En un
+    repositorio público eso está a un `git add -A`, y en la imagen a un
+    `COPY . .`.
+
+    Se comprueba la propiedad contra el inventario, que es la fuente de verdad
+    de qué estado existe: si mañana se declara una pieza nueva, esto la exige
+    ignorada sin que nadie tenga que acordarse de tocar dos ficheros.
+    """
+    import subprocess
+
+    from src.core.state_registry import build_registry
+
+    _requiere_checkout_git()
+    raiz = Path(__file__).resolve().parents[1]
+
+    sin_ignorar = []
+    for pieza in build_registry():
+        nombre = Path(pieza.path).name
+        if nombre in ("Biblioteca",):   # vive en output/, con su propia regla
+            continue
+        candidato = f"data/{nombre}"
+        decision = subprocess.run(["git", "check-ignore", "--no-index", "-q", candidato],
+                                  cwd=raiz, timeout=60)
+        if decision.returncode != 0:
+            sin_ignorar.append(f"{pieza.id} ({candidato})")
+
+    assert not sin_ignorar, (
+        f"estado durable que entraría al repositorio: {sin_ignorar}")
+
+    # Y en la imagen. `.dockerignore` no lo sabe comprobar `git`, así que se
+    # lee la regla: lo que vale es que cubra todo `data/`, no una lista.
+    docker = (raiz / ".dockerignore").read_text(encoding="utf-8")
+    assert "data/**" in docker, (
+        ".dockerignore vuelve a enumerar ficheros de data/: una pieza nueva se cuela sola")
+
+
+def test_el_aislamiento_vale_para_los_dos_ejecutores():
+    """
+    `conftest.py` es de pytest, y la CI ejecuta también `unittest`.
+
+    Por ese camino las *fixtures* no se aplican, así que la suite escribía
+    estado de verdad en el `data/` del repositorio: una pasada dejaba ahí la
+    base, el perfil dialéctico, el estado vital y cuatro libros más, y la
+    segunda pasada fallaba porque el perfil ya traía el ajuste que la prueba
+    iba a hacer. En integración continua no se notaba: cada trabajo arranca de
+    un checkout limpio.
+
+    Ahora la redirección vive en `tests/__init__.py`, que se importa por los
+    dos caminos. Esto comprueba que las dos listas no se separen.
+    """
+    import tests
+
+    redirigidas_en_conftest = set(re.findall(
+        r'monkeypatch\.setenv\(\s*"([A-Z][A-Z0-9_]+)"',
+        (Path(__file__).resolve().parents[1] / "tests" / "conftest.py").read_text(encoding="utf-8")))
+
+    faltan = sorted(redirigidas_en_conftest - set(tests._REUBICACIONES))
+    assert not faltan, (
+        f"`conftest.py` redirige estas variables y `tests/__init__.py` no: {faltan}. "
+        "Con `python -m unittest` quedarían apuntando al estado de la instancia.")

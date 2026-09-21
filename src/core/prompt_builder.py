@@ -2,7 +2,7 @@
 Constructor Dinámico de Contexto para Yuki.
 Ensambla el prompt del sistema inyectando selectivamente:
 1. El alma inmutable (SOUL.md)
-2. Recuperación selectiva SQLite FTS5 (<113ms)
+2. Recuperación selectiva SQLite FTS5 (objetivo p95 < 113 ms)
 3. Modelado dialéctico Honcho (Teoría de la mente con el interlocutor)
 4. Protocolos del canal y reglas anti-repetición.
 """

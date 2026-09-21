@@ -1,7 +1,24 @@
 # ==========================================
-# Pipeline de build y despliegue de Yuki en Google Cloud
+# Pipeline de build y despliegue de Yuki en Google Cloud — **NO ES EL VIGENTE**
 #   gcloud builds submit --config cloudbuild.yaml
 # ==========================================
+#
+# Lo que corre en producción es una instancia `yuki-agent` en Compute Engine
+# (`e2-small`, `europe-southwest1`) con disco persistente, y su runbook es
+# `docs/DESPLIEGUE.md`. Esto despliega otra cosa: un servicio `yuki-salon` en
+# Cloud Run, con otra imagen y otro nombre.
+#
+# Y con una diferencia que no es de gusto: monta `/app/data` sobre un bucket de
+# GCS. Ahí viven `yuki_memory.db` —SQLite, con sus `-wal`/`-shm`— y los catorce
+# ficheros de estado que `estado_json` escribe con `os.replace`. Ni el bloqueo
+# de SQLite ni el rename atómico funcionan sobre GCS FUSE. El propio
+# `docs/GCP_DEPLOYMENT.md` lo reconoce al ofrecer Compute Engine «sin la
+# limitación de SQLite sobre GCS», sólo que lo hace en un anexo: el anexo es la
+# realidad y este camino es el que no sirve.
+#
+# Se conserva porque documenta una decisión de su día y porque el resto del
+# pipeline —pruebas, build, push— sigue siendo válido. No se ejecuta tal cual
+# sin resolver antes dónde vive el estado durable.
 
 substitutions:
   _REGION: europe-southwest1        # Madrid — coincide con la zona horaria de Yuki

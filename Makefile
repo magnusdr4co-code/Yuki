@@ -7,7 +7,7 @@
 .DEFAULT_GOAL := ayuda
 PY ?= python3
 
-.PHONY: ayuda instalar pruebas cobertura linter humo humo-ci simulacro restaurar circuito pulso dia estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
+.PHONY: ayuda instalar pruebas cobertura unittest linter humo humo-ci simulacro restaurar circuito pulso dia estado albedrio sueno bitacora freno parar soltar todo imagen replica limpiar
 
 ayuda:  ## Muestra esta ayuda
 	@grep -E '^[a-z-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | \
@@ -40,7 +40,14 @@ restaurar:  ## Restaura la última copia real y comprueba que sirve
 circuito:  ## Fabrica una copia y la restaura: no necesita copia previa
 	$(PY) scripts/restore_drill.py --ciclo
 
-todo: linter pruebas simulacro circuito humo-ci  ## Lo que ejecuta la CI, en local
+unittest:  ## El ejecutor estándar, que es lo que documentó el README durante meses
+	$(PY) -m unittest discover -s tests
+
+todo: linter cobertura unittest simulacro circuito humo-ci  ## Lo que ejecuta la CI, en local
+	@echo ""
+	@echo "Queda fuera lo que necesita Docker: imagen, las dos composiciones y el"
+	@echo "gemelo dentro de la imagen. Eso es \`make imagen\` y \`make replica\`."
+
 
 pulso:  ## Signos vitales: ¿corre el proceso, y además vive Yuki?
 	$(PY) cli.py pulso

@@ -244,3 +244,88 @@ def test_la_entrega_marca_lo_que_llegue_sin_marca(tmp_path, monkeypatch):
 
     assert MediaMarker().is_marked(str(ruta)), "se marca antes de salir"
     assert "generado por IA" in enviados[0], "y se dice también a quien lo lee"
+
+
+def test_la_auditoria_ve_un_formato_que_no_estaba_en_ninguna_lista(tmp_path, monkeypatch):
+    """
+    La auditoría filtraba por extensión antes de preguntar por la marca.
+
+    Miraba ocho formatos y descartaba el resto en silencio, así que decía
+    «ninguno pendiente» sobre un directorio con obra sin marcar dentro. Y no
+    era teórico: `discord_salon.py` entrega la partitura `.mid` a un canal, y
+    `HERRAMIENTAS.md` §8 obliga a archivar en `output/posts/` los `.md` de lo
+    publicado. Ninguno de los dos existía para el auditor.
+
+    Es el mismo fallo que `.gitignore` ya había corregido pasando de enumerar
+    extensiones a comprobar la propiedad, y se comprueba igual: con un formato
+    que nadie ha visto nunca.
+    """
+    from src.core.transparency import MediaMarker, audit_directory
+
+    salida = tmp_path / "output"
+    (salida / "music").mkdir(parents=True)
+    (salida / "posts").mkdir()
+    monkeypatch.setenv("YUKI_OUTPUT_DIR", str(salida))
+    monkeypatch.setenv("YUKI_TRANSPARENCY_PATH", str(tmp_path / "transparency.json"))
+
+    partitura = salida / "music" / "obra.mid"
+    partitura.write_bytes(b"MThd\x00\x00\x00\x06\x00\x01\x00\x01\x01\xe0")
+    (salida / "posts" / "lanzamiento.md").write_text("texto de Yuki", encoding="utf-8")
+    (salida / "music" / "toma.formato-que-aun-no-existe").write_text("x", encoding="utf-8")
+
+    informe = audit_directory()
+    nombres = {Path(r).name for r in informe["sin_marcar"]}
+    assert {"obra.mid", "lanzamiento.md", "toma.formato-que-aun-no-existe"} <= nombres, (
+        f"la auditoría no ve obra sin marcar: {informe}")
+
+    # Y al marcarla pasa al otro lado, sin que la extensión importe.
+    MediaMarker().mark(str(partitura), model="local.midi", prompt="tema", kind="sonora")
+    informe = audit_directory()
+    assert str(partitura) in informe["marcados"]
+    # El manifiesto lateral que acaba de escribirse no se audita a sí mismo.
+    assert not any(r.endswith(".c2pa.json") for r in informe["marcados"] + informe["sin_marcar"])
+
+
+def test_la_version_del_manifiesto_es_la_del_proyecto(tmp_path, monkeypatch):
+    """
+    El número que sale al mundo tiene que ser uno de los del proyecto.
+
+    Había cinco distintos: `pyproject.toml` y `src/__init__.py` en 2.4.0,
+    `config.yaml` en 2.5.0, `hermes_config.yaml` en 2.5, y un literal 2.6.0
+    escrito a mano dentro de `claim_generator_info`. El único que viaja fuera
+    —grabado en el registro de procedencia de cada obra que Yuki entrega bajo
+    el Artículo 50— era justo el que no correspondía a ninguna versión
+    declarada del proyecto.
+    """
+    import src
+    from src.core.transparency import MediaMarker
+
+    monkeypatch.setenv("YUKI_TRANSPARENCY_PATH", str(tmp_path / "t.json"))
+    fichero = tmp_path / "obra.png"
+    fichero.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 40)
+
+    manifiesto = MediaMarker().manifest(str(fichero))
+    generador = manifiesto["claim_generator_info"][0]
+
+    assert generador["version"] == src.__version__, (
+        "el manifiesto C2PA vuelve a llevar una versión propia")
+
+
+def test_nadie_declara_una_version_distinta_de_la_del_proyecto():
+    """Un solo sitio donde cambiarla, para que no vuelvan a ser cinco."""
+    import re
+
+    import src
+
+    raiz = Path(__file__).resolve().parents[1]
+    pyproject = (raiz / "pyproject.toml").read_text(encoding="utf-8")
+    assert 'dynamic = ["version"]' in pyproject, (
+        "pyproject vuelve a fijar la versión a mano")
+
+    otras = set(re.findall(r'"(\d+\.\d+\.\d+)"', (raiz / "config.yaml").read_text(encoding="utf-8")))
+    discrepantes = {v for v in otras if v != src.__version__}
+    assert not discrepantes or all(
+        "no se lee" in linea
+        for linea in (raiz / "config.yaml").read_text(encoding="utf-8").splitlines()
+        if any(v in linea for v in discrepantes) and "version" in linea
+    ), f"config.yaml declara versiones propias sin marcarlas: {discrepantes}"

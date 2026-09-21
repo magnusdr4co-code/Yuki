@@ -3,14 +3,14 @@
 # ==========================================
 
 agent:
-  name: "Yuki"
+  name: "Yuki"   # no se lee: su nombre vive en SOUL.md y en el prompt
   display_name: "Yuki (雪)"   # no se lee: sólo documental
-  version: "2.5.0"
+  version: "2.5.0"   # no se lee: la versión la declara src/__init__.py, que es la que sale en el manifiesto C2PA
   harness: "hermes-agent"   # no se lee: sólo documental
   default_language: "es-ES"   # no se lee: el idioma sale de SOUL.md y del prompt
   fallback_language: "en-US"   # no se lee: el idioma sale de SOUL.md y del prompt
   model:
-    provider: "openrouter" # o "anthropic", "google", "openai", "nous"
+    provider: "openrouter" # o "anthropic", "google", "openai", "nous"   # no se lee: el orden de pasarelas lo fija llm_router (Nous → Vertex → OpenRouter)
     # Solar Pro 4 ofrece buena calidad general a un coste muy bajo en OpenRouter.
     # El identificador canónico no lleva guion entre "pro" y "4".
     primary_model: "upstage/solar-pro4"
@@ -223,6 +223,8 @@ budget:
     video_segundos: 120
     imagenes: 40
     musica_pistas: 12
+    # La voz se reservaba sin techo: la comprobación existía y no podía negar.
+    voz_caracteres: 60000
   # Techo global en dólares. Deja vacío para gobernar sólo por unidades; la
   # estimación no incluye música, que no tiene precio de referencia registrado.
   usd_per_day: null
@@ -268,10 +270,13 @@ memory:
   soul_md_path: "SOUL.md"
   fts:
     tokenizer: "unicode61 remove_diacritics 2"   # no se lee: el tokenizador se fija al crear la tabla FTS5
+    # no se lee: los pesos son literales en el SQL de fts5_memory.py
+    # (`bm25(memories_fts, 5.0, 2.0, 3.0, 1.0)`), que además pondera una
+    # cuarta columna que aquí no aparece. Cambiarlos aquí no cambia nada.
     bm25_weights:
-      title: 5.0
-      content: 2.0
-      tags: 3.0
+      title: 5.0   # no se lee: literal en el SQL de fts5_memory.py
+      content: 2.0   # no se lee: literal en el SQL de fts5_memory.py
+      tags: 3.0   # no se lee: literal en el SQL de fts5_memory.py
     max_retrieved_memories: 5   # no se lee: el límite lo pone cada llamada a search()
     min_score_threshold: 0.15   # no se lee: el ranking es BM25 y no se filtra por umbral
   decay:
@@ -338,30 +343,34 @@ honcho:
 nous_portal:
   base_url: "https://api.nousportal.com/v1"
   auth_mode: "oauth_bearer"   # no se lee: sólo documental
+  # no se lee: dónde vive cada cosa lo decide src/core/rutas.py, con
+  # YUKI_OUTPUT_DIR por delante. Estas cuatro rutas no las consulta nadie.
   workspace_output_paths:
-    art: "./output/art"
-    voice: "./output/voice"
-    music: "./output/music"
-    posts: "./output/posts"
+    art: "./output/art"   # no se lee: manda src/core/rutas.py y YUKI_OUTPUT_DIR
+    voice: "./output/voice"   # no se lee: manda src/core/rutas.py y YUKI_OUTPUT_DIR
+    music: "./output/music"   # no se lee: manda src/core/rutas.py y YUKI_OUTPUT_DIR
+    posts: "./output/posts"   # no se lee: manda src/core/rutas.py y YUKI_OUTPUT_DIR
   frontier_engines:
     vision:
       default_provider: "gemini_image" # "gemini_image", "seedream", "flux_pro"   # no se lee: el modelo lo fija vertex_ai.media
+      # no se lee: el catálogo real es un diccionario literal en nous_portal.py.
+      # `seedream` y `flux_pro` los da por inexistentes skills/HERRAMIENTAS.md.
       models:
-        gemini_image: "gemini-2.5-flash-image"
-        seedream: "bytedance/seedream-v2.5-hd"
-        flux_pro: "fal-ai/flux-pro/v1.1-ultra"
+        gemini_image: "gemini-2.5-flash-image"   # no se lee: el catálogo real es un literal en nous_portal.py
+        seedream: "bytedance/seedream-v2.5-hd"   # no se lee: HERRAMIENTAS.md lo da por inexistente
+        flux_pro: "fal-ai/flux-pro/v1.1-ultra"   # no se lee: HERRAMIENTAS.md lo da por inexistente
     music:
       default_engine: "lyria-3-pro-preview" # "lyria-3-pro-preview", "lyria-3-clip-preview", "midi_only"   # no se lee: el modelo lo fija vertex_ai.media
       models:
         lyria_pro: "lyria-3-pro-preview"   # no se lee: el modelo lo fija vertex_ai.media
         lyria_clip: "lyria-3-clip-preview"   # no se lee: el modelo lo fija vertex_ai.media
-        midi_only: "local.midi"
+        midi_only: "local.midi"   # no se lee: el respaldo local lo decide music_fallback
     voice:
       default_engine: "gemini_multimodal_audio" # "gemini_multimodal_audio", "nous_tts_v2"   # no se lee: el modelo lo fija vertex_ai.media
-      voice_id: "yuki_serene_alto"
-      cadence_pause_ms: 350
+      voice_id: "yuki_serene_alto"   # no se lee: manda vertex_ai.media.voice
+      cadence_pause_ms: 350   # no se lee: la prosodia va en el SSML que arma vertex_media
     web_search:
-      provider: "firecrawl"
+      provider: "firecrawl"   # no se lee: web_search.py habla con Firecrawl y no tiene alternativa
       max_results: 5
       scrape_mode: "markdown"
 
@@ -412,13 +421,13 @@ scheduler:
 
 adapters:
   telegram:
-    enabled: true
+    enabled: true   # no se lee: la salida se activa con TELEGRAM_BOT_TOKEN y TELEGRAM_DEFAULT_CHAT_ID
     poll_mode: "webhook"   # no se lee: Telegram sigue simulado
     webhook_path: "/webhook/telegram"   # no se lee: Telegram sigue simulado
     send_voice_notes: true   # no se lee: Telegram sigue simulado
     send_images: true   # no se lee: Telegram sigue simulado
   discord:
-    enabled: true
+    enabled: true   # no se lee: el adaptador se levanta si hay DISCORD_BOT_TOKEN
     guild_id: ""   # no se lee: manda DISCORD_ALLOWED_GUILD_ID
     announce_channel_id: ""   # no se lee: manda DISCORD_ALLOWED_CHANNEL_ID
     canvas_enabled: true   # no se lee: el Canvas se sirve siempre desde el Salón
