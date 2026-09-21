@@ -45,8 +45,8 @@ VERTEX_LOCATION=global
 DISCORD_ALLOWED_GUILD_ID=1539988095523623065,1472671221027045648
 # Sin restricción por canal (vacío = todos los canales permitidos en guilds autorizados)
 DISCORD_ALLOWED_CHANNEL_ID=
-# Productor emparejado para DMs Hermes (Dextrure); el pairing se confirma vía DM !pair
-DISCORD_PAIRED_PRODUCER_ID=235796491988369408
+# El Productor emparejado llega de Secret Manager; sin él, los DMs quedan
+# cerrados. El pairing se confirma vía DM !pair.
 YUKI_ENV
 
 # Secret Manager es la fuente de verdad. El fichero de runtime vive solo durante
@@ -83,6 +83,9 @@ fetch_secret_opcional() {
     echo "yuki-startup: ${env_name} no declarado; la capacidad queda inactiva" >&2
   fi
 }
+# Identidad autorizada para DMs Hermes. Nunca se escribe un ID personal en el
+# script público: declara el secreto antes de desplegar.
+fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-discord-paired-producer-id/versions/latest" DISCORD_PAIRED_PRODUCER_ID
 # Sin esto las rutas /api del Salón quedan ABIERTAS en el 8080 y la descarga de
 # obra no se enciende. Es lo primero que conviene declarar tras el primer arranque.
 fetch_secret_opcional "projects/${PROJECT_ID}/secrets/yuki-salon-api-token/versions/latest" SALON_API_TOKEN

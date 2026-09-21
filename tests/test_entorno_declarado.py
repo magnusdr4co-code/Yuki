@@ -133,3 +133,10 @@ def test_ningun_identificador_de_persona_vive_en_el_codigo():
     assert not encontrados, (
         f"identificadores que parecen de una persona, en el código: {encontrados}. "
         "Van en una variable de entorno, no en el fuente.")
+
+
+def test_el_arranque_no_lleva_el_id_personal_en_claro():
+    """El script público obtiene la identidad del Productor desde Secret Manager."""
+    arranque = (RAIZ / "deploy/gce-startup.sh").read_text(encoding="utf-8")
+    assert not re.search(r"DISCORD_PAIRED_PRODUCER_ID\s*=\s*\d{17,19}", arranque)
+    assert "yuki-discord-paired-producer-id/versions/latest" in arranque
