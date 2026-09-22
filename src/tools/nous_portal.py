@@ -128,7 +128,8 @@ class NousPortalClient:
         provider: str = "gemini_image", # "gemini_image", "seedream", "flux_pro"
         aspect_ratio: str = "1:1",
         lighting_style: str = "komorebi",
-        mood_params: Optional[Dict[str, Any]] = None
+        mood_params: Optional[Dict[str, Any]] = None,
+        reference_image: Optional[str] = None,
     ) -> Dict[str, Any]:
         """
         Genera portadas y arte visual consumiendo modelos de frontera:
@@ -169,7 +170,11 @@ class NousPortalClient:
         logger.info(f"🎨 Pintando lienzo visual [{provider}]: '{refined_prompt[:60]}...'")
 
         if self.vertex.is_available():
-            resultado = await self.vertex.generate_image(refined_prompt, aspect_ratio=aspect_ratio)
+            # La referencia sólo viaja si la hay: los dobles y los caminos que
+            # no la conocen siguen llamando con la firma de siempre.
+            extra = {"reference_image": reference_image} if reference_image else {}
+            resultado = await self.vertex.generate_image(refined_prompt, aspect_ratio=aspect_ratio,
+                                                         **extra)
             if resultado["status"] == "success":
                 resultado["lighting"] = lighting_style
                 # `image_url` apunta al fichero que existe, no a un CDN ficticio.

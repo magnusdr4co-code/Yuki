@@ -17,10 +17,14 @@ Model Armor inspecciona el prompt, argumentos y respuesta. La inferencia sale de
 Herramientas: `library_inventory`, `library_list`, `library_save_text`, `library_read`,
 `library_set_status`, `terminal_run`, `runtime_config_get`, `runtime_config_set`,
 `runtime_config_rollback`, `ritual_list`, `ritual_adopt`, `ritual_move`, `ritual_retire`
-`ritual_activate`, y las cinco del cuaderno de taller (`cuaderno_abiertos`,
+`ritual_activate`, las cinco del cuaderno de taller (`cuaderno_abiertos`,
 `cuaderno_anotar`, `cuaderno_intentar`, `cuaderno_resolver`, `cuaderno_sobre`) —
 el cuaderno guarda lo que quedó SIN RESOLVER de su oficio, no la obra, que es la
-Biblioteca; ver [`CUADERNO_DE_TALLER.md`](CUADERNO_DE_TALLER.md). Las de ritmos existen porque le pidieron «apúntate tareas y crons» y
+Biblioteca; ver [`CUADERNO_DE_TALLER.md`](CUADERNO_DE_TALLER.md)—, las de identidad e
+imagen (`identity_get`, `avatar_generate`, `image_generate`) y `encargos_recientes`, que
+lee los trabajos multimedia durables con el error real de los que fallaron: esos
+encargos no pasan por este turno ni por la memoria de la conversación, y sin ella Yuki
+no tenía de dónde contestar «¿qué problema hubo?». Las de ritmos existen porque le pidieron «apúntate tareas y crons» y
 el turno terminó con cero herramientas ejecutadas y un «no puedo» falso: no había ninguna
 que llamar. Cuando las hubo sólo podía **proponer**, y tenía que explicar que la
 aprobación pasaba «fuera de esta ventana de conversación» — cierto, y ése era el problema.
@@ -52,9 +56,26 @@ genera la pista y los clips, los concatena cuando procede y adjunta únicamente 
 verificados al DM. El arnés textual continúa reservado para Biblioteca, terminal y
 configuración.
 
+Una **imagen suelta** no va por ahí. «Genera tres imágenes con esas composiciones» llegó
+al encargo durable el 22 de septiembre, que no ve la conversación: salió el acuse de una
+portada, con el concepto sacado de la última letra de la Biblioteca, y un fallo sin
+motivo. Ahora `encargo.pedido_de_imagen` distingue la imagen suelta —la pinta Yuki en el
+turno del arnés, que sí ve el contexto reciente— de la portada **de una obra** (una
+canción, un vídeo, un sencillo o un identificador de Biblioteca), que sigue siendo del
+encargo durable porque se pinta leyendo su letra. El adaptador pasa al arnés la orden y
+la cantidad pedida; el arnés la pone en el prompt como orden, aplica un tope de
+imágenes por turno y, si al final no se llamó a ninguna herramienta de imagen o salieron
+menos de las pedidas, lo escribe él en la respuesta, no el modelo. Un resultado de
+imagen con `status` de error o simulado lleva recibo ⚠️, no ✓. `avatar_generate`
+antepone sus rasgos canónicos y, con un modelo Gemini, manda un avatar suyo con fichero
+como imagen de referencia; con Imagen lo dice en `reference_note` en vez de darla por
+usada.
+
 El reconocimiento tolera órdenes naturales breves como “procede con la canción y el
-vídeo”; no exige que el Productor repita “pásamelos”. El log del daemon registra la ruta
-elegida (`canal_produccion` y `media_entrega`) sin registrar contenido ni secretos. Un
+vídeo”; no exige que el Productor repita “pásamelos”. Cuando uno no sale, la frase que
+Yuki ofrece para repetirlo es una constante (`FRASE_DE_ENCARGO`) probada contra el
+detector: la mañana del 22 de septiembre improvisó cuatro que no disparaban nada. El log del daemon registra la ruta
+elegida (`canal_produccion`, `media_entrega` e `imagen`) sin registrar contenido ni secretos. Un
 fallo de un proveedor multimedia se comunica como fallo real de ese trabajo, no como una
 afirmación de que Yuki carece de herramientas. Los trabajos multimedia son durables: cada
 paso facturable —canción, cada clip, montaje y entrega— se persiste en `data/media_jobs/`
@@ -62,7 +83,12 @@ antes de gastar y se marca al tener fichero verificado, así que un reinicio rea
 el último paso y no vuelve a pagar lo hecho. Un paso cuyo fichero desapareció deja de
 contar como hecho; uno que falló tres veces cierra el trabajo nombrando el fallo, y un
 trabajo con pasos pendientes no se cierra como terminado. `!status` informa de los
-trabajos reanudables. El gasto de medios se reserva contra el presupuesto diario antes
+trabajos reanudables. Un fallo que corta el recorrido entero se dice con el error
+concreto y queda sellado en el campo `fallo` del trabajo. Archivar en la Biblioteca es
+contabilidad y no pone en juego la entrega: si el inventario falla, la obra ya pagada se
+adjunta igual y se avisa de lo que no se archivó; el inventario, además, trata el fallo
+de un fichero como error de ese fichero y adopta la copia huérfana que deja un proceso
+muerto entre escribir y confirmar el índice. El gasto de medios se reserva contra el presupuesto diario antes
 de llamar al proveedor: un tope alcanzado aplaza el paso con la cifra concreta, sin gastar
 intento ni cerrar el encargo. Si Lyria no sirve la pista, el respaldo local entrega una
 maqueta instrumental declarada como tal: la entrega nunca llama canción a lo que no canta.

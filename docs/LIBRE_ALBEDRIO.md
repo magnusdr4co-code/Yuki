@@ -214,7 +214,7 @@ Ahora cada salida lleva nombre y queda contada:
 | `techo_diario` | Ya hizo lo que puede hacer hoy | `agency.max_actions_per_day` |
 | `sin_deseos` | No hay impulso vivo, y el aburrimiento no llega para inventar uno | `agency.spontaneous_threshold` |
 | `bajo_umbral` | Quería algo, pero no lo bastante | `agency.min_intensity` |
-| `sin_energia` | No le da la energía para esa acción | esperar, o `agency.min_energy` |
+| `sin_energia` | No le da la energía para esa acción | esperar —se recupera en el descanso profundo, de 00:00 a 02:00, a 0,4 por hora; hasta el 22 de septiembre de 2026 no se recuperaba nunca, porque el tiempo no corría para el estado vital—, o `agency.min_energy` |
 
 ```bash
 python3 cli.py albedrio    # incluye el censo, con porcentajes

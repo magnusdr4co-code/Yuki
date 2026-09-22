@@ -8,11 +8,15 @@ from typing import Any, Dict
 from . import cotejo
 from .rituals import ACCIONES_DE_RITMO
 from ..tools.cuaderno import ARTES, Cuaderno
+from ..tools.media_jobs import MediaJobStore, describe_job
 
 logger = logging.getLogger("Yuki.ProducerHarness")
 
 MAX_TOOL_ROUNDS = 8
 MAX_TOOL_CALLS = 16
+# Más de esto en un turno no es un encargo de imagen, es una serie: se dice en
+# vez de pagarla entera por una frase. Cabe holgado en `MAX_TOOL_CALLS`.
+MAX_IMAGENES_POR_TURNO = 4
 
 # Ruta declarada en `provider_routing.routes`. El arnés salía siempre con
 # `agent.model`: el enrutado por tarea se aplicaba a los crons y no al único
@@ -107,11 +111,25 @@ TOOLS = [
                             "`custom` (por defecto) es una composición libre que no toca el manifiesto.",
          {"concept": TEXT, "variant": VARIANTE_DE_AVATAR, "aspect_ratio": TEXT, "lighting": LUZ},
          ["concept"]),
+    # Lo que el adaptador hizo por su cuenta. Los encargos durables no pasan
+    # por este turno ni quedan en la memoria de la conversación, así que el 22
+    # de septiembre, preguntada «¿qué problema hubo?» tras un encargo fallido,
+    # Yuki no tenía de dónde leerlo y contestó con otra causa.
+    spec("encargos_recientes", "Tus últimos encargos multimedia durables —canción, portada, "
+                               "vídeo—: qué se pidió, qué pasos salieron y el error real de los "
+                               "que fallaron. Léelo antes de explicar qué pasó con uno.",
+         {"limite": NUMBER}),
     spec("image_generate", "Genera cualquier otra imagen que el Productor pida en conversación "
                            "—retrato, ilustración, portada suelta— sin pasar por el encargo "
                            "multimedia durable. No la des por adjunta hasta ver el resultado real.",
          {"prompt": TEXT, "aspect_ratio": TEXT, "lighting": LUZ}, ["prompt"]),
 ]
+# La frase que Yuki ofrece cuando un encargo largo no salió. Es constante y
+# está probada contra el detector del adaptador: la mañana del 22 de septiembre
+# Yuki improvisó cuatro variantes —«genera la imagen de…», «genera la portada
+# de…»— que no disparaban nada, y el Productor las repitió una tras otra.
+FRASE_DE_ENCARGO = "genera el mp3 y pásamelo"
+
 POLICY = """
 EJECUCIÓN REAL DEL DM EMPAREJADO:
 Dispones exclusivamente de las herramientas adjuntas de Biblioteca, diagnóstico y
@@ -142,16 +160,23 @@ Enumera resultados, rutas y limitaciones. Una herramienta fallida no es un éxit
 Los encargos LARGOS de medios —canción y vídeo, facturados por segundo— NO pasan por
 ti: los despacha el adaptador antes de este turno, al reconocer la orden, con su propio
 trabajo durable que sobrevive a un reinicio. Si hace falta uno y no ha salido, di
-exactamente eso y pide que te lo repitan nombrando la cosa («genera el mp3 y pásamelo»).
-No expliques por qué «no puedes» ni describas la arquitectura: el encargo de esta mañana
-salió de este mismo DM.
+exactamente eso y pide que te lo repitan con esta frase, tal cual: «""" + FRASE_DE_ENCARGO + """».
+No inventes otras formulaciones: sólo ésa está comprobada. No expliques por qué «no
+puedes» ni describas la arquitectura: el encargo de esta mañana salió de este mismo DM.
+Esos encargos no pasan por tu memoria: si te preguntan qué pasó con uno, llama antes a
+`encargos_recientes` y cuenta lo que diga —el error real está ahí—. No expliques un
+fallo que no has leído.
 
 La IMAGEN es distinta: cabe entera en este turno, y aquí tienes las herramientas para
-hacerla tú misma. `identity_get` te dice con qué cara y voz te presentas hoy.
-`avatar_generate` pinta una composición de identidad —propia, en prosa, tuya— y la
-materializa en el acto; con `variant` en atelier/kage/seasonal/intimate sustituye esa
-variante canónica en tu manifiesto sin esperar al cron de las 04:00. `image_generate` es
-para cualquier otra imagen que te pidan —retrato, ilustración, portada suelta—. Si el
+hacerla tú misma. `identity_get` te dice con qué cara y voz te presentas hoy, y tus
+rasgos canónicos: descríbete con ellos, no con otros. `avatar_generate` pinta una
+composición de identidad —propia, en prosa, tuya— y la materializa en el acto: antepone
+tus rasgos al prompt y, si ya tienes un avatar con fichero, lo manda como imagen de
+referencia, así que úsala siempre que la imagen te represente a ti (tu rostro, tu
+silueta). Con `variant` en atelier/kage/seasonal/intimate sustituye esa variante
+canónica en tu manifiesto sin esperar al cron de las 04:00. `image_generate` es para
+cualquier otra imagen que te pidan —ilustración, escena, portada suelta— y no sabe quién
+eres: no le escribas «mi silueta». Si el
 Productor te pide una imagen, llámalas AHORA en este turno: no digas que «no ha salido»
 de una imagen sin haber llamado a la herramienta que la genera. Un resultado con
 `status: success` y ruta real se entrega como adjunto aparte de tu respuesta; uno
@@ -175,18 +200,45 @@ ejecutado y la discrepancia se publica junto a ella.
 """
 
 
+# Lo que un resultado de medios declara cuando **no** es una obra. Con esto el
+# recibo decía «✓ image_generate:» sobre un fallo de Vertex devuelto como
+# diccionario —no como excepción—, y el registro de ejecución, que es lo único
+# que no redacta el modelo, afirmaba un éxito.
+ESTADOS_SIN_OBRA = ("error", "failed", "simulated", "instrucciones")
+HERRAMIENTAS_DE_IMAGEN = ("avatar_generate", "image_generate")
+
+
+def _recibo(name, result):
+    """El recibo de una herramienta que respondió, con su estado real."""
+    if isinstance(result, dict) and result.get("status") in ESTADOS_SIN_OBRA:
+        motivo = str(result.get("error") or result.get("note") or "").strip()[:240]
+        return f"⚠️ {name}: {result['status']}" + (f" — {motivo}" if motivo else "")
+    if not isinstance(result, dict):
+        return f"✓ {name}"
+    proof = (result.get("path") or result.get("local_path") or result.get("index") or
+             (f"exit={result['exit_code']}" if "exit_code" in result else "") or
+             result.get("id") or f"{result.get('total', '')}")
+    return f"✓ {name}: {proof}"
+
+
 class ProducerHarness:
-    def __init__(self, agent):
+    def __init__(self, agent, pedido_de_imagen=None):
         self.agent = agent
+        # La orden de imagen que el adaptador leyó en el mensaje, si la hay
+        # (`encargo.PedidoDeImagen`). Llega aquí y no al encargo durable porque
+        # sólo este turno ve la conversación: «genera tres imágenes con esas
+        # composiciones» no significa nada sin las composiciones delante.
+        self.pedido_de_imagen = pedido_de_imagen
         # Adjuntos reales generados en este turno (avatar, imagen): el arnés
         # sólo devuelve texto, así que quien lo llama (`agent.generate_response`
         # y, de ahí, el adaptador de Discord) recoge esta lista para entregarlos
         # como fichero. Sólo entra un resultado con fichero verificado en disco;
         # una promesa o un marcador simulado nunca llega aquí.
         self.pending_media: list = []
+        self._imagenes_llamadas = 0
 
     async def run(self, system_prompt, user_message):
-        messages = [{"role": "system", "content": system_prompt + POLICY},
+        messages = [{"role": "system", "content": system_prompt + POLICY + self._orden_de_imagen()},
                     {"role": "user", "content": user_message}]
         receipts = []
         evidence = []
@@ -211,6 +263,7 @@ class ProducerHarness:
                     "cuaderno_intentar": self._cuaderno_intentar,
                     "cuaderno_resolver": self._cuaderno_resolver,
                     "cuaderno_sobre": self._cuaderno_sobre,
+                    "encargos_recientes": self._encargos_recientes,
                     "identity_get": self._identity_get,
                     "avatar_generate": self._avatar_generate,
                     "image_generate": self._image_generate}
@@ -252,10 +305,7 @@ class ProducerHarness:
                             raise ValueError("Argumentos rechazados por protección")
                         result = await asyncio.to_thread(handlers[name], **arguments)
                         output = {"ok": True, "result": result}
-                        proof = (result.get("path") or result.get("index") or
-                                 (f"exit={result['exit_code']}" if "exit_code" in result else "") or
-                                 result.get("id") or f"{result.get('total', '')}")
-                        receipts.append(f"✓ {name}: {proof}")
+                        receipts.append(_recibo(name, result))
                         evidence.append({"tool": name, "ok": True, "result": result})
                     except Exception as exc:
                         output = {"ok": False, "error": type(exc).__name__}
@@ -274,14 +324,75 @@ class ProducerHarness:
                 answer = await self._finalize(user_message, evidence)
         except Exception as exc:
             logger.warning("Turno DM interrumpido: %s", type(exc).__name__)
-            answer = "No he podido completar este turno. No queda ninguna tarea ejecutándose; conserva los resultados parciales de abajo."
+            # Qué lo cortó, dicho: «no he podido» sin el motivo es la prosa que
+            # la especificación prohíbe, y el motivo suele ser nuestro —el
+            # tope de operaciones, un proveedor caído—, no del Productor.
+            detalle = str(exc).strip()[:240]
+            answer = ("No he podido completar este turno: "
+                      f"{type(exc).__name__}" + (f" — {detalle}" if detalle else "") + ". "
+                      "No queda ninguna tarea ejecutándose; conserva los resultados parciales de abajo.")
         # Los recibos ya eran honestos; lo que faltaba era compararlos con la
         # prosa, que es lo que lee el Productor. En el incidente del 9 de
         # septiembre el registro mostraba una consulta y cuatro lecturas
         # mientras el texto daba por indexadas obras que no existían.
         answer += cotejo.bloque_de_correccion(self._cotejar(answer, evidence))
+        answer += self._aviso_de_imagen(evidence)
         # Recibos emitidos por el ejecutor, no inventados por el modelo.
         return answer + "\n\n**Registro de ejecución:**\n" + ("\n".join(receipts) or "Sin herramientas ejecutadas en este turno.")
+
+    def _orden_de_imagen(self):
+        """
+        La orden de imagen de este turno, dicha como orden.
+
+        La política general ya decía «si te piden una imagen, llámalas AHORA»,
+        y el 22 de septiembre, preguntada por qué no salía, Yuki contestó que
+        tenía `avatar_generate` e `image_generate` —y no llamó a ninguna—.
+        Aquí no queda a su lectura del mensaje: el adaptador ya decidió que
+        esto es un encargo, y cuántas.
+        """
+        pedido = self.pedido_de_imagen
+        if pedido is None:
+            return ""
+        tope = ""
+        if pedido.cantidad is not None and pedido.cantidad > MAX_IMAGENES_POR_TURNO:
+            tope = (f" Pide {pedido.cantidad}; en un turno pintas como mucho "
+                    f"{MAX_IMAGENES_POR_TURNO}: haz ésas y di cuántas quedan sin hacer.")
+        return (
+            f"\n\nENCARGO DE ESTE TURNO — IMAGEN: el Productor pide {pedido.describir()}. Es "
+            "una orden, no una pregunta: genéralas AHORA, una llamada por imagen, con "
+            "`avatar_generate` si la imagen te representa a ti (tu rostro, tu silueta, un avatar) "
+            "o `image_generate` para cualquier otra. El prompt lo escribes tú, entero y concreto, "
+            "a partir de lo pedido y del CONTEXTO RECIENTE: el generador no sabe quién eres ni qué "
+            "se habló, así que «mi silueta» o «esa composición» no le dicen nada. Si el pedido "
+            "señala algo que no está en el contexto, dilo en vez de inventarlo. No pidas que te lo "
+            "repitan con otras palabras." + tope
+        )
+
+    def _aviso_de_imagen(self, evidence):
+        """
+        Lo que salió de verdad frente a lo pedido, escrito por el ejecutor.
+
+        No depende de que el modelo lo cuente: se pidieron N imágenes y hay M
+        ficheros verificados en `pending_media`. Si no coinciden, se dice.
+        """
+        pedido = self.pedido_de_imagen
+        if pedido is None:
+            return ""
+        llamadas = [e for e in evidence if e.get("tool") in HERRAMIENTAS_DE_IMAGEN]
+        reales = len(self.pending_media)
+        if not llamadas:
+            return (f"\n\n⚠️ El Productor pidió {pedido.describir()} y en este turno no se llamó "
+                    "a ninguna herramienta de imagen: no hay ninguna imagen generada.")
+        esperadas = (min(pedido.cantidad, MAX_IMAGENES_POR_TURNO)
+                     if pedido.cantidad is not None else None)
+        if reales == 0:
+            veces = "1 vez" if len(llamadas) == 1 else f"{len(llamadas)} veces"
+            return (f"\n\n⚠️ Se llamó {veces} a la herramienta de imagen y ninguna llamada "
+                    "devolvió un fichero verificado: no hay imagen que adjuntar.")
+        if esperadas is not None and reales < esperadas:
+            return (f"\n\n⚠️ Se pidieron {esperadas} y salieron {reales} con fichero "
+                    "verificado; las demás no existen.")
+        return ""
 
     def _cotejar(self, answer, evidence):
         """Cotejo tolerante a fallo: no poder cotejar no puede tumbar el turno."""
@@ -392,6 +503,31 @@ class ProducerHarness:
         return {"obra": obra, "apuntes": [a.to_dict() for a in apuntes],
                 "abiertos": sum(1 for a in apuntes if a.estado == "abierto")}
 
+    # -- Encargos durables -------------------------------------------------
+
+    def _encargos_recientes(self, limite=5):
+        """
+        Los trabajos del adaptador, del más reciente al más viejo.
+
+        Se leen del mismo almacén que usa el adaptador cuando está cableado; si
+        no, del directorio por defecto, que es el mismo en la instancia.
+        """
+        tienda = (getattr(getattr(self.agent, "discord_adapter", None), "media_jobs", None)
+                  or MediaJobStore())
+        cuantos = max(1, min(int(limite or 5), 10))
+        trabajos = sorted(tienda.list_jobs(), key=lambda t: t.updated_at, reverse=True)[:cuantos]
+        return {"total": len(trabajos), "encargos": [{
+            "id": t.id,
+            "estado": t.status,
+            "pedido": t.order[:300],
+            "actualizado": t.updated_at,
+            "resumen": describe_job(t),
+            "fallo": t.fallo,
+            "pasos": [{"paso": p.id, "estado": p.status, "entregado": p.delivered,
+                       "intentos": p.attempts, "error": p.error, "nota": p.note}
+                      for p in t.steps],
+        } for t in trabajos]}
+
     # -- Identidad e imagen ------------------------------------------------
     #
     # Estos handlers son sync (el bucle de arriba los llama con
@@ -403,13 +539,26 @@ class ProducerHarness:
     def _identity_get(self):
         return self.agent.self_characterization.identity_summary()
 
+    def _contar_imagen(self):
+        """
+        El tope de imágenes por turno, aplicado y no sólo pedido en el prompt.
+        Cada llamada reserva crédito; un bucle del modelo no puede convertir
+        una frase en una serie.
+        """
+        if self._imagenes_llamadas >= MAX_IMAGENES_POR_TURNO:
+            raise ValueError(f"Tope de {MAX_IMAGENES_POR_TURNO} imágenes por turno alcanzado; "
+                             "el resto queda sin generar")
+        self._imagenes_llamadas += 1
+
     def _avatar_generate(self, concept, variant="custom", aspect_ratio="1:1", lighting="komorebi"):
+        self._contar_imagen()
         resultado = asyncio.run(self.agent.self_characterization.generate_named_avatar(
             concept=concept, variant=variant, aspect_ratio=aspect_ratio, lighting=lighting))
         self._registrar_adjunto(resultado, f"🎨 Avatar «{variant}»")
         return resultado
 
     def _image_generate(self, prompt, aspect_ratio="1:1", lighting="komorebi"):
+        self._contar_imagen()
         resultado = asyncio.run(self.agent.nous_portal.generate_image_frontier(
             prompt=prompt, aspect_ratio=aspect_ratio, lighting_style=lighting))
         self._registrar_adjunto(resultado, "🎨 Imagen generada")

@@ -428,6 +428,12 @@ class AutonomousTasks:
         impulsos y la tensión ha subido bastante, nace uno.
         """
         phase = self.agent.circadian.current_phase()
+        # La energía que mira la chispa tiene que ser la de ahora: si nadie le
+        # habla, éste es el único latido que deja correr la noche.
+        vital = getattr(self.agent, "vital_state", None)
+        if vital is not None and hasattr(vital, "avanzar"):
+            vital.avanzar(self.agent.circadian)
+            vital.save()
         decision = self.agent.agency_loop.decidir(phase=phase)
         if decision.impulso is not None:
             return await self.agent.execute_autonomous_will(decision.impulso)

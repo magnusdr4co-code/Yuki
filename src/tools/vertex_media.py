@@ -65,6 +65,12 @@ DURACION_VIDEO_MIN = 3
 DURACION_VIDEO_MAX = 10
 
 
+def _tipo_de_imagen(ruta: str) -> str:
+    """Tipo MIME de una imagen de partida, por su extensión."""
+    return {".jpg": "image/jpeg", ".jpeg": "image/jpeg",
+            ".webp": "image/webp"}.get(os.path.splitext(ruta)[1].lower(), "image/png")
+
+
 class VertexMediaError(RuntimeError):
     """Fallo al producir un medio. Se propaga como `status: error`, nunca como éxito."""
 
@@ -256,17 +262,33 @@ class VertexMediaClient:
     # --- Imagen ---------------------------------------------------------------
 
     async def generate_image(self, prompt: str, aspect_ratio: str = "1:1",
-                             model: Optional[str] = None) -> Dict[str, Any]:
+                             model: Optional[str] = None,
+                             reference_image: Optional[str] = None) -> Dict[str, Any]:
         """
         Pinta una imagen con Imagen y la guarda en `output/art/`.
 
         Una sola imagen por petición, como manda `skills/HERRAMIENTAS.md` §3:
         generar variantes "para elegir" sin que el productor lo pida es gasto.
+
+        `reference_image` es una imagen de partida —un avatar de Yuki que ya
+        existe— para que un retrato suyo se le parezca. Sólo la admiten los
+        modelos Gemini, que reciben imagen y texto juntos; con Imagen se pinta
+        sólo con el texto y el resultado lo dice en `reference_note`, en vez de
+        dar por usada una referencia que el modelo nunca vio.
         """
         if not self.is_available():
             return _resultado_error("Vertex no está configurado: falta VERTEX_PROJECT_ID.")
 
         model = model or self.image_model
+        admite_referencia = model.startswith("gemini-") or model.startswith("nano-banana")
+        referencia, nota_referencia = None, None
+        if reference_image:
+            if not admite_referencia:
+                nota_referencia = f"{model} no admite imagen de referencia: se pintó sólo con el texto"
+            elif not os.path.isfile(reference_image):
+                nota_referencia = "la imagen de referencia no existe: se pintó sólo con el texto"
+            else:
+                referencia = reference_image
 
         frenado = self.brake.blocked_reason("medios")
         if frenado:
@@ -285,10 +307,16 @@ class VertexMediaClient:
             from google.genai import types
 
             cliente = self._genai_client(self.location)
-            if model.startswith("gemini-") or model.startswith("nano-banana"):
+            if admite_referencia:
+                contenido: Any = prompt
+                if referencia:
+                    with open(referencia, "rb") as fichero:
+                        contenido = [types.Part.from_bytes(data=fichero.read(),
+                                                           mime_type=_tipo_de_imagen(referencia)),
+                                     prompt]
                 respuesta = cliente.models.generate_content(
                     model=model,
-                    contents=prompt,
+                    contents=contenido,
                     config=types.GenerateContentConfig(response_modalities=["IMAGE"]),
                 )
                 for candidato in getattr(respuesta, "candidates", None) or []:
@@ -335,7 +363,8 @@ class VertexMediaClient:
 
         logger.info(f"🎨 Imagen real generada con {model}: {destino}")
         marca = self.marker.mark(destino, model=model, prompt=prompt, kind="visual")
-        receta.escribir(destino, motor=model, prompt=prompt, aspect_ratio=aspect_ratio)
+        receta.escribir(destino, motor=model, prompt=prompt, aspect_ratio=aspect_ratio,
+                        imagen_de_partida=referencia)
         return {
             "marking": marca,
             "status": "success",
@@ -345,6 +374,8 @@ class VertexMediaClient:
             "prompt_used": prompt,
             "local_path": destino,
             "aspect_ratio": aspect_ratio,
+            "reference_image": referencia,
+            "reference_note": nota_referencia,
             "bytes": len(datos),
             "estimated_cost_usd": PRECIO_IMAGEN,
             "created_at": time.time(),

@@ -59,6 +59,16 @@ _OBJETO_MATERIAL = (
 )
 
 
+def ordena_producir(texto_plegado: str) -> bool:
+    """Si el texto (ya pasado por `fold`) manda producir algo."""
+    return any(token in texto_plegado for token in _ORDENA_PRODUCIR)
+
+
+def solo_pregunta(texto_plegado: str) -> bool:
+    """Si el texto (ya pasado por `fold`) pregunta por una posibilidad en vez de encargarla."""
+    return any(token in texto_plegado for token in _SOLO_PREGUNTA)
+
+
 def looks_like_media_delivery_request(content: str) -> bool:
     """
     Encargo explícito de generar y adjuntar medios en el DM del Productor.
@@ -76,12 +86,12 @@ def looks_like_media_delivery_request(content: str) -> bool:
     emparejado, y porque el acuse dice qué va a producir antes de gastar.
     """
     text = fold(content)
-    asks_to_make = any(token in text for token in _ORDENA_PRODUCIR)
+    asks_to_make = ordena_producir(text)
     asks_for_media = any(token in text for token in _MEDIOS)
     asks_for_delivery = any(token in text for token in _PIDE_ENTREGA)
     names_the_thing = any(token in text for token in _OBJETO_MATERIAL)
     asks_for_both_media = sum(token in text for token in ("cancion", "video")) == 2
-    if any(token in text for token in _SOLO_PREGUNTA):
+    if solo_pregunta(text):
         return False
     return asks_to_make and asks_for_media and (
         asks_for_delivery or names_the_thing or asks_for_both_media)

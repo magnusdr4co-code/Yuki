@@ -24,9 +24,10 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from typing import List, Tuple
+from typing import List, Optional, Tuple
 
 from .discord_intents import fold as _fold
+from .discord_intents import ordena_producir, solo_pregunta
 
 # Recorte de las indicaciones que se incrustan en un prompt. No es censura: es
 # que un pedido largo desplaza al guion y a la letra dentro de la ventana del
@@ -147,3 +148,84 @@ def leer_encargo(pedido: str, segmentos_disponibles: int) -> Encargo:
         segmentos=_segmentos_pedidos(texto, segmentos_disponibles),
         matices=(pedido or "").strip()[:MAX_MATICES],
     )
+
+
+# --- Imagen suelta: no es un encargo durable --------------------------------
+#
+# El 22 de septiembre Yuki escribió en el DM tres composiciones en prosa para
+# sus avatares y el Productor pidió «genera tres imágenes con esas
+# composiciones». El pedido entró por aquí —`imagen` acababa de sumarse al
+# vocabulario de portada— y salió **una** portada de sencillo de *Herrumbre y
+# Escarcha*: el encargo durable no ve la conversación, así que «esas
+# composiciones» no significaba nada, y la única materia que tenía a mano era
+# la última letra de la Biblioteca. Dos veces seguidas, con la imagen pagada.
+#
+# Una imagen suelta cabe entera en un turno del arnés, que sí lee el contexto
+# reciente y tiene `avatar_generate` e `image_generate`. Al encargo durable sólo
+# va la portada **de una obra sonora o audiovisual**: la que se pinta leyendo su
+# letra.
+
+_IMAGEN = (
+    "imagen", "imagenes", "foto", "fotos", "retrato", "retratos", "dibujo", "dibujos",
+    "avatar", "avatares", "ilustracion", "ilustraciones", "estampa", "estampas",
+    "portada", "portadas", "caratula", "lamina", "laminas",
+)
+
+# Verbos que ya son el encargo aunque no digan «genera»: «píntame», «dibújala».
+_ORDENA_PINTAR = ("pinta", "dibuja", "ilustra", "retrata")
+
+# Lo que ata la imagen a una obra de la Biblioteca: entonces es la portada de
+# esa obra y la pinta el encargo durable a partir de su letra.
+_OBRA_DE_ORIGEN = (_PIEZAS["cancion"] + _PIEZAS["video"]
+                   + ("sencillo", "single", "album", "disco", "letra", "poema"))
+_ID_DE_BIBLIOTECA = re.compile(r"\b(?:palabra|sonora|visual|audiovisual)-[0-9a-f]{6,}\b")
+
+_CONTABLES = ("imagenes", "imagen", "fotos", "foto", "retratos", "retrato", "dibujos",
+              "dibujo", "avatares", "avatar", "ilustraciones", "ilustracion", "estampas",
+              "estampa", "composiciones", "composicion", "versiones", "version",
+              "variantes", "variante", "propuestas", "propuesta", "portadas", "portada")
+
+
+@dataclass(frozen=True)
+class PedidoDeImagen:
+    """
+    Una orden de imagen suelta. `cantidad` es la pedida, o `None` si el pedido
+    dice «imágenes» sin número: entonces decide quien pinta, y lo dice.
+    """
+
+    cantidad: Optional[int]
+
+    def describir(self) -> str:
+        if self.cantidad is None:
+            return "varias imágenes, sin número dicho"
+        return f"{self.cantidad} " + ("imagen" if self.cantidad == 1 else "imágenes")
+
+
+def _cantidad_de_imagenes(texto: str) -> Optional[int]:
+    numeros = "|".join(sorted(_NUMEROS, key=len, reverse=True))
+    match = re.search(rf"\b(\d{{1,2}}|{numeros})\s+(?:\w+\s+)?(?:{'|'.join(_CONTABLES)})\b",
+                      texto)
+    if match:
+        bruto = match.group(1)
+        return int(bruto) if bruto.isdigit() else _NUMEROS[bruto]
+    plural = ("imagenes", "fotos", "retratos", "dibujos", "avatares", "ilustraciones",
+              "estampas", "portadas", "laminas", "composiciones")
+    return None if _menciona(texto, plural) else 1
+
+
+def pedido_de_imagen(pedido: str) -> Optional[PedidoDeImagen]:
+    """
+    Si el pedido es una imagen suelta —no la portada de una obra—, cuántas.
+
+    Devuelve `None` cuando no manda pintar nada, cuando sólo pregunta si se
+    podría, o cuando la imagen es la portada de una canción, un vídeo o una obra
+    designada por su identificador: eso sigue siendo del encargo durable.
+    """
+    texto = _fold(pedido or "")
+    if not (ordena_producir(texto) or any(verbo in texto for verbo in _ORDENA_PINTAR)):
+        return None
+    if solo_pregunta(texto) or not _menciona(texto, _IMAGEN):
+        return None
+    if _menciona(texto, _OBRA_DE_ORIGEN) or _ID_DE_BIBLIOTECA.search(texto):
+        return None
+    return PedidoDeImagen(cantidad=_cantidad_de_imagenes(texto))

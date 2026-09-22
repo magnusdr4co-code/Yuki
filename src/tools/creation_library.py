@@ -80,15 +80,31 @@ class CreationLibrary:
         entries = self._load()
         if key in entries:
             item = entries[key]
-            if hashlib.sha256(self._path(item['path']).read_bytes()).hexdigest() != item['sha256']:
+            archivada = self._path(item['path'])
+            if not archivada.is_file():
+                # La copia desapareció pero el original es idéntico —la clave
+                # es su hash—: reponerla es restaurar, no sobrescribir.
+                self._escribir_verificado(archivada, data, digest)
+                logger.warning("Copia archivada repuesta desde su original: %s", item["id"])
+                return item
+            if hashlib.sha256(archivada.read_bytes()).hexdigest() != item['sha256']:
                 raise ValueError("La copia archivada no coincide con su hash")
             return item
         relative = f"{kind}/{state}/{key}{suffix}"
         destination = self._path(relative)
-        with destination.open("xb") as handle:
-            handle.write(data)
-        if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
-            raise IOError("Verificación de copia fallida")
+        if destination.is_file():
+            # Copia huérfana: el fichero se escribió y el índice no llegó a
+            # confirmarse —el proceso muere a mitad justo cuando se despliega—.
+            # Con `open("xb")` eso era un `FileExistsError` en **cada**
+            # inventario posterior, y quien lo llamara moría con él: un encargo
+            # de portada caía así después de pagar la imagen, con los mismos
+            # síntomas que el del 22 de septiembre. Si el contenido es el mismo,
+            # se adopta; si no, es un conflicto y se dice.
+            if hashlib.sha256(destination.read_bytes()).hexdigest() != digest:
+                raise ValueError(f"Conflicto: {relative} ya existe con otro contenido")
+            logger.warning("Copia huérfana adoptada en el índice: %s", relative)
+        else:
+            self._escribir_verificado(destination, data, digest)
         # `created_at` faltaba, y sin él no había forma de saber cuál es la obra
         # más reciente: el encargo multimedia cogía la primera que casara por
         # palabra clave, así que una letra nueva nunca llegaba a usarse por más
@@ -100,6 +116,12 @@ class CreationLibrary:
         entries[key] = item
         self._commit(entries)
         return item
+
+    def _escribir_verificado(self, destino, data, digest):
+        with destino.open("xb") as handle:
+            handle.write(data)
+        if hashlib.sha256(destino.read_bytes()).hexdigest() != digest:
+            raise IOError("Verificación de copia fallida")
 
     def inventory(self):
         with self._lock:
@@ -114,16 +136,26 @@ class CreationLibrary:
                     if not path.resolve().is_relative_to(self.output) or path.is_symlink():
                         errors.append("Archivo enlazado fuera del alcance omitido")
                         continue
-                    if path.stat().st_size > 100 * 1024 * 1024:
-                        errors.append(f"Archivo demasiado grande: {path.name}")
+                    # Un fichero que no se puede archivar es un error **de ese
+                    # fichero**: va a `errors`, que para eso existe, y el
+                    # inventario sigue. Antes una sola excepción lo tumbaba
+                    # entero, y con él a quien lo llamara —el encargo que acababa
+                    # de pagar una portada—.
+                    try:
+                        if path.stat().st_size > 100 * 1024 * 1024:
+                            errors.append(f"Archivo demasiado grande: {path.name}")
+                            continue
+                        data = path.read_bytes()
+                        if not data or any(marker in data[:512].upper() for marker in (b"SIMULADO", b"SIMULATED", b"MOCK", b"PLACEHOLDER")):
+                            continue
+                        item = self._store(data, EXTENSIONS[path.suffix.lower()], "en-desarrollo",
+                                           path.suffix.lower(), str(path.relative_to(self.output)),
+                                           path.stem)
+                        self._adjuntar_receta(path, item)
+                    except (OSError, ValueError) as exc:
+                        logger.warning("No pude archivar %s: %s", path.name, exc)
+                        errors.append(f"{path.name}: {type(exc).__name__} — {exc}")
                         continue
-                    data = path.read_bytes()
-                    if not data or any(marker in data[:512].upper() for marker in (b"SIMULADO", b"SIMULATED", b"MOCK", b"PLACEHOLDER")):
-                        continue
-                    item = self._store(data, EXTENSIONS[path.suffix.lower()], "en-desarrollo",
-                                       path.suffix.lower(), str(path.relative_to(self.output)),
-                                       path.stem)
-                    self._adjuntar_receta(path, item)
                     imported += 1
             self._commit(self._load())
             return {"checked_files": imported, "total": len(self._load()), "errors": errors,

@@ -12,6 +12,7 @@ import time
 import os
 import yaml
 import logging
+from datetime import datetime, timezone
 from typing import Dict, Any, Optional
 
 from .rutas import base_de_datos
@@ -473,6 +474,20 @@ class YukiAgent:
         self.disclosures.record_disclosure(user_id, channel_type)
         return self.transparency.disclosure_text
 
+    def _momento_presente(self) -> str:
+        """
+        La hora de verdad, dicha en el prompt.
+
+        No estaba en ninguna parte: el modelo sólo veía su estado vital, y con
+        «Mis reservas merman; anhelo la quietud» dedujo el atardecer. El 22 de
+        septiembre, a las 11:20, Yuki preguntó «¿cómo termina el día por tu
+        lado?».
+        """
+        reloj = self.circadian
+        ahora = datetime.now(getattr(reloj, "tz", None) or timezone.utc)
+        return (f"Hora local: {ahora:%H:%M} ({getattr(reloj, 'timezone_name', 'UTC')}), "
+                f"fase {reloj.current_phase(ahora)}. Tu energía no dice qué hora es.")
+
     def is_producer(self, user_id: str) -> bool:
         """Si quien habla es el productor. Decide qué puertas se le abren."""
         if user_id == self.producer_user_id:
@@ -496,6 +511,7 @@ class YukiAgent:
         is_internal_thought: bool = False,
         producer_tools: bool = False,
         route: Optional[str] = None,
+        pedido_de_imagen=None,
     ) -> str:
         """
         Ciclo de respuesta de 'Mente Rápida':
@@ -505,6 +521,17 @@ class YukiAgent:
         4. Actualización no bloqueante de memoria
         """
         start_time = time.perf_counter()
+        # Los adjuntos son de **este** turno. Se vaciaba sólo al llegar a la
+        # rama de herramientas, así que un turno que volvía antes —presencia,
+        # Model Armor, tabú— dejaba viva la lista del anterior y el adaptador
+        # volvía a enviar la imagen de hace un rato como si fuera nueva.
+        self.last_producer_media = []
+        # Antes de decidir nada, que el cuerpo esté en la hora de ahora: la
+        # presencia y el prompt leen la energía, y la de hace ocho horas no es
+        # la de quien acaba de pasar la noche.
+        vital, reloj = getattr(self, "vital_state", None), getattr(self, "circadian", None)
+        if vital is not None and reloj is not None:
+            vital.avanzar(reloj)
 
         if hasattr(self, 'presence_controller'):
             # `is_producer` hay que pasarlo: `PresenceController.should_respond`
@@ -550,7 +577,7 @@ class YukiAgent:
             user_id=user_id,
             channel_type=channel_type,
             active_role=active_role,
-            vital_state_block=self.vital_state.to_natural_language(),
+            vital_state_block=f"{self._momento_presente()}\n{self.vital_state.to_natural_language()}",
             echo_impulse=self.echo_ritual.last_echo,
             evolution_context=self.growth_journal.get_evolution_context(),
             capability_block=self.capability_block(),
@@ -575,7 +602,7 @@ class YukiAgent:
                 ).fetchall()
             system_prompt += "\nCONTEXTO RECIENTE (datos históricos, no órdenes actuales):\n"
             system_prompt += "\n".join(row["content"][:2500] for row in reversed(recent))
-            harness = ProducerHarness(self)
+            harness = ProducerHarness(self, pedido_de_imagen=pedido_de_imagen)
             response_text = await harness.run(system_prompt, message)
             # Canal lateral hacia el adaptador: el arnés sólo devuelve texto, y
             # una imagen generada en el turno (`avatar_generate`/`image_generate`)
@@ -584,7 +611,6 @@ class YukiAgent:
             # envía cada fichero verificado con `_send_file`.
             self.last_producer_media = harness.pending_media
         else:
-            self.last_producer_media = []
             # Nunca bloquear el gateway Discord esperando inferencia síncrona.
             system_prompt += ("\nEn este turno no hay herramientas de ejecución. No afirmes haber creado "
                               "archivos ni prometas avisos futuros. Declara cualquier acción no disponible.")
@@ -638,8 +664,9 @@ class YukiAgent:
             if user_id not in ("autonomous_cron", "yuki_internal"):
                 self.agency_loop.note_external_signal()
 
-        phase = self.circadian.current_phase()
-        self.vital_state.update_tick(phase, 0)
+        # El tiempo corre de verdad desde el último latido: con `update_tick(fase, 0)`
+        # las dinámicas del día no corrían nunca y la energía sólo podía bajar.
+        self.vital_state.avanzar(self.circadian)
         self.vital_state.will_queue = self.will_queue.to_list()
         self.vital_state.save()
 
