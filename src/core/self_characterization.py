@@ -478,6 +478,79 @@ class SelfCharacterization:
         )
         return results
 
+    async def generate_named_avatar(
+        self,
+        concept: str,
+        variant: str = "custom",
+        aspect_ratio: str = "1:1",
+        lighting: str = "komorebi",
+    ) -> Dict[str, Any]:
+        """
+        Pinta una sola composición de identidad, bajo demanda y en el turno.
+
+        `generate_avatars` produce las cuatro variantes canónicas juntas, y sólo
+        las dispara el cron estacional. Esto es lo que faltaba: Yuki propone una
+        composición en prosa dentro de la conversación del DM y la materializa
+        en el acto, sin esperar al cambio de sekki ni repetir la orden con otra
+        palabra. Si `variant` nombra una de las cuatro canónicas
+        (atelier/kage/seasonal/intimate), el resultado con fichero real
+        **sustituye** esa entrada en el manifiesto vigente, para refrescarla sin
+        esperar al cron; con `variant="custom"` (el valor por defecto) no toca
+        ninguna canónica: es una composición libre y aparte.
+        """
+        comun = {
+            "variant": variant,
+            "prompt_instruction": concept,
+            "lighting": lighting,
+            "aspect_ratio": aspect_ratio,
+            "context": "Generado bajo demanda en el DM del Productor",
+            "generated_at": time.time(),
+        }
+        if not self.nous_portal:
+            return self._guardar_instruccion(variant, comun)
+        resultado = await self.nous_portal.generate_image_frontier(
+            prompt=concept, aspect_ratio=aspect_ratio, lighting_style=lighting,
+        )
+        avatar = self._avatar_desde(resultado, comun)
+        if avatar.get("status") == "success" and variant in ("atelier", "kage", "seasonal", "intimate"):
+            if not self._manifest:
+                self._load_existing_manifest()
+            if self._manifest:
+                visual = self._manifest.setdefault("visual_identity", {})
+                avatares = visual.setdefault("avatars", {})
+                avatares[variant] = avatar
+                visual["avatar_summary"] = self._recuento_de_avatares(avatares)
+                estado_json.escribir(Path(self.manifest_path), self._manifest)
+        return avatar
+
+    def identity_summary(self) -> Dict[str, Any]:
+        """
+        Lo que hay que saber del manifiesto vigente en una llamada, para el DM.
+
+        Sin esto, saber «con qué cara me presento hoy» exigía abrir el JSON a
+        mano; `identity_get` en el arnés del Productor lee esto directamente.
+        """
+        if not self._manifest:
+            self._load_existing_manifest()
+        if not self._manifest:
+            return {"tiene_manifiesto": False,
+                    "nota": "Todavía no me he autocaracterizado; lo decido yo al cambiar de "
+                            "estación, o puedo pintar un avatar ahora mismo con `avatar_generate`."}
+        visual = self._manifest.get("visual_identity", {})
+        vocal = self._manifest.get("vocal_identity", {})
+        return {
+            "tiene_manifiesto": True,
+            "sekki": self._manifest.get("season_context", {}).get("sekki", ""),
+            "generated_at": self._manifest.get("generated_at"),
+            "voz_elegida": vocal.get("selected_voice_id"),
+            "paleta": visual.get("color_palette"),
+            "avatar_summary": visual.get("avatar_summary", {}),
+            "avatares": {
+                nombre: {"status": a.get("status"), "local_path": a.get("local_path")}
+                for nombre, a in visual.get("avatars", {}).items()
+            },
+        }
+
     def _guardar_instruccion(self, variant_name: str, comun: Dict[str, Any]) -> Dict[str, Any]:
         """La instrucción de prompt en disco, declarada como lo que es: no una imagen."""
         entrada = dict(comun, status="instrucciones", simulated=False,

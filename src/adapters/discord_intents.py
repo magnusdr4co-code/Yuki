@@ -43,14 +43,20 @@ _ORDENA_PRODUCIR = ("crea", "crear", "genera", "generar", "haz", "realiza",
 _SOLO_PREGUNTA = ("podrias", "podras", "podrias", "seria posible", "se podria",
                   "algun dia", "en el futuro", "te ves capaz")
 
-_MEDIOS = ("cancion", "musica", "audio", "video", "mp3", "mp4", "pista", "tema musical")
+_MEDIOS = (
+    "cancion", "musica", "audio", "video", "mp3", "mp4", "pista", "tema musical",
+    "imagen", "imagenes", "foto", "retrato", "dibujo", "avatar", "portada", "ilustracion", "estampa",
+)
 
 # Palabras que piden el fichero en el DM. No son obligatorias: ver abajo.
 _PIDE_ENTREGA = ("aqui", "pasame", "pasamela", "pasamelo", "adjunta", "envia", "mandame")
 
 # Un objeto material: lo que distingue «genera el archivo de audio» de «¿podrías
 # generar música algún día?». Si el Productor nombra la cosa, está encargándola.
-_OBJETO_MATERIAL = ("archivo", "fichero", "audio", "mp3", "mp4", "pista", "cancion", "tema")
+_OBJETO_MATERIAL = (
+    "archivo", "fichero", "audio", "mp3", "mp4", "pista", "cancion", "tema",
+    "imagen", "foto", "retrato", "dibujo", "avatar", "portada", "ilustracion", "estampa",
+)
 
 
 def looks_like_media_delivery_request(content: str) -> bool:

@@ -44,6 +44,19 @@ class LibraryDoble:
         return {}
 
 
+class LibrarySinLetra:
+    """Biblioteca sin ninguna letra: una portada no debería depender de que exista una."""
+
+    def list_entries(self):
+        return {"entries": []}
+
+    def read_entry(self, entry_id):
+        raise AssertionError("no debería leerse ninguna entrada sin letra verificable")
+
+    def inventory(self):
+        return {}
+
+
 class PortalDoble:
     """Anota cada prompt facturado: es lo que permite ver si el pedido llegó."""
 
@@ -97,7 +110,7 @@ class CanalDoble:
             self.textos.append(content)
 
 
-def _adaptador(tmp_path, monkeypatch, simulada=False):
+def _adaptador(tmp_path, monkeypatch, simulada=False, biblioteca=None):
     monkeypatch.setenv("DISCORD_PAIRED_PRODUCER_ID", "42")
     monkeypatch.setenv("DATABASE_PATH", str(tmp_path / "data" / "yuki.db"))
     portal = PortalDoble(tmp_path)
@@ -105,7 +118,8 @@ def _adaptador(tmp_path, monkeypatch, simulada=False):
     adaptador = DiscordAdapter.__new__(DiscordAdapter)
     adaptador.agent = types.SimpleNamespace(
         nous_portal=portal, media_creator=creador,
-        creation_library=LibraryDoble(tmp_path), discord_adapter=None,
+        creation_library=biblioteca if biblioteca is not None else LibraryDoble(tmp_path),
+        discord_adapter=None,
     )
     adaptador.paired_producer_ids = {"42"}
     adaptador._workflow_tasks = set()
@@ -186,6 +200,23 @@ def test_reanudar_recompone_los_mismos_pasos(tmp_path, monkeypatch):
     plan = leer_encargo(pedido, 4)
     assert {identificador for identificador, _ in plan.steps()} == hechos
     assert len(portal.prompts_clip) == 2
+
+
+def test_la_portada_no_exige_letra_verificable_en_biblioteca(tmp_path, monkeypatch):
+    """
+    Una portada o un retrato no dependen de que exista una letra archivada.
+
+    El incidente real: pedir una imagen sin que hubiera una obra de
+    «palabra» en la Biblioteca abortaba el encargo entero con «sin letra
+    verificable», aunque nadie había pedido cantar nada. Sólo el CANTO exige
+    letra de verdad; pintar no.
+    """
+    adaptador, _portal, creador = _adaptador(tmp_path, monkeypatch, biblioteca=LibrarySinLetra())
+    canal = _correr(adaptador, "hazme un retrato en tinta sumi-e, sin canción")
+
+    assert creador.conceptos, "la portada no se generó pese a no depender de una letra"
+    assert any(nombre.startswith("portada_") for nombre in canal.adjuntos)
+    assert not any("sin letra verificable" in texto for texto in canal.textos)
 
 
 def test_una_portada_simulada_no_se_da_por_portada(tmp_path, monkeypatch):

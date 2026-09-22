@@ -64,6 +64,23 @@ class AutonomousTasks:
         )
         return reflection
 
+    @staticmethod
+    def _concepto_visual_desde_reflexion(texto: str, mood: float) -> str:
+        """
+        El concepto visual matinal nace del haiku de hoy, no de una escena fija.
+
+        Era una constante —«Luz dorada de la mañana... salón de té tradicional...»—,
+        así que el arte matutino era el mismo cuadro cada día, sin relación con lo
+        que Yuki acababa de escribir. Ahora parte de las primeras líneas del
+        propio texto: la imagen ilustra la reflexión de esa mañana concreta.
+        """
+        primeras = " ".join(
+            linea.strip() for linea in (texto or "").splitlines() if linea.strip()
+        )[:300]
+        tono = "luz dorada y calidez" if mood > 0.55 else "luz fría y contención"
+        base = primeras or "El silencio de una mañana cualquiera."
+        return f"Interpretación visual de esta reflexión matutina ({tono}): {base}"
+
     async def morning_inspiration_drop(self):
         """
         07:30 AM - Yuki crea y publica un haiku y una obra visual para sus canales.
@@ -93,7 +110,7 @@ class AutonomousTasks:
             route="social_formatting",
         )
 
-        visual_concept = "Luz dorada de la mañana entrando en un salón de té tradicional con reflejos de lluvia en el cristal."
+        visual_concept = self._concepto_visual_desde_reflexion(morning_text, mood)
 
         image_result = None
         voice_result = None

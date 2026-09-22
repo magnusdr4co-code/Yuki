@@ -58,6 +58,13 @@ def call(name, arguments=None):
         "name": name, "arguments": json.dumps(arguments or {})}}
 
 
+def _async_result(value):
+    """Doble asíncrono mínimo: ignora argumentos y devuelve `value` al await."""
+    async def _call(*args, **kwargs):
+        return value
+    return _call
+
+
 def agent_for(tmp_path, turns, allowed=True):
     class Router:
         def generate_with_tools(self, messages, tools, route=None):
@@ -79,6 +86,14 @@ def agent_for(tmp_path, turns, allowed=True):
     agent.reconfigure_runtime = lambda path, value, actor, reason="": store.set(path, value, actor=actor, reason=reason)
     agent.rollback_runtime = lambda path, actor, reason="": store.rollback(path, actor=actor, reason=reason)
     agent._call_llm_inference = lambda system, message: "Cierre fiable basado en los resultados ejecutados."
+    agent.self_characterization = SimpleNamespace(
+        identity_summary=lambda: {"tiene_manifiesto": False, "nota": "sin manifiesto todavía"},
+        generate_named_avatar=_async_result({"status": "success", "local_path": str(tmp_path / "avatar.png"),
+                                             "variant": "custom"}),
+    )
+    agent.nous_portal = SimpleNamespace(
+        generate_image_frontier=_async_result({"status": "success", "local_path": str(tmp_path / "imagen.png")}),
+    )
     return agent
 
 
@@ -122,6 +137,66 @@ def test_harness_runs_safe_terminal_and_reconfigures_overlay(tmp_path):
     assert "✓ terminal_run: exit=0" in answer
     assert "✓ runtime_config_set" in answer
     assert agent.runtime_config_get()["values"]["vertex_ai.temperature"] == 0.8
+
+
+def test_harness_consults_identity_without_generating_anything(tmp_path):
+    turns = [
+        {"role": "assistant", "content": "", "tool_calls": [call("identity_get")]},
+        {"role": "assistant", "content": "Sin manifiesto todavía."},
+    ]
+    agent = agent_for(tmp_path, turns)
+    answer = asyncio.run(ProducerHarness(agent).run("Yuki", "¿con qué cara te presentas hoy?"))
+    assert "✓ identity_get" in answer
+
+
+def test_harness_paints_an_avatar_and_registers_the_attachment(tmp_path):
+    """
+    El fallo real: Yuki proponía una composición de avatar en prosa y no tenía
+    forma de pintarla en el mismo turno. `avatar_generate` la materializa, y el
+    resultado con fichero real queda en `pending_media` para que el adaptador
+    lo entregue como adjunto —no como una ruta mencionada en el texto.
+    """
+    (tmp_path / "avatar.png").write_bytes(b"png")
+    turns = [
+        {"role": "assistant", "content": "", "tool_calls": [call("avatar_generate", {
+            "concept": "Retrato en tinta sumi-e, contraste acero y sandalo", "variant": "custom"})]},
+        {"role": "assistant", "content": "Pintado."},
+    ]
+    agent = agent_for(tmp_path, turns)
+    harness = ProducerHarness(agent)
+    answer = asyncio.run(harness.run("Yuki", "pinta el avatar que propusiste"))
+    assert "✓ avatar_generate" in answer
+    assert harness.pending_media == [{"path": str(tmp_path / "avatar.png"), "caption": "🎨 Avatar «custom»"}]
+
+
+def test_harness_generates_an_image_on_the_producers_order(tmp_path):
+    """«Genera una imagen» ya no depende de que el adaptador reconozca la orden antes: el arnés la ejecuta."""
+    (tmp_path / "imagen.png").write_bytes(b"png")
+    turns = [
+        {"role": "assistant", "content": "", "tool_calls": [call("image_generate", {
+            "prompt": "Retrato de Yuki en el atelier"})]},
+        {"role": "assistant", "content": "Generada."},
+    ]
+    agent = agent_for(tmp_path, turns)
+    harness = ProducerHarness(agent)
+    answer = asyncio.run(harness.run("Yuki", "genera una imagen de ti misma"))
+    assert "✓ image_generate" in answer
+    assert harness.pending_media == [{"path": str(tmp_path / "imagen.png"), "caption": "🎨 Imagen generada"}]
+
+
+def test_harness_does_not_register_a_failed_or_simulated_image_as_attachment(tmp_path):
+    """Un marcador simulado o un fallo no son un adjunto: no hay fichero real que entregar."""
+    turns = [
+        {"role": "assistant", "content": "", "tool_calls": [call("image_generate", {
+            "prompt": "Retrato de Yuki en el atelier"})]},
+        {"role": "assistant", "content": "No salió."},
+    ]
+    agent = agent_for(tmp_path, turns)
+    agent.nous_portal.generate_image_frontier = _async_result(
+        {"status": "simulated", "local_path": str(tmp_path / "marcador.simulado.txt"), "simulated": True})
+    harness = ProducerHarness(agent)
+    asyncio.run(harness.run("Yuki", "genera una imagen de ti misma"))
+    assert harness.pending_media == []
 
 
 def test_terminal_rejects_shell_and_sensitive_paths():

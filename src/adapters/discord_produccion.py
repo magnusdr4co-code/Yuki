@@ -740,14 +740,25 @@ class ProduccionMultimedia:
         job.channel_id = str(getattr(channel, "id", "")) or job.channel_id
 
         try:
+            # La letra se busca siempre —enriquece la portada o el guión del
+            # vídeo cuando existe una obra relacionada en la Biblioteca—, pero
+            # sólo el CANTO la exige de verdad: no hay canción sin letra, y sí
+            # hay portada o retrato que pintar sin ella, a partir del propio
+            # texto del pedido (`_semilla_visual` + los matices literales que
+            # `plan.con_matices` ya anexa). Exigirla para cualquier pedido
+            # bloqueaba «genera un retrato de...» sin motivo técnico real: eso
+            # era el fallo, no una salvaguarda.
             lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema", "herrumbre"),
                                                pedido=content)
-            lyrics_path = self._library_file(lyrics_entry)
-            if not lyrics_entry or not lyrics_path:
+            lyrics_path = self._library_file(lyrics_entry) if lyrics_entry else None
+            if lyrics_entry and not lyrics_path:
+                lyrics_entry = None
+            if plan.cancion and not lyrics_entry:
                 self.media_jobs.abandon(job, "sin letra verificable en Biblioteca")
                 await report("❌ No encuentro una letra verificable en la Biblioteca; no generaré una canción sin texto fuente.")
                 return
-            lyrics = self.agent.creation_library.read_entry(lyrics_entry["id"]).get("content", "")
+            lyrics = (self.agent.creation_library.read_entry(lyrics_entry["id"]).get("content", "")
+                     if lyrics_entry else "")
             # La brevedad sólo descarta el **canto**: una portada o un vídeo se
             # sostienen sobre un poema corto. Antes esta guarda abortaba el
             # encargo entero, así que pedir sólo la portada de una pieza breve

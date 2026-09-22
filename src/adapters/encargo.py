@@ -44,6 +44,7 @@ _PIEZAS = {
     ),
     "portada": (
         "portada", "portadas", "caratula", "cover", "artwork", "ilustracion",
+        "imagen", "imagenes", "foto", "fotos", "retrato", "dibujo", "avatar", "estampa",
     ),
 }
 

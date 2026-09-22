@@ -450,7 +450,7 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
             return f"❌ Tarea cron `{task_name}` no encontrada."
 
         # Invocación habitual con rol de Productor/Mánager
-        return await self.agent.generate_response(
+        reply = await self.agent.generate_response(
             user_id=author_id,
             user_name=author_name,
             message=content,
@@ -458,6 +458,14 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
             active_role="producer",
             producer_tools=True,
         )
+        # Si el turno pintó una imagen o un avatar (`avatar_generate` /
+        # `image_generate` en el arnés), el resultado con fichero real viaja
+        # aquí, no en la prosa: se adjunta al mismo DM antes de devolver el
+        # texto. Sin canal de origen no hay dónde adjuntarlo.
+        for adjunto in getattr(self.agent, "last_producer_media", None) or []:
+            await self._send_file(origin_channel, adjunto.get("path"),
+                                  adjunto.get("caption", "🎨 Adjunto"))
+        return reply
 
 
     async def handle_public_message(self, channel_id: str, author_id: str, author_name: str, content: str) -> str:
