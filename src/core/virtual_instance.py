@@ -196,7 +196,7 @@ class VirtualInstance:
         medios = ((self.config.get("vertex_ai", {}) or {}).get("media", {}) or {})
         vertex = bool(self.vertex_project)
         for cap_id, modelo_key, etiqueta in (
-            ("medios.imagen", "image_model", "Portadas"),
+            ("medios.imagen", "image_model", "Portadas e imágenes pedidas en el DM"),
             ("medios.video", "video_model", "Vídeo"),
             ("medios.musica", "music_model", "Música"),
             ("medios.voz", "tts_model", "Voz"),
@@ -233,6 +233,18 @@ class VirtualInstance:
                   "estructura), imagen (encuadre, luz, carga), vídeo (planos desde las secciones "
                   "de la obra) y voz (registro, respiración); manda lo que la fuente ya traiga y "
                   "avisa de lo que va a salir mal antes de gastar")
+        # Se declara porque los retratos de Yuki salían sin nadie a quien
+        # dibujar: el concepto decía «mi silueta» y el generador no sabía de
+        # quién. Los rasgos van siempre; la imagen de referencia sólo si el
+        # modelo la admite, y eso depende de la configuración.
+        modelo_imagen = str(medios.get("image_model", ""))
+        admite = modelo_imagen.startswith(("gemini-", "nano-banana"))
+        self._cap("medios.retrato", "Medios", (REAL if admite else INACTIVO) if vertex else SIMULADO,
+                  ("Sus retratos llevan sus rasgos canónicos y un avatar suyo como imagen de "
+                   f"referencia ({modelo_imagen})" if admite else
+                   f"Sus retratos llevan sus rasgos canónicos; {modelo_imagen or 'el modelo'} no "
+                   "admite imagen de referencia") if vertex
+                  else "Sin VERTEX_PROJECT_ID no hay retrato: marcador declarado como simulado")
         self._cap("medios.receta", "Medios", REAL,
                   "Cada obra generada deja `<fichero>.receta.json` con el prompt íntegro y sus "
                   "parámetros, y la receta se archiva con ella en Biblioteca")

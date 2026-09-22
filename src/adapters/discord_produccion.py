@@ -50,6 +50,16 @@ def _plan_del_encargo(pedido: str):
     """Plan del pedido. Determinista sobre el mismo texto: reanudar lo recompone."""
     return leer_encargo(pedido, len(MEDIA_STORYBOARD))
 
+
+def _motivo(exc: BaseException) -> str:
+    """
+    Qué falló, dicho con el error concreto. Recortado: es para leerlo en un DM,
+    el rastro entero queda en el registro de la instancia.
+    """
+    detalle = str(exc).strip()
+    return type(exc).__name__ + (f" — {detalle[:300]}" if detalle else "")
+
+
 def _mismo_contenido(uno: str, otro: str) -> bool:
     """
     Si dos ficheros entregados son el mismo. Tamaño primero: leer un vídeo
@@ -191,9 +201,13 @@ class ProduccionMultimedia:
         línea y evita descubrir el tope a mitad.
         """
         segundos = plan.segmentos * 8 if plan.video else 0
-        piezas = (f"{segundos} s de vídeo"
-                  + (", 1 pista" if plan.cancion else "")
-                  + (", 1 imagen" if plan.portada else ""))
+        # Sólo lo que se va a producir: «0 s de vídeo, 1 imagen» anunciaba una
+        # pieza que nadie había pedido.
+        piezas = ", ".join(pieza for pieza, va in (
+            (f"{segundos} s de vídeo", plan.video),
+            ("1 pista", plan.cancion),
+            ("1 imagen", plan.portada),
+        ) if va) or "nada"
         return self._linea_de_presupuesto(piezas, segundos_de_video=segundos)
 
     def _linea_de_presupuesto(self, piezas: str, segundos_de_video: int = 0) -> str:
@@ -359,6 +373,28 @@ class ProduccionMultimedia:
         path = (self.agent.creation_library.root / entry["path"]).resolve()
         root = self.agent.creation_library.root.resolve()
         return str(path) if path.is_relative_to(root) and path.is_file() else None
+
+    async def _archivar_en_biblioteca(self, report) -> None:
+        """
+        Archiva lo recién generado sin poner en juego su entrega.
+
+        El inventario corría entre «ya existe y está pagado» y «adjuntado», y
+        cualquier excepción suya —una copia huérfana en la Biblioteca basta—
+        caía al `except` general del encargo: la obra quedaba en disco, sin
+        entregar, y el Productor leía «la producción multimedia falló» sin
+        motivo. Archivar es contabilidad; la obra sale igual, y lo que no se
+        pudo archivar se dice.
+        """
+        try:
+            resultado = await asyncio.to_thread(self.agent.creation_library.inventory)
+        except Exception as exc:
+            logger.warning("No pude archivar en la Biblioteca: %s", type(exc).__name__)
+            await report(f"⚠️ La obra existe y la entrego, pero no pude archivarla en la "
+                         f"Biblioteca: {_motivo(exc)}.")
+            return
+        errores = (resultado or {}).get("errors") if isinstance(resultado, dict) else None
+        if errores:
+            logger.warning("Inventario con %d fichero(s) sin archivar: %s", len(errores), errores[:3])
 
     @staticmethod
     def _concat_videos(paths: List[str]) -> Optional[str]:
@@ -527,7 +563,7 @@ class ProduccionMultimedia:
                     else "🎼 " + (song.get("note") or "Maqueta local: no es una canción cantada.")
                 ))
                 self.media_jobs.save(job)
-                await asyncio.to_thread(self.agent.creation_library.inventory)
+                await self._archivar_en_biblioteca(report)
             elif song.get("budget_exceeded"):
                 # Un tope de presupuesto no es un fallo del paso: mañana el
                 # mismo trabajo cabe. No gasta intento ni marca fallo.
@@ -601,7 +637,7 @@ class ProduccionMultimedia:
             if ruta and Path(ruta).is_file() and not arte.get("simulated"):
                 portada.mark_done(ruta)
                 self.media_jobs.save(job)
-                await asyncio.to_thread(self.agent.creation_library.inventory)
+                await self._archivar_en_biblioteca(report)
             elif arte.get("budget_exceeded"):
                 portada.attempts -= 1
                 self.media_jobs.save(job)
@@ -689,7 +725,7 @@ class ProduccionMultimedia:
                 montaje.mark_failed("ffmpeg no produjo el vídeo final")
             self.media_jobs.save(job)
         if final_video:
-            await asyncio.to_thread(self.agent.creation_library.inventory)
+            await self._archivar_en_biblioteca(report)
             if not montaje.delivered:
                 pie = (f"🎬 Vídeo final — {plan.segmentos * 8} s, {plan.segmentos} segmento(s) ensamblados"
                        + await self._aviso_de_que_ya_salio_asi(job, montaje))
@@ -738,6 +774,9 @@ class ProduccionMultimedia:
                 channel_id=getattr(channel, "id", None), steps=plan.steps(),
             )
         job.channel_id = str(getattr(channel, "id", "")) or job.channel_id
+        # Un recorrido nuevo empieza sin el motivo del anterior: si esta vez
+        # llega al final, el trabajo no puede seguir diciendo que se cortó.
+        job.fallo = None
 
         try:
             # La letra se busca siempre —enriquece la portada o el guión del
@@ -748,7 +787,11 @@ class ProduccionMultimedia:
             # `plan.con_matices` ya anexa). Exigirla para cualquier pedido
             # bloqueaba «genera un retrato de...» sin motivo técnico real: eso
             # era el fallo, no una salvaguarda.
-            lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema", "herrumbre"),
+            # Sin «herrumbre» entre las claves: estaba escrita a mano, y como
+            # gana la primera que casa, esa letra se imponía a cualquier otra
+            # más reciente que no dijera «letra» en su título. Es el mismo
+            # defecto que ya se quitó del concepto visual y del guion.
+            lyrics_entry = self._library_entry("palabra", ("letra", "lirica", "poema"),
                                                pedido=content)
             lyrics_path = self._library_file(lyrics_entry) if lyrics_entry else None
             if lyrics_entry and not lyrics_path:
@@ -820,10 +863,16 @@ class ProduccionMultimedia:
             self.media_jobs.save(job)
             logger.warning("Producción multimedia cancelada a mitad: %s", describe_media_job(job))
             raise
-        except Exception:
+        except Exception as exc:
             logger.exception("Fallo en producción multimedia por DM")
+            # El motivo va en el mensaje y en el trabajo. El 22 de septiembre
+            # dos encargos acabaron en «la producción multimedia falló» sin una
+            # palabra más; preguntada después, Yuki no tenía de dónde sacar la
+            # causa y dio otra. `encargos_recientes` en el arnés lee este campo.
+            job.fallo = _motivo(exc)
             self.media_jobs.save(job)
             await report(
-                "❌ La producción multimedia falló; no doy por generados ni entregados archivos que no consten "
-                f"adjuntos. El trabajo `{job.id}` queda registrado y reanudable desde el último paso verificado."
+                f"❌ La producción multimedia falló: {job.fallo}. No doy por generados ni entregados "
+                "archivos que no consten adjuntos. El trabajo "
+                f"`{job.id}` queda registrado y reanudable desde el último paso verificado."
             )

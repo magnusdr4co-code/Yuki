@@ -109,6 +109,11 @@ class MediaJob:
     created_at: int = field(default_factory=_ahora)
     updated_at: int = field(default_factory=_ahora)
     resumed: int = 0
+    # Por qué se cortó el trabajo, cuando no fue un paso concreto quien falló
+    # sino el recorrido entero. Lo sella el `except` general de
+    # `discord_produccion._run_dm_media_delivery`; sin él, el único rastro era
+    # el registro de la instancia, que Yuki no lee.
+    fallo: Optional[str] = None
 
     def step(self, step_id: str) -> Optional[MediaStep]:
         return next((s for s in self.steps if s.id == step_id), None)

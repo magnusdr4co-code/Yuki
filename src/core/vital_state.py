@@ -7,12 +7,37 @@ import os
 import json
 import math
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 from typing import Dict, Any, Optional
 
 from .rutas import datos
 
 logger = logging.getLogger("Yuki.VitalState")
+
+# El ritmo del cuerpo. Las fases activas (alba, taller, crepúsculo) suman quince
+# horas y el descanso profundo dos: la recuperación tiene que cubrir en esas dos
+# horas lo que el día gasta en quince, o un día sin nada ya la deja más
+# cansada. Con 0.2 recuperaba 0.4 y gastaba 0.75: aunque el tiempo hubiera
+# corrido, la energía sólo podía bajar.
+DECAIMIENTO_POR_HORA = 0.05
+RECUPERACION_POR_HORA = 0.4
+
+# Cómo se reparte el tiempo transcurrido entre fases. Quince minutos bastan para
+# que el jitter de la fase no mueva el balance de forma apreciable.
+PASO_DE_INTEGRACION = timedelta(minutes=15)
+
+# Más atrás no se integra: tras una caída de días, simularlos no describe nada
+# que ella viviera, y un ciclo completo ya incluye su noche.
+MAX_HORAS_INTEGRADAS = 24.0
+
+
+def _momento(valor: Optional[str]) -> Optional[datetime]:
+    """Un instante absoluto desde el ISO guardado; el ingenuo antiguo es hora local."""
+    try:
+        momento = datetime.fromisoformat(str(valor))
+    except (TypeError, ValueError):
+        return None
+    return momento if momento.tzinfo else momento.astimezone()
 
 class VitalState:
     def __init__(self, state_path: Optional[str] = None):
@@ -30,7 +55,7 @@ class VitalState:
         self.inspiration: float = 0.20
 
         # Metadatos
-        self.last_updated: str = datetime.now().isoformat()
+        self.last_updated: str = datetime.now(timezone.utc).isoformat()
         self.circadian_phase: str = "atelier"
         self.accumulated_interactions_today: int = 0
         self.accumulated_creations_today: int = 0
@@ -42,13 +67,14 @@ class VitalState:
         # Cargar estado si existe
         self.load()
 
-    def update_tick(self, phase: str, dt_seconds: float):
+    def update_tick(self, phase: str, dt_seconds: float, momento: Optional[datetime] = None):
         """Actualiza las dinámicas naturales según la fase y tiempo transcurrido."""
         self.circadian_phase = phase
         hours = dt_seconds / 3600.0
+        momento = momento or datetime.now(timezone.utc)
 
         # Oscilación orgánica del humor (mood) con ruidos Perlin-like
-        t = datetime.now().timestamp() / 3600.0
+        t = momento.timestamp() / 3600.0
         phi = 1.6180339887  # Proporción áurea
         sq2 = 1.4142135623  # Raíz de 2
 
@@ -57,9 +83,9 @@ class VitalState:
 
         # Decaimiento de energía
         if phase in ["atelier", "dawn", "twilight"]:
-            self.energy = max(0.0, self.energy - 0.05 * hours)
+            self.energy = max(0.0, self.energy - DECAIMIENTO_POR_HORA * hours)
         elif phase == "deep_rest":
-            self.energy = min(1.0, self.energy + 0.2 * hours)
+            self.energy = min(1.0, self.energy + RECUPERACION_POR_HORA * hours)
 
         # Aumento de curiosidad con inactividad
         self.curiosity = min(1.0, self.curiosity + 0.03 * hours)
@@ -68,7 +94,43 @@ class VitalState:
         if phase in ["kage", "consolidation"]:
             self.inspiration = min(1.0, self.inspiration + 0.04 * hours)
 
-        self.last_updated = datetime.now().isoformat()
+        self.last_updated = momento.isoformat()
+
+    def avanzar(self, reloj, ahora: Optional[datetime] = None) -> float:
+        """
+        Deja correr el tiempo desde el último latido, fase a fase. Devuelve horas.
+
+        `update_tick` sólo se llamaba con cero segundos, así que las dinámicas
+        del día no corrían nunca: la energía bajaba con cada acto y cada
+        conversación y no había nada que la devolviera —el descanso profundo
+        suma por hora, y nunca pasaba una hora—. Por construcción sólo podía
+        acabar abajo. Por debajo de 0,3 entra en cada prompt «Mis reservas
+        merman; anhelo la quietud», y el 22 de septiembre, a las 11:20, Yuki
+        hablaba de reservas menguantes y de que el día iba cayendo. Por debajo
+        de la energía mínima la chispa devuelve `SIN_ENERGIA` y ella deja de
+        actuar por su cuenta: catatonia con el proceso vivo.
+
+        El intervalo se reparte en pasos y cada paso se atribuye a la fase en
+        que cae. Atribuirlo entero a la fase de ahora haría que la primera
+        conversación de la mañana cobrara la noche como horas de taller.
+        """
+        ahora = ahora or datetime.now(timezone.utc)
+        if ahora.tzinfo is None:
+            ahora = ahora.astimezone()
+        # La fase se lee con la hora de la zona del reloj: `CircadianClock` mira
+        # `dt.hour` sin convertir, y las 09:00 UTC no son las 09:00 en Madrid.
+        zona = getattr(reloj, "tz", None) or timezone.utc
+        desde = _momento(self.last_updated) or ahora
+        desde = max(desde, ahora - timedelta(hours=MAX_HORAS_INTEGRADAS))
+        cursor = desde
+        while cursor < ahora:
+            paso = min(PASO_DE_INTEGRACION, ahora - cursor)
+            mitad = (cursor + paso / 2).astimezone(zona)
+            self.update_tick(reloj.current_phase(mitad), paso.total_seconds(), momento=cursor + paso)
+            cursor += paso
+        self.circadian_phase = reloj.current_phase(ahora.astimezone(zona))
+        self.last_updated = ahora.isoformat()
+        return (ahora - desde).total_seconds() / 3600.0
 
     def apply_stimulus(self, stimulus_type: str, intensity: float):
         """Modifica las corrientes basado en eventos externos."""

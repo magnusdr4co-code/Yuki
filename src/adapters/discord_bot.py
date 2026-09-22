@@ -25,6 +25,7 @@ from .discord_intents import (
     looks_like_media_delivery_request as _looks_like_media_delivery_request,
 )
 from .discord_produccion import MEDIA_STORYBOARD, ProduccionMultimedia
+from .encargo import pedido_de_imagen
 from .discord_salon import IMAGINARIO_POR_DEFECTO, SalonDeDiscord, TEMA_POR_DEFECTO
 from .discord_text import split_discord_text
 from ..core.brake import Brake
@@ -351,8 +352,14 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
         if author_id not in self.paired_producer_ids or not self._is_paired(author_id):
             return "🔒 Se requiere DM del productor emparejado."
         channel_production = _looks_like_discord_production_request(content)
-        media_delivery = _looks_like_media_delivery_request(content)
-        logger.info("Ruta DM productor: canal_produccion=%s media_entrega=%s", channel_production, media_delivery)
+        # Una imagen suelta no es un encargo durable: la pinta Yuki en el turno
+        # del arnés, que es el único que ve la conversación. Por el encargo
+        # durable salió una portada de *Herrumbre y Escarcha* cuando se le
+        # pidieron tres imágenes de tres composiciones recién escritas.
+        imagen = pedido_de_imagen(content)
+        media_delivery = imagen is None and _looks_like_media_delivery_request(content)
+        logger.info("Ruta DM productor: canal_produccion=%s media_entrega=%s imagen=%s",
+                    channel_production, media_delivery, imagen)
         if channel_production:
             return self._launch_discord_production(
                 author_id=author_id,
@@ -457,6 +464,7 @@ class DiscordAdapter(ComandosDelProductor, ProduccionMultimedia, SalonDeDiscord)
             channel_type="direct_message",
             active_role="producer",
             producer_tools=True,
+            pedido_de_imagen=imagen,
         )
         # Si el turno pintó una imagen o un avatar (`avatar_generate` /
         # `image_generate` en el arnés), el resultado con fichero real viaja

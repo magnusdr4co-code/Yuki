@@ -38,6 +38,26 @@ from datetime import datetime
 
 logger = logging.getLogger("Yuki.SelfCharacterization")
 
+# Con qué cara se pinta Yuki. Vivía dentro de `generate_avatars`, así que sólo
+# la usaban las cuatro variantes del cron: `generate_named_avatar` mandaba el
+# concepto a secas, y una composición en prosa que decía «mi silueta» llegaba al
+# generador sin nadie a quien dibujar. El 22 de septiembre el Productor lo pidió
+# con estas palabras —«describe al generador cómo eres, o pásale una imagen de
+# contexto»— y en la misma conversación Yuki se describió con un pelo que no es
+# el suyo. Lo canónico se escribe una vez y lo leen todos los caminos.
+RASGOS = (
+    "Portrait of a woman, 42 years old, Korean-born Japanese-trained artist, "
+    "short salt-and-pepper hair swept back with quiet elegance, "
+    "deep contemplative eyes with the stillness of someone who has chosen every word in a borrowed language, "
+    "high cheekbones, expression of serene attentiveness, "
+    "subtle smile lines that speak of measured warmth rather than easy laughter, "
+    "skin with the luminous quality of someone who lives between two cultures"
+)
+
+# Qué avatar canónico sirve mejor de referencia: el del atelier es de día y con
+# el rostro enfocado; el de kage está medio en sombra a propósito.
+ORDEN_DE_REFERENCIA = ("atelier", "intimate", "seasonal", "kage")
+
 
 class SoulExtract:
     """Estructura de datos con los tokens de identidad extraídos de SOUL.md."""
@@ -343,14 +363,7 @@ class SelfCharacterization:
                 mood_light = "urushi"
 
         # Base compartida del prompt de avatar
-        base_subject = (
-            "Portrait of a woman, 42 years old, Korean-born Japanese-trained artist, "
-            "short salt-and-pepper hair swept back with quiet elegance, "
-            "deep contemplative eyes with the stillness of someone who has chosen every word in a borrowed language, "
-            "high cheekbones, expression of serene attentiveness, "
-            "subtle smile lines that speak of measured warmth rather than easy laughter, "
-            "skin with the luminous quality of someone who lives between two cultures"
-        )
+        base_subject = RASGOS
 
         # Construcción de los 4 prompts especializados
         avatar_specs = {
@@ -497,10 +510,19 @@ class SelfCharacterization:
         **sustituye** esa entrada en el manifiesto vigente, para refrescarla sin
         esperar al cron; con `variant="custom"` (el valor por defecto) no toca
         ninguna canónica: es una composición libre y aparte.
+
+        El concepto lo escribe ella y puede decir «mi silueta»: el generador no
+        sabe quién es. Por eso el prompt empieza siempre por sus `RASGOS`, y si
+        ya existe un avatar canónico con fichero se manda como imagen de
+        referencia. El resultado dice cuál se usó, o por qué no.
         """
+        prompt = f"{RASGOS}. {concept}"
+        referencia = self._avatar_de_referencia()
         comun = {
             "variant": variant,
             "prompt_instruction": concept,
+            "prompt_used": prompt,
+            "reference_image": referencia,
             "lighting": lighting,
             "aspect_ratio": aspect_ratio,
             "context": "Generado bajo demanda en el DM del Productor",
@@ -508,10 +530,14 @@ class SelfCharacterization:
         }
         if not self.nous_portal:
             return self._guardar_instruccion(variant, comun)
+        extra = {"reference_image": referencia} if referencia else {}
         resultado = await self.nous_portal.generate_image_frontier(
-            prompt=concept, aspect_ratio=aspect_ratio, lighting_style=lighting,
+            prompt=prompt, aspect_ratio=aspect_ratio, lighting_style=lighting, **extra,
         )
         avatar = self._avatar_desde(resultado, comun)
+        if resultado.get("reference_note"):
+            avatar["reference_note"] = resultado["reference_note"]
+            avatar["reference_image"] = None
         if avatar.get("status") == "success" and variant in ("atelier", "kage", "seasonal", "intimate"):
             if not self._manifest:
                 self._load_existing_manifest()
@@ -523,6 +549,18 @@ class SelfCharacterization:
                 estado_json.escribir(Path(self.manifest_path), self._manifest)
         return avatar
 
+    def _avatar_de_referencia(self) -> Optional[str]:
+        """Un avatar canónico con fichero en disco, o `None` si todavía no hay ninguno."""
+        if not self._manifest:
+            self._load_existing_manifest()
+        avatares = ((self._manifest or {}).get("visual_identity", {}) or {}).get("avatars", {}) or {}
+        for nombre in ORDEN_DE_REFERENCIA:
+            avatar = avatares.get(nombre) or {}
+            ruta = avatar.get("local_path")
+            if avatar.get("status") == "success" and ruta and os.path.isfile(ruta):
+                return ruta
+        return None
+
     def identity_summary(self) -> Dict[str, Any]:
         """
         Lo que hay que saber del manifiesto vigente en una llamada, para el DM.
@@ -533,13 +571,16 @@ class SelfCharacterization:
         if not self._manifest:
             self._load_existing_manifest()
         if not self._manifest:
-            return {"tiene_manifiesto": False,
+            return {"tiene_manifiesto": False, "rasgos": RASGOS,
                     "nota": "Todavía no me he autocaracterizado; lo decido yo al cambiar de "
                             "estación, o puedo pintar un avatar ahora mismo con `avatar_generate`."}
         visual = self._manifest.get("visual_identity", {})
         vocal = self._manifest.get("vocal_identity", {})
         return {
             "tiene_manifiesto": True,
+            # Con qué cara se pinta, para que al describirse no invente otra.
+            "rasgos": RASGOS,
+            "avatar_de_referencia": self._avatar_de_referencia(),
             "sekki": self._manifest.get("season_context", {}).get("sekki", ""),
             "generated_at": self._manifest.get("generated_at"),
             "voz_elegida": vocal.get("selected_voice_id"),
