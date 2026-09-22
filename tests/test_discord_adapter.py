@@ -30,6 +30,21 @@ def test_media_delivery_request_requires_creation_media_and_delivery():
     assert not looks_like_media_delivery_request("El vídeo anterior duró tres segundos.")
 
 
+def test_media_delivery_request_recognizes_images_and_avatars():
+    """
+    «Genera una imagen» u «hazme un avatar» no llegaban a reconocerse: `imagen`,
+    `retrato`, `dibujo` y `avatar` faltaban en el vocabulario de medios, así que
+    el pedido caía al arnés del DM —que hasta ahora tampoco tenía herramienta de
+    imagen— y Yuki acababa pidiendo que se lo repitieran con una palabra que
+    nunca iba a disparar nada.
+    """
+    assert looks_like_media_delivery_request("Genera una imagen de tu avatar y pásamela")
+    assert looks_like_media_delivery_request("Hazme un retrato en tinta sumi-e")
+    assert looks_like_media_delivery_request("Crea un dibujo de cómo te imaginas")
+    assert looks_like_media_delivery_request("Genera la portada del sencillo")
+    assert not looks_like_media_delivery_request("¿Podrías generar una imagen algún día?")
+
+
 def test_production_target_and_channel_slug_are_stable():
     guild, channel = extract_production_target(
         'Crea un canal nuevo en el servidor "Dev Server", llamado "Salón".'

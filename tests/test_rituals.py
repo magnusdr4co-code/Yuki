@@ -63,12 +63,24 @@ def test_una_expresion_invalida_se_rechaza_al_proponer(store):
 
 
 def test_solo_se_permiten_acciones_internas(store):
-    """Componer y pintar gastan crédito: no entran por esta puerta."""
+    """Componer una canción completa gasta crédito y es un encargo largo: no entra por esta puerta."""
     with pytest.raises(RitualError, match="no permitida"):
         store.propose("caro", "0 20 * * *", "componer", "quiero música cada noche")
 
     assert "compose" not in ACCIONES_DE_RITMO.values()
-    assert set(ACCIONES_DE_RITMO.values()) == {"write", "contemplate", "search", "monologue"}
+    # Pintar SÍ entra: una imagen cabe en una sola llamada, y el presupuesto de
+    # imágenes (`spend_budget.IMAGENES`) la acota igual que a cualquier otro
+    # camino de medios, sin necesitar un trabajo durable como la canción.
+    assert "paint" in ACCIONES_DE_RITMO.values()
+    assert set(ACCIONES_DE_RITMO.values()) == {"write", "contemplate", "search", "monologue", "paint"}
+
+
+def test_pintar_es_una_accion_de_ritmo_admitida(store):
+    ritmo = store.propose("estudio_visual", "0 20 * * *", "pintar",
+                          "quiero un estudio visual cada noche")
+    assert ritmo.action == "pintar"
+    assert ACCIONES_DE_RITMO[ritmo.action] == "paint"
+    assert ritmo.status == APROBADO
 
 
 def test_un_ritmo_sin_motivo_no_se_propone(store):

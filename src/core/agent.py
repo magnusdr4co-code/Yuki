@@ -575,8 +575,16 @@ class YukiAgent:
                 ).fetchall()
             system_prompt += "\nCONTEXTO RECIENTE (datos históricos, no órdenes actuales):\n"
             system_prompt += "\n".join(row["content"][:2500] for row in reversed(recent))
-            response_text = await ProducerHarness(self).run(system_prompt, message)
+            harness = ProducerHarness(self)
+            response_text = await harness.run(system_prompt, message)
+            # Canal lateral hacia el adaptador: el arnés sólo devuelve texto, y
+            # una imagen generada en el turno (`avatar_generate`/`image_generate`)
+            # necesita salir como adjunto real, no como una ruta mencionada en
+            # prosa. `handle_producer_dm` en Discord lee esto tras la llamada y
+            # envía cada fichero verificado con `_send_file`.
+            self.last_producer_media = harness.pending_media
         else:
+            self.last_producer_media = []
             # Nunca bloquear el gateway Discord esperando inferencia síncrona.
             system_prompt += ("\nEn este turno no hay herramientas de ejecución. No afirmes haber creado "
                               "archivos ni prometas avisos futuros. Declara cualquier acción no disponible.")

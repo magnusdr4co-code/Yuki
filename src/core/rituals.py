@@ -16,9 +16,11 @@ invariante le prohíbe tocar—.
 
 La seguridad no la daba el clic de nadie: **es estructural, y sigue entera.**
 
-  · **Qué puede hacer un ritmo está cerrado**: escribir, contemplar, explorar y
-    monologar. Componer y pintar quedan fuera porque gastan crédito, y publicar
-    hacia fuera tiene su propio cauce.
+  · **Qué puede hacer un ritmo está cerrado**: escribir, contemplar, explorar,
+    monologar y pintar. Componer queda fuera porque una canción completa es un
+    encargo largo con su propio cauce; pintar entra porque cabe en una sola
+    llamada y el presupuesto de imágenes la acota igual que a cualquier otro
+    camino de medios.
   · **Cuántas veces**, acotado: nada por debajo de una hora, nada que dispare
     más de `MAXIMOS_DISPAROS_DIARIOS` al día.
   · **Cuántos ritmos**, acotado: un calendario que se llena solo deja de ser un
@@ -59,14 +61,22 @@ RECHAZADO = "rechazado"
 RETIRADO = "retirado"
 
 # Lo que un ritmo propio puede hacer. Son actos internos y de lenguaje: escribir,
-# contemplar, mirar el mundo, hablar consigo misma. Componer y pintar quedan
-# fuera a propósito —gastan crédito y ya tienen su cauce por orden explícita—,
-# igual que cualquier cosa que publique sin que nadie lo lea antes.
+# contemplar, mirar el mundo, hablar consigo misma, y pintar. Componer queda
+# fuera a propósito —una canción completa es un encargo largo con su propio
+# cauce—, igual que cualquier cosa que publique sin que nadie lo lea antes.
+#
+# Pintar SÍ entra: una imagen es una sola llamada, no un trabajo durable, y el
+# mismo freno de iniciativa más el techo diario de actos propios que acotan
+# cualquier otro ritmo la acotan igual. Lo que de verdad la protege del gasto
+# no es la exclusión de esta lista sino el presupuesto de imágenes
+# (`spend_budget.IMAGENES`), que `vertex_media.generate_image` comprueba antes
+# de llamar al proveedor, tal como comprueba cualquier otro camino de imagen.
 ACCIONES_DE_RITMO = {
     "escribir": "write",
     "contemplar": "contemplate",
     "explorar": "search",
     "monologo": "monologue",
+    "pintar": "paint",
 }
 
 # Frecuencia: nada por debajo de una hora y nada que dispare más de esto al día.
