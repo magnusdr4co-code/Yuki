@@ -154,10 +154,11 @@ jobs:
         # el ejemplo, que no contiene credenciales, y no fabrica secretos.
         run: cp .env.example .env
 
-      - name: Las dos composiciones son válidas
+      - name: Las tres composiciones son válidas
         run: |
           docker compose -f docker-compose.yml config > /dev/null
           docker compose -f deploy/virtual/docker-compose.virtual.yml config > /dev/null
+          docker compose -f deploy/local/docker-compose.local.yml config > /dev/null
 
       - name: El sintetizador del respaldo musical está en la imagen
         # Se comprueba aquí porque es lo que hace la diferencia entre tener

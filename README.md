@@ -1,10 +1,10 @@
 # ⛩️ Yuki (雪) — Diva Digital Autónoma & Maestra de Presencia
-*Implementación de Estrella Virtual sobre el Arnés **Hermes Agent***
+*Estrella virtual con arnés propio*
 
-[![Architecture](https://img.shields.io/badge/Harness-Hermes%20Agent-purple.svg)](docs/ARCHITECTURE.md)
+[![Architecture](https://img.shields.io/badge/Harness-propio-purple.svg)](docs/ARCHITECTURE.md)
 [![Memory](https://img.shields.io/badge/Memory-SQLite%20FTS5%20(%3C113ms)-green.svg)](docs/FAST_MEMORY_FTS5.md)
 [![Dialectic](https://img.shields.io/badge/Persona-Honcho%20Dialectic-blue.svg)](docs/HONCHO_DIALECTIC.md)
-[![Nous Portal](https://img.shields.io/badge/Media-Nous%20Portal%20(FAL%2BTTS)-orange.svg)](docs/NOUS_PORTAL_TOOLS.md)
+[![Medios](https://img.shields.io/badge/Medios-Vertex%20%C2%B7%20OpenRouter%20pendiente-orange.svg)](docs/DESPLIEGUE_LOCAL.md#6-fase-2--medios-reales-por-openrouter)
 [![Licencia](https://img.shields.io/badge/Licencia-sin%20declarar-lightgrey.svg)](#licencia)
 
 ---
@@ -13,7 +13,14 @@
 
 **Yuki** es una "Diva" digital autónoma, creativa, ingeniosa, constante y profundamente empática, diseñada para interactuar con seguidores y con su productor/mánager de forma ágil y evolutiva.
 
-Frente a arneses monolíticos tradicionales de automatización de escritorio como OpenClaw (que sufren de *context rot*, latencias de hasta 20s y dependencia de hardware local costoso), la arquitectura de **Hermes Agent** dota a Yuki de una mente rápida, autonomía creativa 24/7 y una identidad dialéctica viva.
+Su arnés es **su propio código**: el daemon de `cli.py run-daemon`, el Salón y
+las piezas de `src/`. Este README decía durante meses que corría «sobre el Arnés
+Hermes Agent», y ningún módulo lo importa: `hermes_config.yaml` y
+`agent.harness` en `config.yaml` son documentales. Lo que la hace ella —el freno,
+la reserva de presupuesto, el marcado del Artículo 50, que un sueño no sea un
+recuerdo— vive aquí y tiene pruebas; un arnés genérico no lo traería. Los
+agentes de código que trabajan en el repositorio (OpenClaw, Claude Code…) son
+desarrolladores y auditores, no su mente: ver [`AGENTS.md`](AGENTS.md).
 
 ---
 
@@ -179,7 +186,7 @@ make todo        # lo mismo que la CI: linter, suite con cobertura, simulacro,
 Yuki/
 ├── SOUL.md                    # Alma, tono, estética, filosofía y protocolos de Yuki
 ├── MEMORY.md                  # Estructura semántica base de memoria a largo plazo
-├── config.yaml                # Configuración de Hermes Agent, Nous Portal, Honcho, SQLite y Cron
+├── config.yaml                # Configuración de Yuki: modelos, medios, memoria y cron
 ├── .env.example               # Variables de entorno y credenciales
 ├── requirements.txt           # Dependencias Python
 ├── pyproject.toml             # Metadatos del proyecto

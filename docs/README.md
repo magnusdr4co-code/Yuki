@@ -48,6 +48,7 @@ como si fuera el presente es de donde salen las medias horas perdidas.
 | Tema | Documento |
 |---|---|
 | **Desplegar ahora** | [DESPLIEGUE.md](DESPLIEGUE.md) — qué variable habilita qué, qué secretos hacen falta y cómo comprobar que **vive**, no sólo que arrancó. Es la que se mantiene al día: `tests/test_despliegue.py` la vigila |
+| **En una máquina propia** | [DESPLIEGUE_LOCAL.md](DESPLIEGUE_LOCAL.md) — el traslado al MSI tras caducar el crédito de Google: rescatar la memoria de la VM, levantarla junto a otro agente sin compartir secretos, y qué hace falta para que los medios vuelvan a ser reales por OpenRouter. `tests/test_despliegue_local.py` vigila su plantilla y su puerto |
 | Google Cloud, de cero | [GCP_DEPLOYMENT.md](GCP_DEPLOYMENT.md) — el montaje del proyecto (cuentas, IAM, registro). Conserva decisiones de su día, corregidas en su cabecera |
 | Otras opciones (VPS, Docker, Modal) | [DEPLOYMENT_GUIDE.md](DEPLOYMENT_GUIDE.md) — alternativas estudiadas; **la instancia real corre en GCE**, no en ninguna de ellas |
 

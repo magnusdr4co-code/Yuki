@@ -1,20 +1,27 @@
-# AGENTS.md — Directrices de Desarrollo y Operación para Hermes Agent
+# AGENTS.md — Directrices para los agentes que trabajan en este repositorio
 
-Este archivo define la arquitectura del software, flujos de trabajo, rutas del workspace y directrices para que **Hermes Agent** opere sobre este repositorio sin cometer errores de contexto.
+Este archivo define la arquitectura del software, flujos de trabajo, rutas del workspace y directrices para que un agente de código —OpenClaw, Claude Code, Hermes u otro— opere sobre este repositorio sin cometer errores de contexto.
+
+> **Ningún agente de código es el arnés de Yuki.** Su arnés es su propio código
+> (`cli.py run-daemon`); este documento lo dirigía a Hermes Agent como «arnés de
+> ejecución y cerebro operativo», y ningún módulo importa Hermes. Tú desarrollas,
+> operas y auditas. Si trabajas en la máquina donde vive —el MSI—, tu encargo y
+> lo que no puedes tocar están en
+> [`docs/DESPLIEGUE_LOCAL.md`](docs/DESPLIEGUE_LOCAL.md) §1 y §7.
 
 ---
 
-## 1. Visión y Rol de Hermes
+## 1. Visión y rol del agente
 
-Hermes actúa como el arnés de ejecución y cerebro operativo de **Yuki (Diva Digital Autónoma)**. 
-- **Workspace Nativo:** Hermes opera directamente sobre la raíz del repositorio local. NO intentes forzar rutas protegidas o absolutas de otros arneses (como `~/.openclaw/workspace/`). Todos los archivos de salida generados deben persistirse en `./output/`.
+Trabajas sobre el código de **Yuki (Diva Digital Autónoma)**; no hablas por ella.
+- **Workspace:** opera sobre la raíz del repositorio. Lo que Yuki produce lo decide `src/core/rutas.py`; desde las pruebas no se escribe nunca en `output/` ni en `data/`.
 - **Memoria sin Context Rot:** Todas las consultas sobre el historial, acuerdos del productor y datos de fans deben canalizarse a través del motor `src/memory/fts5_memory.py` (SQLite FTS5), NUNCA reinyectando logs masivos en bruto.
 - **El mapa entero está en `CLAUDE.md`**, que es el que se mantiene al día.
   Además de lo de abajo existen `src/tools/criterio_*.py` (cada arte decide
   antes de encargar), `src/tools/media_jobs.py` (cola durable de lo facturable),
   `src/tools/receta.py`, `src/tools/creation_library.py`, `src/core/cotejo.py`
   (contrasta lo dicho con lo ejecutado) y `src/security/model_armor.py`.
-- **Herramientas de medios:** `src/tools/nous_portal.py` es la puerta única. Por debajo, con proyecto de Google Cloud declarado, sirve `src/tools/vertex_media.py` —Imagen para portadas, Gemini Omni Flash para vídeo y Gemini TTS para voz—; sin él, el gateway de Nous Portal (FAL, OpenAI TTS y Whisper, Firecrawl, Browser Use, Modal).
+- **Herramientas de medios:** `src/tools/nous_portal.py` es la puerta única. Por debajo, el único motor real es `src/tools/vertex_media.py` —Imagen, Lyria, vídeo y Gemini TTS— y sólo sirve con `VERTEX_PROJECT_ID` declarado. Sin él (el crédito de Google caducó en septiembre de 2026) los medios salen como marcador `simulated` y la música cae al respaldo local; el gateway de Nous Portal no existe como motor. El motor por OpenRouter está especificado y pendiente: [`docs/DESPLIEGUE_LOCAL.md`](docs/DESPLIEGUE_LOCAL.md) §6.
 - **Un medio simulado se declara:** cuando no hay motor real configurado, la pasarela escribe un marcador de texto y lo devuelve con `simulated: true` y `status: simulated`. Nunca lo presentes como una portada, un vídeo o una nota de voz, y nunca acompañes un medio de una URL que no exista: los ficheros se referencian por su ruta en `./output/`.
 - **El vídeo cuesta por segundo:** Gemini Omni Flash factura ≈0,10 USD por segundo producido. No lo invoques desde tareas del cron ni por iniciativa propia; sólo a petición explícita del productor, y registra el `estimated_cost_usd` que devuelve.
 - **Catálogo canónico:** [`skills/HERRAMIENTAS.md`](skills/HERRAMIENTAS.md) define qué herramienta existe, cómo se invoca, qué cuesta y qué hacer cuando falla. **Si una herramienta no aparece ahí, no existe:** no inventes endpoints ni modelos, no sustituyas una herramienta por otra en silencio y no devuelvas resultados simulados como reales.
@@ -43,7 +50,7 @@ Hermes actúa como el arnés de ejecución y cerebro operativo de **Yuki (Diva D
 
 ## 3. Esquema de Base de Datos y Memoria (`data/yuki_memory.db`)
 
-Hermes gestiona una base de datos SQLite relacional con extensión virtual FTS5:
+Yuki gestiona una base de datos SQLite relacional con extensión virtual FTS5:
 - **Tabla `memories`:** Registro canónico relacional (`id`, `category`, `title`, `content`, `tags`, `user_id`, `importance`, `created_at`, `updated_at`).
   - Categorías válidas, y la fuente es `BASE_POR_CATEGORIA` en
     `src/memory/sueno_comun.py`, no esta lista: `core`, `producer`, `schema`,
@@ -60,13 +67,13 @@ Hermes gestiona una base de datos SQLite relacional con extensión virtual FTS5:
 
 ## 4. Convenciones de Ejecución de Habilidades (`skills/`)
 
-Cada habilidad en `skills/<nombre-skill>/SKILL.md` es invocable por Hermes como un comando barra (ej. `/componer-beat`, `/generar-portada`, `/sintesis-vocal`, `/publicar-redes`, `/analizar-feed`, `/lectura-runas`).
-- Al ejecutar una habilidad, Hermes debe leer su `SKILL.md`, extraer los parámetros requeridos, invocar las herramientas necesarias y almacenar el resultado en `./output/<tipo>/`.
+Cada habilidad en `skills/<nombre-skill>/SKILL.md` se invoca con `python3 cli.py skill <nombre>` o como comando barra (ej. `/componer-beat`, `/generar-portada`, `/sintesis-vocal`, `/publicar-redes`, `/analizar-feed`, `/lectura-runas`).
+- Al ejecutar una habilidad, el agente debe leer su `SKILL.md`, extraer los parámetros requeridos, invocar las herramientas necesarias y almacenar el resultado en `./output/<tipo>/`.
 - Cada `SKILL.md` incluye una sección **`## Herramientas`** con su contrato: qué herramienta usa en cada paso, con qué *tier* de modelo, qué cuesta, dónde persiste y qué hacer si falla. Ese contrato es vinculante; ante duda, manda [`skills/HERRAMIENTAS.md`](skills/HERRAMIENTAS.md).
 
 ---
 
-## 5. Protocolos Anti-Errores para Hermes
+## 5. Protocolos anti-errores
 
 1. **Rutas Relativas:** Usa siempre rutas relativas al repositorio (ej. `output/art/cover_01.png`), nunca rutas absolutas fijas con nombres de usuario del sistema operativo.
 2. **Telegram, lo justo:** la salida es real (API HTTP, con marca y freno) y la

@@ -83,3 +83,8 @@ Thumbs.db
 .idea/
 .vscode/
 *.swp
+
+# Despliegue en máquina propia (deploy/local/): secretos y copias con memoria dentro
+.env.local
+copias/
+migracion/

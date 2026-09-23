@@ -28,6 +28,9 @@ service-account*.json
 data/**
 !data/**/.gitkeep
 media_cache/
+# Copias y migración del despliegue local: memoria real, igual que `data/`.
+copias/
+migracion/
 
 # Artefactos generados por Yuki. La regla es la propiedad, no la lista de
 # carpetas: una categoría nueva de obra —`output/otro/`— no tendría por qué

@@ -1,0 +1,114 @@
+# ==========================================================================
+# Yuki en una máquina propia (el MSI), con otro agente viviendo al lado.
+#
+# Parte de la réplica virtual (`deploy/virtual/`), que ya espejaba la VM: la
+# misma imagen, los dos mismos procesos y un único disco con `output/`
+# colgando de él. Eso último no es estética: es el formato del disco de la VM,
+# así que la memoria rescatada de Compute Engine entra aquí sin reordenar nada.
+#
+# Lo que cambia respecto a la réplica, y por qué:
+#
+#  · El Salón escucha sólo en 127.0.0.1. `docker-compose.yml` publica
+#    `8080:8080`, que en un portátil es abrirlo a toda la red de casa —y a la
+#    del bar—. Desde fuera se llega por Tailscale, no por el router.
+#  · Las copias salen del volumen a una carpeta del anfitrión
+#    (`YUKI_COPIAS_DIR`). Dentro del volumen viven en el mismo disco virtual
+#    que el original, y `backup.py` ya avisa de que eso no protege de nada.
+#    Esa carpeta es sólo de copias verificadas: la base viva **nunca** se
+#    monta desde el disco de Windows (`/mnt/c/...`), porque SQLite en WAL
+#    sobre ese sistema de ficheros bloquea mal y cuando falla no da error.
+#  · Los logs tienen techo. Un portátil no tiene alerta de disco lleno, y el
+#    driver por defecto de Docker no rota.
+#  · Nombre de proyecto propio (`yuki-local`) y red propia: el agente de al
+#    lado no comparte volúmenes ni red con ella.
+#
+# Sin `VERTEX_PROJECT_ID` (el crédito de Google caducó) los medios salen como
+# marcadores declarados `simulated`, y la música tiene su respaldo local con
+# fluidsynth. La conversación, el cron y el sueño no dependen de eso.
+#
+#   docker compose -f deploy/local/docker-compose.local.yml up -d --build
+#   docker compose -f deploy/local/docker-compose.local.yml --profile check \
+#       run --rm yuki-local-check
+#
+# Runbook completo: docs/DESPLIEGUE_LOCAL.md
+# ==========================================================================
+
+name: yuki-local
+
+x-instancia: &instancia
+  build:
+    context: ../..
+    dockerfile: Dockerfile
+  image: yuki-agent:local
+  env_file:
+    # Opcional para que `docker compose config` valide en la CI sin secretos.
+    # Sin él el arranque muere a propósito por falta de OPENROUTER_API_KEY y
+    # DISCORD_BOT_TOKEN, que es el aviso que se quiere.
+    - path: ../../.env.local
+      required: false
+  environment:
+    ENVIRONMENT: production
+    LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    DATABASE_PATH: /app/data/yuki_memory.db
+    NOUS_PORTAL_MODE: disabled
+    # El cron y el recuento diario usan Europe/Madrid por su cuenta
+    # (`scheduler.timezone`); esto sólo alinea la hora de los logs con la tuya.
+    TZ: Europe/Madrid
+  volumes:
+    - yuki-local-data:/app/data
+    - type: volume
+      source: yuki-local-data
+      target: /app/output
+      volume:
+        subpath: output
+    # Las copias verificadas, fuera del volumen. La carpeta del anfitrión
+    # tiene que pertenecer al uid 10001 (el usuario `yuki` de la imagen).
+    - ${YUKI_COPIAS_DIR:-../../copias}:/app/data/backups
+  logging:
+    driver: json-file
+    options:
+      max-size: "10m"
+      max-file: "5"
+  networks:
+    - yuki
+  restart: unless-stopped
+
+services:
+  yuki-salon:
+    <<: *instancia
+    container_name: yuki-local-salon
+    command: ["python", "cli.py", "web"]
+    ports:
+      - "127.0.0.1:${YUKI_LOCAL_PORT:-8080}:8080"
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  yuki-daemon:
+    <<: *instancia
+    container_name: yuki-local-daemon
+    command: ["python", "cli.py", "run-daemon"]
+    depends_on:
+      - yuki-salon
+    deploy:
+      resources:
+        limits:
+          memory: 1G
+          cpus: "1.0"
+
+  # Diagnóstico: escribe el informe de capacidades y limitadores y termina.
+  # No abre puertos ni habla con Discord.
+  yuki-local-check:
+    <<: *instancia
+    container_name: yuki-local-check
+    restart: "no"
+    profiles: ["check"]
+    command: ["python", "cli.py", "virtualize", "--output", "/app/output/virtual/informe.md"]
+
+networks:
+  yuki:
+
+volumes:
+  yuki-local-data:
